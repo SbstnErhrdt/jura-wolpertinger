@@ -313,9 +313,9 @@ footer p {
 .download-card svg {
   color: #008bd2;
   fill: currentColor;
-  height: 34px;
-  margin-bottom: 8px;
-  width: 34px;
+  height: 24px;
+  margin-bottom: 6px;
+  width: 24px;
 }
 
 .download-card small {
