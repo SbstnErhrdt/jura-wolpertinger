@@ -1,0 +1,65 @@
+{
+  "name": "jura-wolpertinger",
+  "version": "0.1.0",
+  "description": "Lokale Electron-App zum Schreiben, Abgeben, Exportieren und Korrigieren juristischer Prüfungen.",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "type": "module",
+  "main": "out/main/index.js",
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "dev": "electron-rebuild -f -w better-sqlite3 && electron-vite dev",
+    "build": "npm run typecheck && electron-vite build",
+    "build:icons": "node scripts/prepare-icons.mjs",
+    "preview": "electron-vite preview",
+    "typecheck": "vue-tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.node.json",
+    "dist": "pnpm run build:icons && pnpm run build && electron-builder --publish never",
+    "dist:dir": "pnpm run build:icons && pnpm run build && electron-builder --dir --publish never",
+    "dist:mac": "pnpm run build:icons && pnpm run build && electron-builder --mac --publish never",
+    "release:linux": "pnpm run build:icons && pnpm run build && electron-builder --linux --publish always",
+    "release:mac": "pnpm run build:icons && pnpm run build && electron-builder --mac --publish always",
+    "release:win": "pnpm run build:icons && pnpm run build && electron-builder --win --publish always",
+    "test": "pnpm rebuild better-sqlite3 && vitest run",
+    "test:e2e": "electron-rebuild -f -w better-sqlite3 && pnpm run build && playwright test",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@tiptap/core": "^2.11.5",
+    "@tiptap/extension-highlight": "^2.11.5",
+    "@tiptap/extension-text-align": "^2.11.5",
+    "@tiptap/extension-text-style": "^2.11.5",
+    "@tiptap/extension-underline": "^2.11.5",
+    "@tiptap/starter-kit": "^2.11.5",
+    "@tiptap/vue-3": "^2.11.5",
+    "better-sqlite3": "^11.9.1",
+    "driver.js": "^1.4.0",
+    "electron-updater": "^6.8.3",
+    "jszip": "^3.10.1",
+    "lucide-vue-next": "^0.468.0",
+    "pinia": "^2.3.0",
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^3.7.1",
+    "@playwright/test": "^1.49.1",
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.2",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^2.3.0",
+    "typescript": "^5.7.2",
+    "vite": "^5.4.11",
+    "vitest": "^2.1.8",
+    "vue-tsc": "^2.1.10"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "electron",
+      "esbuild",
+      "vue-demi"
+    ]
+  }
+}

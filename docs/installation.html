@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Installation · Jura Wolpertinger</title>
+    <meta
+      name="description"
+      content="Installation von Jura Wolpertinger auf Windows, macOS und Linux inklusive Signatur- und Zertifikatshinweisen."
+    />
+    <link rel="icon" href="assets/icon.png" />
+    <link rel="stylesheet" href="landing.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="index.html" aria-label="Jura Wolpertinger Start">
+        <img src="assets/icon.png" alt="" />
+        <span>Jura Wolpertinger</span>
+      </a>
+      <nav aria-label="Hauptnavigation">
+        <a href="index.html#features">Funktionen</a>
+        <a href="index.html#download">Download</a>
+        <a href="installation.html">Installation</a>
+        <a href="https://github.com/SbstnErhrdt/jura-wolpertinger/releases/latest">Releases</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="doc-hero">
+        <p class="kicker">Installation</p>
+        <h1>Jura Wolpertinger installieren</h1>
+        <p>
+          Lade die passende Datei aus GitHub Releases herunter. Die App läuft lokal auf deinem Rechner
+          und speichert Klausuren offline-ready.
+        </p>
+        <a class="button primary" href="https://github.com/SbstnErhrdt/jura-wolpertinger/releases/latest">
+          Aktuelles Release öffnen
+        </a>
+      </section>
+
+      <section id="windows" class="doc-section">
+        <h2>Windows</h2>
+        <ol>
+          <li>`Jura Wolpertinger-&lt;version&gt;-&lt;arch&gt;-win.exe` herunterladen.</li>
+          <li>Installer starten.</li>
+          <li>Dem Installationsdialog folgen.</li>
+          <li>Die App über Startmenü oder Desktop-Verknüpfung öffnen.</li>
+        </ol>
+        <p>
+          Windows SmartScreen kann bei neuen oder unsignierten Apps warnen. Für öffentliche Releases sollte
+          der Installer mit einem vertrauenswürdigen Code-Signing-Zertifikat oder Microsoft Trusted Signing
+          signiert werden.
+        </p>
+      </section>
+
+      <section id="macos" class="doc-section">
+        <h2>macOS</h2>
+        <ol>
+          <li>`Jura Wolpertinger-&lt;version&gt;-&lt;arch&gt;-mac.dmg` herunterladen.</li>
+          <li>DMG öffnen.</li>
+          <li>`Jura Wolpertinger.app` in den Programme-Ordner ziehen.</li>
+          <li>Die App aus `Programme` starten.</li>
+        </ol>
+        <p>
+          Für öffentliche macOS-Releases sind Developer-ID-Signierung, Hardened Runtime und Notarisierung
+          praktisch notwendig, damit Gatekeeper die App normal startet.
+        </p>
+      </section>
+
+      <section id="linux" class="doc-section">
+        <h2>Linux</h2>
+        <ol>
+          <li>`Jura Wolpertinger-&lt;version&gt;-&lt;arch&gt;-linux.AppImage` herunterladen.</li>
+          <li>Ausführbar machen: `chmod +x "Jura Wolpertinger-&lt;version&gt;-&lt;arch&gt;-linux.AppImage"`.</li>
+          <li>Starten: `./Jura\ Wolpertinger-&lt;version&gt;-&lt;arch&gt;-linux.AppImage`.</li>
+        </ol>
+        <p>
+          Für AppImages gibt es kein zentrales Vendor-Zertifikat wie bei macOS oder Windows. Empfehlenswert
+          sind SHA256-Checksums und optional GPG-Signaturen.
+        </p>
+      </section>
+
+      <section class="doc-section">
+        <h2>Brauchen wir Zertifikate?</h2>
+        <p>
+          Für interne Tests nicht zwingend. Für öffentliche Releases ja: macOS sollte signiert und notarisiert
+          werden, Windows sollte code-signiert werden, Linux sollte mindestens Checksums bekommen.
+        </p>
+        <p>
+          Die ausführliche Maintainer-Anleitung steht zusätzlich als Markdown-Datei im Repository:
+          <a href="installation.md">installation.md</a>.
+        </p>
+      </section>
+    </main>
+  </body>
+</html>

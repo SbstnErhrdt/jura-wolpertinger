@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Jura Wolpertinger</title>
+    <meta
+      name="description"
+      content="Offline-ready Desktop-App zum Schreiben, Abgeben, Korrigieren und Auswerten juristischer Übungsklausuren."
+    />
+    <link rel="icon" href="assets/icon.png" />
+    <link rel="stylesheet" href="landing.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="Jura Wolpertinger Start">
+        <img src="assets/icon.png" alt="" />
+        <span>Jura Wolpertinger</span>
+      </a>
+      <nav aria-label="Hauptnavigation">
+        <a href="#features">Funktionen</a>
+        <a href="#offline">Offline</a>
+        <a href="#download">Download</a>
+        <a href="installation.html">Installation</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="kicker">Offline-ready Desktop-App</p>
+          <h1>Übungsklausuren schreiben, abgeben, korrigieren und auswerten.</h1>
+          <p>
+            Jura Wolpertinger ist ein lokaler Arbeitsplatz für die juristische Examensvorbereitung:
+            ruhig im Schreibmodus, präzise in der Bewertung und hilfreich bei der Auswertung deiner Entwicklung.
+          </p>
+          <div class="hero-actions">
+            <a class="button primary" href="https://github.com/SbstnErhrdt/jura-wolpertinger/releases/latest">
+              Download
+            </a>
+            <a class="button secondary" href="installation.html">Installationsanleitung</a>
+          </div>
+        </div>
+        <div class="hero-art" aria-hidden="true">
+          <img src="assets/hello.png" alt="" />
+        </div>
+      </section>
+
+      <section id="features" class="section">
+        <div class="section-heading">
+          <p class="kicker">Arbeitsfluss</p>
+          <h2>Von der Klausur bis zur Auswertung</h2>
+        </div>
+        <div class="feature-grid">
+          <article>
+            <span>01</span>
+            <h3>Schreiben</h3>
+            <p>Prüfungsnaher Editor mit Fokusmodus, Autosave und lokal gespeicherten Revisionen.</p>
+          </article>
+          <article>
+            <span>02</span>
+            <h3>Abgeben</h3>
+            <p>Abgaben werden als fester Snapshot gespeichert, während der Entwurf weiter bearbeitet werden kann.</p>
+          </article>
+          <article>
+            <span>03</span>
+            <h3>Bewerten</h3>
+            <p>Gesamtbewertung nach Bayern `0-18`, Randkommentare und Textmarkierungen direkt im Dokument.</p>
+          </article>
+          <article>
+            <span>04</span>
+            <h3>Auswerten</h3>
+            <p>Tags, Zeitraumfilter und Charts zeigen, welche Rechtsgebiete und Themen besser werden.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="offline" class="offline-band">
+        <div>
+          <p class="kicker">Lokal gespeichert</p>
+          <h2>Keine Cloud-Pflicht. Kein Account-Zwang.</h2>
+          <p>
+            Deine Klausuren liegen lokal auf deinem Rechner. Die App ist darauf ausgelegt, dass Entwürfe,
+            Abgaben, Bewertungen und Anhänge auch nach Neustart, Stromausfall oder App-Absturz verfügbar bleiben.
+          </p>
+        </div>
+        <img src="assets/submission.png" alt="Abgabe erfolgreich" />
+      </section>
+
+      <section id="download" class="section download-section">
+        <div class="section-heading">
+          <p class="kicker">Releases</p>
+          <h2>Für Windows, macOS und Linux</h2>
+          <p>
+            Lade die passende Datei über GitHub Releases herunter. Hinweise zu Plattformwarnungen,
+            Signaturen und Installation stehen in der Anleitung.
+          </p>
+        </div>
+        <div class="download-grid">
+          <a href="installation.html#windows">
+            <strong>Windows</strong>
+            <span>Installer `.exe`</span>
+          </a>
+          <a href="installation.html#macos">
+            <strong>macOS</strong>
+            <span>DMG oder ZIP</span>
+          </a>
+          <a href="installation.html#linux">
+            <strong>Linux</strong>
+            <span>AppImage</span>
+          </a>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        Jura Wolpertinger ist ein lokales Freizeitprojekt für Übung und Organisation. Es ist kein offizielles
+        Prüfungsprodukt und ersetzt keine echte Prüfungsumgebung.
+      </p>
+    </footer>
+  </body>
+</html>

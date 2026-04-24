@@ -1,0 +1,17 @@
+.idea
+.dev-data
+references
+node_modules
+dist
+out
+coverage
+release
+build/icon.icns
+build/icon.png
+build/icon.iconset
+.DS_Store
+*.log
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.tsbuildinfo

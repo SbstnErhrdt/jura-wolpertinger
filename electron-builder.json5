@@ -1,0 +1,68 @@
+/**
+ * @see https://www.electron.build/configuration.html
+ */
+{
+  appId: "com.erhardt.jura-wolpertinger",
+  productName: "Jura Wolpertinger",
+  asar: true,
+  directories: {
+    buildResources: "build",
+    output: "release/${version}"
+  },
+  publish: {
+    provider: "github",
+    owner: "SbstnErhrdt",
+    repo: "jura-wolpertinger",
+    releaseType: "release"
+  },
+  files: [
+    "out/**/*",
+    "package.json",
+    "!src{,/**}",
+    "!tests{,/**}",
+    "!references{,/**}",
+    "!release{,/**}",
+    "!build/icon.iconset{,/**}",
+    "!playwright.config.ts",
+    "!vitest.config.ts",
+    "!tsconfig*.json",
+    "!electron.vite.config.ts",
+    "!README.md",
+    "!Requirements.md"
+  ],
+  extraResources: [
+    {
+      from: "build",
+      to: "assets",
+      filter: ["icon.png"]
+    }
+  ],
+  asarUnpack: [
+    "node_modules/better-sqlite3/**/*"
+  ],
+  mac: {
+    category: "public.app-category.productivity",
+    target: ["dmg", "zip"],
+    icon: "build/icon.icns",
+    artifactName: "${productName}-${version}-${arch}-mac.${ext}"
+  },
+  dmg: {
+    icon: "build/icon.icns"
+  },
+  win: {
+    target: ["nsis"],
+    icon: "build/icon.png",
+    artifactName: "${productName}-${version}-${arch}-win.${ext}"
+  },
+  nsis: {
+    oneClick: false,
+    perMachine: false,
+    allowToChangeInstallationDirectory: true,
+    deleteAppDataOnUninstall: false
+  },
+  linux: {
+    target: ["AppImage"],
+    icon: "build/icon.png",
+    artifactName: "${productName}-${version}-${arch}-linux.${ext}"
+  }
+}

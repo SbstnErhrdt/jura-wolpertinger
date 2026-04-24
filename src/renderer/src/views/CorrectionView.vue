@@ -1,0 +1,492 @@
+<template>
+  <section class="correction-view">
+    <aside class="correction-list-panel">
+      <div class="correction-list-header">
+        <p class="eyebrow">Bewertung</p>
+        <h1>Abgaben</h1>
+      </div>
+      <div v-if="submittedItems.length" class="correction-submission-list">
+        <RouterLink
+          v-for="item in submittedItems"
+          :key="item.submissionId"
+          class="correction-submission-item"
+          :class="{ active: item.submissionId === submission?.id, graded: item.scorePoints !== null }"
+          :to="{ name: 'correction', params: { id: item.submissionId } }"
+        >
+          <div class="correction-submission-title">
+            <strong>{{ item.examTitle }}</strong>
+            <CheckCircle2 v-if="item.scorePoints !== null" :size="17" aria-hidden="true" />
+          </div>
+          <span>{{ formatDate(item.submittedAt) }}</span>
+          <div class="correction-submission-status" :class="{ done: item.scorePoints !== null }">
+            <CheckCircle2 v-if="item.scorePoints !== null" :size="14" aria-hidden="true" />
+            <Clock3 v-else :size="14" aria-hidden="true" />
+            <span>{{ item.scorePoints === null ? waitingLabel(item.submittedAt) : 'Bewertet' }}</span>
+          </div>
+          <div class="correction-submission-meta">
+            <em>{{ item.scorePoints === null ? 'Offen' : `${formatScoreInput(item.scorePoints)} Punkte` }}</em>
+            <small>{{ item.commentCount }} {{ item.commentCount === 1 ? 'Kommentar' : 'Kommentare' }}</small>
+          </div>
+        </RouterLink>
+      </div>
+      <p v-else class="empty-state">Keine abgegebenen Prüfungen.</p>
+    </aside>
+
+    <div class="correction-detail-scroll">
+      <template v-if="submission && correction">
+        <header class="page-header correction-detail-header">
+          <div>
+            <p class="eyebrow">Korrektur · {{ formatDate(submission.submittedAt) }}</p>
+            <h1>{{ submission.examTitle }}</h1>
+          </div>
+          <div class="header-actions">
+            <RouterLink class="secondary" :to="{ name: 'exam', params: { id: submission.examId } }">
+              Zur Prüfung
+            </RouterLink>
+            <button @click="saveCorrection">Speichern</button>
+          </div>
+        </header>
+
+        <p v-if="actionError" class="action-error">{{ actionError }}</p>
+
+        <div class="correction-workspace">
+          <section class="correction-assessment-panel">
+            <div>
+              <h2>Bewertung</h2>
+              <div class="correction-score-grid">
+                <label>
+                  Punkte
+                  <input
+                    v-model="scoreInput"
+                    inputmode="decimal"
+                    placeholder="0 bis 18, z. B. 12,5"
+                    @blur="normalizeScoreInput"
+                  />
+                </label>
+                <p class="field-hint">Erlaubt sind Werte von 0 bis 18 in 0,5er-Schritten.</p>
+              </div>
+              <label>
+                Bewertungskommentar
+                <textarea v-model="gradingComment" rows="4" />
+              </label>
+            </div>
+          </section>
+
+          <div class="correction-document-grid">
+            <main ref="submissionPaperRef" class="submission-paper">
+              <div
+                ref="paperRef"
+                class="readonly-document"
+                tabindex="0"
+                @mouseup="captureSelection"
+                @keyup="captureSelection"
+                v-html="renderedHtml"
+              />
+              <div
+                v-if="selectedText"
+                class="selection-comment-popover"
+                :style="{ left: `${selectionPopover.x}px`, top: `${selectionPopover.y}px` }"
+                @mousedown.stop
+                @click.stop
+              >
+                <div class="selection-preview">
+                  <span>Ausgewählter Text</span>
+                  <p>{{ selectedText }}</p>
+                </div>
+                <label class="comment-input-label">
+                  Kommentar
+                  <textarea
+                    v-model="commentBody"
+                    rows="3"
+                    placeholder="Hinweis oder Korrektur zur markierten Passage"
+                    autofocus
+                  />
+                </label>
+                <div class="comment-actions">
+                  <button type="button" class="secondary" @click="clearSelectedText">
+                    Abbrechen
+                  </button>
+                  <button
+                    type="button"
+                    :disabled="!canAddComment"
+                    @click="addComment"
+                  >
+                    Kommentar setzen
+                  </button>
+                </div>
+              </div>
+            </main>
+            <aside class="document-comment-rail" :style="{ minHeight: `${commentRailHeight}px` }">
+              <article
+                v-for="(comment, index) in correction.inlineComments"
+                :key="comment.id"
+                class="comment-card margin-comment-card"
+                :class="{ active: activeCommentId === comment.id }"
+                :style="{ top: `${commentTop(comment, index)}px`, zIndex: activeCommentId === comment.id ? 30 : 1 }"
+                @mouseenter="highlightInlineComment(comment)"
+                @mouseleave="clearInlineCommentHighlight"
+              >
+                <blockquote>{{ comment.anchor.selectedText || 'Auswahl' }}</blockquote>
+                <p>{{ comment.body }}</p>
+                <span>{{ formatDate(comment.createdAt) }}</span>
+              </article>
+              <p v-if="!correction.inlineComments.length" class="empty-state margin-empty-state">
+                Kommentare erscheinen hier neben der markierten Stelle.
+              </p>
+              <div v-if="!selectedText" class="rail-comment-hint">
+                <strong>Keine Auswahl</strong>
+                <p>Markiere eine Passage im Dokument.</p>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </template>
+      <div v-else class="correction-empty-detail">
+        <div class="correction-start-panel">
+          <p class="eyebrow">Bewertung</p>
+          <h2>Abgabe auswählen</h2>
+          <p>Wähle links eine abgegebene Prüfung aus, um die Bewertung zu starten.</p>
+          <div v-if="submittedItems.length" class="correction-start-stats">
+            <div>
+              <strong>{{ openSubmissionCount }}</strong>
+              <span>offen</span>
+            </div>
+            <div>
+              <strong>{{ gradedSubmissionCount }}</strong>
+              <span>bewertet</span>
+            </div>
+          </div>
+          <RouterLink
+            v-if="nextOpenSubmission"
+            class="correction-start-action"
+            :to="{ name: 'correction', params: { id: nextOpenSubmission.submissionId } }"
+          >
+            Nächste offene Abgabe bewerten
+          </RouterLink>
+        </div>
+      </div>
+    </div>
+  </section>
+</template>
+
+<script setup lang="ts">
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import { CheckCircle2, Clock3 } from 'lucide-vue-next'
+import { EDITOR_SCHEMA_VERSION } from '@shared/constants'
+import type { SubmissionDetails } from '@shared/ipc'
+import type { Correction, InlineComment } from '@shared/schemas'
+import { api } from '../api'
+import { renderTiptapHtml } from '../utils/renderTiptap'
+
+type SubmittedItem = {
+  submissionId: string
+  examId: string
+  examTitle: string
+  submittedAt: string
+  scorePoints: number | null
+  commentCount: number
+}
+
+const route = useRoute()
+const submission = ref<SubmissionDetails | null>(null)
+const correction = ref<Correction | null>(null)
+const submittedItems = ref<SubmittedItem[]>([])
+const scoreInput = ref('')
+const gradingComment = ref('')
+const selectedText = ref('')
+const commentBody = ref('')
+const paperRef = ref<HTMLElement | null>(null)
+const submissionPaperRef = ref<HTMLElement | null>(null)
+const actionError = ref('')
+const activeCommentId = ref<string | null>(null)
+const commentPositions = ref<Record<string, number>>({})
+const commentRailHeight = ref(760)
+const selectionPopover = ref({ x: 0, y: 0 })
+
+const renderedHtml = computed(() =>
+  submission.value ? renderTiptapHtml(submission.value.content) : ''
+)
+const canAddComment = computed(() => Boolean(selectedText.value && commentBody.value.trim()))
+const openSubmissionCount = computed(
+  () => submittedItems.value.filter((item) => item.scorePoints === null).length
+)
+const gradedSubmissionCount = computed(
+  () => submittedItems.value.filter((item) => item.scorePoints !== null).length
+)
+const nextOpenSubmission = computed(
+  () => submittedItems.value.find((item) => item.scorePoints === null) ?? submittedItems.value[0] ?? null
+)
+
+onMounted(() => {
+  window.addEventListener('resize', updateCommentPositions)
+  load()
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', updateCommentPositions)
+  clearInlineCommentHighlight()
+})
+watch(
+  () => route.params.id,
+  () => load()
+)
+
+async function load(): Promise<void> {
+  await loadSubmittedItems()
+  const submissionId = typeof route.params.id === 'string' ? route.params.id : null
+  if (!submissionId) {
+    submission.value = null
+    correction.value = null
+    return
+  }
+
+  submission.value = await api.getSubmission(submissionId)
+  correction.value =
+    submission.value.corrections[0] ?? (await api.createCorrection(submission.value.id))
+  scoreInput.value = formatScoreInput(correction.value.score.points)
+  gradingComment.value = correction.value.gradingComment
+  await nextTick()
+  updateCommentPositions()
+}
+
+async function loadSubmittedItems(): Promise<void> {
+  const exams = await api.listExams()
+  const submittedExams = exams.filter((exam) => exam.status !== 'archived')
+  const details = await Promise.all(submittedExams.map((exam) => api.getExam(exam.id)))
+  const items = details.flatMap((exam) =>
+    exam.submissions.map((submission) => ({
+        submissionId: submission.id,
+        examId: exam.id,
+        examTitle: exam.title,
+        submittedAt: submission.submittedAt,
+        scorePoints: exam.latestScore,
+        commentCount: 0
+      }))
+  )
+  const itemDetails = await Promise.all(
+    items.map(async (item) => {
+      const submissionDetails = await api.getSubmission(item.submissionId)
+      const correction = submissionDetails.corrections[0]
+      return {
+        ...item,
+        scorePoints: correction?.score.points ?? null,
+        commentCount: submissionDetails.corrections.reduce(
+          (sum, correction) => sum + correction.inlineComments.length,
+          0
+        )
+      }
+    })
+  )
+  submittedItems.value = itemDetails
+    .sort((left, right) => right.submittedAt.localeCompare(left.submittedAt))
+}
+
+async function saveCorrection(): Promise<void> {
+  if (!correction.value) return
+  actionError.value = ''
+  try {
+    correction.value = await api.updateCorrection({
+      correctionId: correction.value.id,
+      scorePoints: parseScoreInput(scoreInput.value),
+      gradingComment: gradingComment.value,
+      tags: []
+    })
+    scoreInput.value = formatScoreInput(correction.value.score.points)
+    await loadSubmittedItems()
+  } catch (error) {
+    actionError.value = error instanceof Error ? error.message : String(error)
+  }
+}
+
+function captureSelection(): void {
+  const selection = window.getSelection()
+  const text = selection?.toString().trim() ?? ''
+  if (!text || !paperRef.value || !selection?.anchorNode) return
+  if (!paperRef.value.contains(selection.anchorNode)) return
+  selectedText.value = text
+  updateSelectionPopover(selection)
+}
+
+function clearSelectedText(): void {
+  selectedText.value = ''
+  commentBody.value = ''
+  window.getSelection()?.removeAllRanges()
+}
+
+async function addComment(): Promise<void> {
+  captureSelection()
+  if (!submission.value || !correction.value || !canAddComment.value) {
+    return
+  }
+  const fullText = paperRef.value?.innerText ?? ''
+  const from = Math.max(0, fullText.indexOf(selectedText.value))
+  const to = from + selectedText.value.length
+  await api.addInlineComment({
+    correctionId: correction.value.id,
+    submissionId: submission.value.id,
+    body: commentBody.value,
+    tags: [],
+    anchor: {
+      type: 'prosemirror-selection',
+      editorSchemaVersion: EDITOR_SCHEMA_VERSION,
+      from,
+      to,
+      selectedText: selectedText.value,
+      prefix: fullText.slice(Math.max(0, from - 40), from),
+      suffix: fullText.slice(to, to + 40),
+      contentHash: submission.value.contentHash
+    }
+  })
+  commentBody.value = ''
+  selectedText.value = ''
+  await load()
+}
+
+function updateSelectionPopover(selection: Selection): void {
+  const range = selection.rangeCount ? selection.getRangeAt(0) : null
+  const container = submissionPaperRef.value
+  if (!range || !container) return
+  const rect = range.getBoundingClientRect()
+  const containerRect = container.getBoundingClientRect()
+  selectionPopover.value = {
+    x: Math.max(180, Math.min(rect.left - containerRect.left + rect.width / 2, containerRect.width - 180)),
+    y: Math.max(12, rect.top - containerRect.top - 10)
+  }
+}
+
+function commentTop(comment: InlineComment, index: number): number {
+  return commentPositions.value[comment.id] ?? index * 124
+}
+
+function highlightInlineComment(comment: InlineComment): void {
+  clearInlineCommentHighlight()
+  activeCommentId.value = comment.id
+  const range = findCommentRange(comment)
+  if (!range || !supportsCssHighlights()) return
+  CSS.highlights.set('inline-comment-hover', new Highlight(range))
+}
+
+function updateCommentPositions(): void {
+  const root = paperRef.value
+  if (!root || !correction.value) return
+  const rootRect = root.getBoundingClientRect()
+  const nextPositions: Record<string, number> = {}
+  for (const [index, comment] of correction.value.inlineComments.entries()) {
+    const range = findCommentRange(comment)
+    if (!range) {
+      nextPositions[comment.id] = index * 124
+      continue
+    }
+    const rect = range.getBoundingClientRect()
+    nextPositions[comment.id] = Math.max(0, rect.top - rootRect.top + 8)
+  }
+  commentPositions.value = avoidCommentOverlap(nextPositions, correction.value.inlineComments)
+  commentRailHeight.value = Math.max(root.offsetHeight, ...Object.values(commentPositions.value).map((top) => top + 150), 760)
+}
+
+function avoidCommentOverlap(
+  positions: Record<string, number>,
+  comments: InlineComment[]
+): Record<string, number> {
+  const adjusted = { ...positions }
+  let previousBottom = -Infinity
+  for (const comment of comments) {
+    const top = Math.max(adjusted[comment.id] ?? 0, previousBottom + 10)
+    adjusted[comment.id] = top
+    previousBottom = top + 116
+  }
+  return adjusted
+}
+
+function clearInlineCommentHighlight(): void {
+  activeCommentId.value = null
+  if (supportsCssHighlights()) CSS.highlights.delete('inline-comment-hover')
+}
+
+function findCommentRange(comment: InlineComment): Range | null {
+  const root = paperRef.value
+  const selectedText = comment.anchor.selectedText
+  if (!root || !selectedText) return null
+
+  const textNodes: Text[] = []
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  let next = walker.nextNode()
+  while (next) {
+    textNodes.push(next as Text)
+    next = walker.nextNode()
+  }
+
+  const fullText = textNodes.map((node) => node.textContent ?? '').join('')
+  const anchoredText = `${comment.anchor.prefix}${selectedText}${comment.anchor.suffix}`
+  const anchoredIndex = comment.anchor.prefix || comment.anchor.suffix ? fullText.indexOf(anchoredText) : -1
+  const start = anchoredIndex >= 0
+    ? anchoredIndex + comment.anchor.prefix.length
+    : fullText.indexOf(selectedText)
+  if (start < 0) return null
+  const end = start + selectedText.length
+
+  const startPosition = resolveTextPosition(textNodes, start)
+  const endPosition = resolveTextPosition(textNodes, end)
+  if (!startPosition || !endPosition) return null
+
+  const range = document.createRange()
+  range.setStart(startPosition.node, startPosition.offset)
+  range.setEnd(endPosition.node, endPosition.offset)
+  return range
+}
+
+function resolveTextPosition(nodes: Text[], offset: number): { node: Text; offset: number } | null {
+  let cursor = 0
+  for (const node of nodes) {
+    const length = node.textContent?.length ?? 0
+    if (offset <= cursor + length) {
+      return { node, offset: Math.max(0, offset - cursor) }
+    }
+    cursor += length
+  }
+  const last = nodes.at(-1)
+  return last ? { node: last, offset: last.textContent?.length ?? 0 } : null
+}
+
+function supportsCssHighlights(): boolean {
+  return typeof CSS !== 'undefined' && 'highlights' in CSS && typeof Highlight !== 'undefined'
+}
+
+function formatDate(value: string): string {
+  return new Intl.DateTimeFormat('de-DE', {
+    dateStyle: 'short',
+    timeStyle: 'short'
+  }).format(new Date(value))
+}
+
+function waitingLabel(value: string): string {
+  const submittedAt = new Date(value).getTime()
+  const ageInDays = Math.max(0, Math.floor((Date.now() - submittedAt) / 86_400_000))
+  if (ageInDays === 0) return 'wartet seit heute'
+  if (ageInDays === 1) return 'wartet seit 1 Tag'
+  return `wartet seit ${ageInDays} Tagen`
+}
+
+function parseScoreInput(value: string): number | null {
+  const normalized = value.replace(',', '.').trim()
+  if (!normalized) return null
+  const parsed = Number(normalized)
+  if (!Number.isFinite(parsed)) {
+    throw new Error('Bitte einen gültigen Punktwert eingeben.')
+  }
+  return parsed
+}
+
+function normalizeScoreInput(): void {
+  try {
+    scoreInput.value = formatScoreInput(parseScoreInput(scoreInput.value))
+  } catch {
+    // Keep the raw value so the user can correct it.
+  }
+}
+
+function formatScoreInput(value: number | null): string {
+  if (value === null) return ''
+  return Number.isInteger(value) ? String(value) : value.toFixed(1).replace('.', ',')
+}
+</script>
