@@ -52,7 +52,6 @@ const detectedOs = detectOs()
 
 async function loadDownloads() {
   const cards = [...document.querySelectorAll('.download-card[data-os]')]
-  const primaryDownload = document.querySelector('#primary-download')
   const detectedDownload = document.querySelector('#detected-download')
   const detectedDownloadLink = document.querySelector('#detected-download-link')
   const detectedLabel = document.querySelector('#detected-label')
@@ -75,9 +74,6 @@ async function loadDownloads() {
 
     const detectedAsset = detectedOs ? assetsByOs[detectedOs] : null
     if (detectedAsset) {
-      primaryDownload.href = detectedAsset.browser_download_url
-      primaryDownload.setAttribute('download', '')
-      primaryDownload.textContent = `Download für ${osLabels[detectedOs]}`
       detectedDownload.hidden = false
       detectedDownloadLink.href = detectedAsset.browser_download_url
       detectedDownloadLink.setAttribute('download', '')
