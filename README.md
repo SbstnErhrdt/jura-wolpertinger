@@ -8,6 +8,44 @@ Jura Wolpertinger ist eine offline-ready Desktop-App für juristische Prüfungen
 
 Die App ist ein Freizeitprojekt. Sie ist nicht offiziell, nicht mit Classtime oder bayerischen Prüfungsstellen verbunden und ersetzt keine echte Prüfungsumgebung. Der Anspruch ist praktischer: Wer zu Hause oder in der Lerngruppe prüfungsnah üben will, soll sich mit einer reduzierten Schreiboberfläche vertraut machen, Abgaben lokal festhalten und die eigene Entwicklung nachvollziehen können. Entwürfe werden laufend lokal gespeichert, sodass Arbeit auch bei Stromausfall, leerem Akku oder App-Absturz nicht einfach im Browser-Tab verschwindet.
 
+## Installation
+
+Die aktuelle Version gibt es unter [GitHub Releases](https://github.com/SbstnErhrdt/jura-wolpertinger/releases/latest).
+
+### Windows
+
+1. Die Datei `Jura Wolpertinger-<version>-<arch>-win.exe` herunterladen.
+2. Installer starten und dem Dialog folgen.
+3. Die App über Startmenü oder Desktop-Verknüpfung öffnen.
+
+Hinweis: Bei neuen oder unsignierten Apps kann Windows SmartScreen warnen.
+
+### macOS
+
+1. Die Datei `Jura Wolpertinger-<version>-<arch>-mac.dmg` herunterladen.
+2. DMG öffnen.
+3. `Jura Wolpertinger.app` in den Programme-Ordner ziehen.
+4. Die App aus `Programme` starten.
+
+Hinweis: Ohne Developer-ID-Signierung und Notarisierung kann macOS Gatekeeper warnen.
+
+### Linux
+
+1. Die Datei `Jura Wolpertinger-<version>-<arch>-linux.AppImage` herunterladen.
+2. Ausführbar machen:
+
+   ```bash
+   chmod +x "Jura Wolpertinger-<version>-<arch>-linux.AppImage"
+   ```
+
+3. Starten:
+
+   ```bash
+   ./Jura\ Wolpertinger-<version>-<arch>-linux.AppImage
+   ```
+
+Ausführliche Hinweise zu Signaturen, Zertifikaten und Distribution stehen in [docs/installation.md](docs/installation.md).
+
 ## Die Idee
 
 <p align="center">
