@@ -44,13 +44,25 @@ Die App ist bewusst lokal und schlicht gebaut. Eine Prüfung soll sich anfühlen
 
 ## Screenshots
 
-Screenshots können später in `docs/screenshots/` abgelegt und hier eingebunden werden. Sinnvolle Motive:
+### Bibliothek
 
-- Bibliothek mit Ordnern und Tag-Chips
-- Prüfungsmodus hell und dunkel
-- Abgabe-Overlay
-- Korrekturansicht
-- Auswertung mit Charts
+![Bibliothek mit Demo-Klausuren, Ordnern und Tag-Chips](docs/screenshots/1_startseite.png)
+
+### Bewertung
+
+![Bewertungsansicht mit Abgabenliste, Bewertung und Inline-Kommentaren](docs/screenshots/2_bewertungen.png)
+
+### Auswertung
+
+![Auswertung mit Punktverlauf, Tag-Filtern und Monatsmitteln](docs/screenshots/3_auswertung.png)
+
+### Klausur bearbeiten
+
+![Klausuransicht mit Editor, Metadaten und Tag-Eingabe](docs/screenshots/4_klausur.png)
+
+### Prüfungsmodus
+
+![Prüfungsmodus mit reduziertem Editor und Autosave-Hinweis](docs/screenshots/5_klausur_vollbild_modus.png)
 
 ## Stack
 

@@ -195,6 +195,57 @@ footer p {
   color: #5c737e;
 }
 
+.screenshots-section {
+  background: #eaf3f7;
+}
+
+.screenshot-showcase {
+  display: grid;
+  gap: 18px;
+  margin-top: 30px;
+}
+
+.screenshot-feature,
+.screenshot-grid figure {
+  background: #fff;
+  border: 1px solid #cfdee6;
+  border-radius: 8px;
+  margin: 0;
+  overflow: hidden;
+}
+
+.screenshot-feature img,
+.screenshot-grid img {
+  background: #0a0d0f;
+  display: block;
+  height: auto;
+  width: 100%;
+}
+
+.screenshot-feature figcaption,
+.screenshot-grid figcaption {
+  align-items: baseline;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 14px 16px;
+}
+
+.screenshot-feature figcaption span {
+  color: #5c737e;
+}
+
+.screenshot-grid {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.screenshot-grid figcaption {
+  color: #19313d;
+  font-weight: 700;
+}
+
 .offline-band {
   align-items: center;
   background: #004f80;
@@ -295,6 +346,7 @@ footer p {
   }
 
   .feature-grid,
+  .screenshot-grid,
   .download-grid {
     grid-template-columns: 1fr;
   }
