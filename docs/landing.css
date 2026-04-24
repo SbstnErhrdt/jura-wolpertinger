@@ -285,6 +285,61 @@ footer p {
   font-size: 22px;
 }
 
+.detected-download {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #c6dce7;
+  border-radius: 8px;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  margin-top: 24px;
+  padding: 14px 16px;
+}
+
+.detected-download[hidden] {
+  display: none;
+}
+
+.detected-download span {
+  color: #506a76;
+  font-weight: 700;
+}
+
+.download-card {
+  position: relative;
+}
+
+.download-card svg {
+  color: #008bd2;
+  fill: currentColor;
+  height: 34px;
+  margin-bottom: 8px;
+  width: 34px;
+}
+
+.download-card small {
+  color: #77909b;
+}
+
+.download-card.recommended {
+  border-color: #008bd2;
+  box-shadow: 0 0 0 3px rgba(0, 139, 210, 0.12);
+}
+
+.download-card.recommended::after {
+  background: #e2f3fb;
+  border-radius: 999px;
+  color: #006ea8;
+  content: "Empfohlen";
+  font-size: 12px;
+  font-weight: 800;
+  padding: 4px 8px;
+  position: absolute;
+  right: 14px;
+  top: 14px;
+}
+
 footer {
   border-top: 1px solid #d5e5ed;
   padding: 26px clamp(20px, 6vw, 92px);
