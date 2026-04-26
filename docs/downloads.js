@@ -1,15 +1,24 @@
 const releaseApiUrl = 'https://api.github.com/repos/SbstnErhrdt/jura-wolpertinger/releases/latest'
-const fallbackReleaseUrl = 'https://github.com/SbstnErhrdt/jura-wolpertinger/releases/latest'
+const latestDownloadBaseUrl = 'https://github.com/SbstnErhrdt/jura-wolpertinger/releases/latest/download'
+
+const directDownloads = {
+  windows: `${latestDownloadBaseUrl}/Jura%20Wolpertinger-x64-win.exe`,
+  macosArm: `${latestDownloadBaseUrl}/Jura%20Wolpertinger-arm64-mac.dmg`,
+  macosIntel: `${latestDownloadBaseUrl}/Jura%20Wolpertinger-x64-mac.dmg`,
+  linux: `${latestDownloadBaseUrl}/Jura%20Wolpertinger-x64-linux.AppImage`
+}
 
 const assetMatchers = {
   windows: (name) => /win.*\.exe$/i.test(name) || /\.exe$/i.test(name),
-  macos: (name) => /mac.*\.(dmg|zip)$/i.test(name) || /\.(dmg)$/i.test(name),
+  macosArm: (name) => /arm64.*mac.*\.dmg$/i.test(name),
+  macosIntel: (name) => /x64.*mac.*\.dmg$/i.test(name),
   linux: (name) => /linux.*\.AppImage$/i.test(name) || /\.AppImage$/i.test(name)
 }
 
 const osLabels = {
   windows: 'Windows',
-  macos: 'macOS',
+  macosArm: 'macOS Apple Silicon',
+  macosIntel: 'macOS Intel',
   linux: 'Linux'
 }
 
@@ -25,7 +34,7 @@ function detectOs() {
 }
 
 function formatAssetLabel(asset) {
-  if (!asset) return 'GitHub Release öffnen'
+  if (!asset) return 'Direkter Download'
   const sizeInMb = asset.size ? ` · ${(asset.size / 1024 / 1024).toFixed(1)} MB` : ''
   return `${asset.name}${sizeInMb}`
 }
@@ -37,18 +46,24 @@ function findAsset(assets, os) {
 function updateCard(card, asset, os) {
   const detail = card.querySelector('small')
   if (!asset) {
-    card.href = fallbackReleaseUrl
-    if (detail) detail.textContent = 'Zum neuesten Release'
+    card.href = directDownloads[os]
+    card.setAttribute('download', '')
+    if (detail) detail.textContent = 'Direkter Download'
     return
   }
 
   card.href = asset.browser_download_url
   card.setAttribute('download', '')
   if (detail) detail.textContent = formatAssetLabel(asset)
-  if (os === detectedOs) card.classList.add('recommended')
+  if (getRecommendedDownloadKeys().includes(os)) card.classList.add('recommended')
 }
 
 const detectedOs = detectOs()
+
+function getRecommendedDownloadKeys() {
+  if (detectedOs === 'macos') return ['macosArm', 'macosIntel']
+  return detectedOs ? [detectedOs] : []
+}
 
 async function loadDownloads() {
   const cards = [...document.querySelectorAll('.download-card[data-os]')]
@@ -63,7 +78,8 @@ async function loadDownloads() {
     const assets = release.assets || []
     const assetsByOs = {
       windows: findAsset(assets, 'windows'),
-      macos: findAsset(assets, 'macos'),
+      macosArm: findAsset(assets, 'macosArm'),
+      macosIntel: findAsset(assets, 'macosIntel'),
       linux: findAsset(assets, 'linux')
     }
 
@@ -72,20 +88,29 @@ async function loadDownloads() {
       updateCard(card, assetsByOs[os], os)
     }
 
-    const detectedAsset = detectedOs ? assetsByOs[detectedOs] : null
-    if (detectedAsset) {
+    const recommendedKeys = getRecommendedDownloadKeys()
+    const detectedAsset = recommendedKeys.length === 1 ? assetsByOs[recommendedKeys[0]] : null
+    if (detectedAsset && detectedOs) {
       detectedDownload.hidden = false
       detectedDownloadLink.href = detectedAsset.browser_download_url
       detectedDownloadLink.setAttribute('download', '')
-      detectedDownloadLink.textContent = `Download für ${osLabels[detectedOs]}`
-      detectedLabel.textContent = `Erkanntes System: ${osLabels[detectedOs]} · ${formatAssetLabel(detectedAsset)}`
+      detectedDownloadLink.textContent = `Download für ${osLabels[recommendedKeys[0]]}`
+      detectedLabel.textContent = `Erkanntes System: ${osLabels[recommendedKeys[0]]} · ${formatAssetLabel(detectedAsset)}`
+    } else if (detectedOs === 'macos') {
+      detectedDownload.hidden = false
+      detectedDownloadLink.href = '#download-grid'
+      detectedDownloadLink.removeAttribute('download')
+      detectedDownloadLink.textContent = 'Mac auswählen'
+      detectedLabel.textContent = 'macOS erkannt: Bitte Apple Chip oder Intel auswählen.'
     }
   } catch {
     for (const card of cards) {
       const detail = card.querySelector('small')
-      card.href = fallbackReleaseUrl
-      if (detail) detail.textContent = 'Zum neuesten Release'
-      if (card.dataset.os === detectedOs) card.classList.add('recommended')
+      const os = card.dataset.os
+      card.href = directDownloads[os]
+      card.setAttribute('download', '')
+      if (detail) detail.textContent = 'Direkter Download'
+      if (getRecommendedDownloadKeys().includes(os)) card.classList.add('recommended')
     }
   }
 }

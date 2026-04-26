@@ -2,7 +2,7 @@
 
 Diese Dokumentation beschreibt die aktuelle Architektur von Jura Wolpertinger. Sie ist als Arbeitsgrundlage für Weiterentwicklung, Reviews und spätere Migrationen gedacht.
 
-Stand: App `0.1.2`, Datenbank-Schema `2`, `.jura` Format `1`.
+Stand: App `0.1.3`, Datenbank-Schema `2`, `.jura` Format `1`.
 
 ## Zielbild
 

@@ -4,22 +4,25 @@ Diese Anleitung beschreibt, wie Nutzer Jura Wolpertinger installieren und was f�
 
 ## Download
 
-Die App wird über GitHub Releases verteilt:
+Die App wird über GitHub Releases verteilt. Die Website verlinkt direkt auf die neuesten Dateien:
 
 ```text
-https://github.com/SbstnErhrdt/jura-wolpertinger/releases/latest
+Windows: https://github.com/SbstnErhrdt/jura-wolpertinger/releases/latest/download/Jura%20Wolpertinger-x64-win.exe
+macOS Apple Silicon: https://github.com/SbstnErhrdt/jura-wolpertinger/releases/latest/download/Jura%20Wolpertinger-arm64-mac.dmg
+macOS Intel: https://github.com/SbstnErhrdt/jura-wolpertinger/releases/latest/download/Jura%20Wolpertinger-x64-mac.dmg
+Linux: https://github.com/SbstnErhrdt/jura-wolpertinger/releases/latest/download/Jura%20Wolpertinger-x64-linux.AppImage
 ```
 
-Für jede Version sollten dort die passenden Dateien für macOS, Windows und Linux liegen.
+Für macOS gibt es zwei Builds: `arm64` für Apple Silicon und `x64` für ältere Intel-Macs.
 
 ## Windows
 
 ### Installation
 
-1. Auf der Release-Seite die Windows-Datei herunterladen:
+1. Windows-Installer herunterladen:
 
    ```text
-   Jura Wolpertinger-<version>-<arch>-win.exe
+   Jura Wolpertinger-x64-win.exe
    ```
 
 2. Die `.exe` starten.
@@ -42,13 +45,14 @@ Aktueller Status im Projekt: Windows-Builds werden gebaut, aber noch nicht produ
 
 ### Installation
 
-1. Auf der Release-Seite die macOS-Datei herunterladen:
+1. Passende macOS-Datei herunterladen:
 
    ```text
-   Jura Wolpertinger-<version>-<arch>-mac.dmg
+   Jura Wolpertinger-arm64-mac.dmg
+   Jura Wolpertinger-x64-mac.dmg
    ```
 
-   Alternativ kann eine `.zip` bereitstehen.
+   Apple Silicon ist für Macs mit M1/M2/M3/M4. Intel ist für ältere Macs.
 
 2. Die `.dmg` öffnen.
 3. `Jura Wolpertinger.app` in den Programme-Ordner ziehen.
@@ -66,28 +70,28 @@ Für öffentliche macOS-Releases ist praktisch erforderlich:
 - Notarization über Apple.
 - Stapling des Notarisierungs-Tickets, damit die App auch offline sauber startet.
 
-Aktueller Status im Projekt: macOS-Builds werden gebaut, aber in der Release-Action ist automatische Zertifikatserkennung deaktiviert (`CSC_IDENTITY_AUTO_DISCOVERY=false`). Produktive Auto-Updates auf macOS sollten erst nach Signierung und Notarisierung aktiviert werden.
+Aktueller Status im Projekt: macOS-Builds werden für Apple Silicon und Intel gebaut, signiert und notariell vorbereitet, wenn die Apple-Secrets in GitHub Actions gesetzt sind.
 
 ## Linux
 
 ### Installation per AppImage
 
-1. Auf der Release-Seite die Linux-Datei herunterladen:
+1. Linux-Datei herunterladen:
 
    ```text
-   Jura Wolpertinger-<version>-<arch>-linux.AppImage
+   Jura Wolpertinger-x64-linux.AppImage
    ```
 
 2. Ausführbar machen:
 
    ```bash
-   chmod +x "Jura Wolpertinger-<version>-<arch>-linux.AppImage"
+   chmod +x "Jura Wolpertinger-x64-linux.AppImage"
    ```
 
 3. Starten:
 
    ```bash
-   ./Jura\ Wolpertinger-<version>-<arch>-linux.AppImage
+   ./Jura\ Wolpertinger-x64-linux.AppImage
    ```
 
 ### Linux-Signaturen

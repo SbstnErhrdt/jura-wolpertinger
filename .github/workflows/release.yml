@@ -49,13 +49,20 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            target: mac
-            script: release:mac
+            target: mac-arm64
+            platform: mac
+            script: release:mac:arm64
+          - os: macos-15-intel
+            target: mac-x64
+            platform: mac
+            script: release:mac:x64
           - os: windows-latest
             target: win
+            platform: win
             script: release:win
           - os: ubuntu-latest
             target: linux
+            platform: linux
             script: release:linux
     runs-on: ${{ matrix.os }}
     env:
@@ -77,13 +84,13 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Prepare macOS signing credentials
-        if: matrix.target == 'mac'
+        if: matrix.platform == 'mac'
         run: |
           printf '%s' "${{ secrets.APPLE_API_KEY }}" > "$RUNNER_TEMP/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8"
           chmod 600 "$RUNNER_TEMP/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8"
 
       - name: Publish mac release assets
-        if: matrix.target == 'mac'
+        if: matrix.platform == 'mac'
         env:
           CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
@@ -94,5 +101,5 @@ jobs:
         run: pnpm run ${{ matrix.script }}
 
       - name: Publish ${{ matrix.target }} release assets
-        if: matrix.target != 'mac'
+        if: matrix.platform != 'mac'
         run: pnpm run ${{ matrix.script }}

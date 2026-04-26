@@ -10,11 +10,11 @@ Die App ist ein Freizeitprojekt. Sie ist nicht offiziell, nicht mit Classtime od
 
 ## Installation
 
-Die aktuelle Version gibt es unter [GitHub Releases](https://github.com/SbstnErhrdt/jura-wolpertinger/releases/latest).
+Die aktuelle Version gibt es direkt als Download über die Projektseite oder über die folgenden Links.
 
 ### Windows
 
-1. Die Datei `Jura Wolpertinger-<version>-<arch>-win.exe` herunterladen.
+1. [Windows-Installer herunterladen](https://github.com/SbstnErhrdt/jura-wolpertinger/releases/latest/download/Jura%20Wolpertinger-x64-win.exe).
 2. Installer starten und dem Dialog folgen.
 3. Die App über Startmenü oder Desktop-Verknüpfung öffnen.
 
@@ -22,26 +22,26 @@ Hinweis: Bei neuen oder unsignierten Apps kann Windows SmartScreen warnen.
 
 ### macOS
 
-1. Die Datei `Jura Wolpertinger-<version>-<arch>-mac.dmg` herunterladen.
+1. Passende DMG-Datei herunterladen: [Apple Silicon](https://github.com/SbstnErhrdt/jura-wolpertinger/releases/latest/download/Jura%20Wolpertinger-arm64-mac.dmg) oder [Intel](https://github.com/SbstnErhrdt/jura-wolpertinger/releases/latest/download/Jura%20Wolpertinger-x64-mac.dmg).
 2. DMG öffnen.
 3. `Jura Wolpertinger.app` in den Programme-Ordner ziehen.
 4. Die App aus `Programme` starten.
 
-Hinweis: Ohne Developer-ID-Signierung und Notarisierung kann macOS Gatekeeper warnen.
+Hinweis: Apple Silicon ist für M1/M2/M3/M4-Macs. Intel ist für ältere Macs.
 
 ### Linux
 
-1. Die Datei `Jura Wolpertinger-<version>-<arch>-linux.AppImage` herunterladen.
+1. [Linux-AppImage herunterladen](https://github.com/SbstnErhrdt/jura-wolpertinger/releases/latest/download/Jura%20Wolpertinger-x64-linux.AppImage).
 2. Ausführbar machen:
 
    ```bash
-   chmod +x "Jura Wolpertinger-<version>-<arch>-linux.AppImage"
+   chmod +x "Jura Wolpertinger-x64-linux.AppImage"
    ```
 
 3. Starten:
 
    ```bash
-   ./Jura\ Wolpertinger-<version>-<arch>-linux.AppImage
+   ./Jura\ Wolpertinger-x64-linux.AppImage
    ```
 
 Ausführliche Hinweise zu Signaturen, Zertifikaten und Distribution stehen in [docs/installation.md](docs/installation.md).
