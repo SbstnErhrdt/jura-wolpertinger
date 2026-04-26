@@ -34,11 +34,21 @@ export function initializeDatabase(db: SqliteDatabase): void {
     return
   }
 
+  if (version === DATABASE_SCHEMA_VERSION) {
+    repairMissingUserScope(db)
+    updateAppVersion(db)
+    return
+  }
+
   if (version !== DATABASE_SCHEMA_VERSION) {
     throw new Error(
       `Unsupported database schema ${version}. Expected schema ${DATABASE_SCHEMA_VERSION}.`
     )
   }
+}
+
+function updateAppVersion(db: SqliteDatabase): void {
+  db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run('app_version', APP_VERSION)
 }
 
 function createSchema(db: SqliteDatabase): void {
@@ -174,6 +184,22 @@ function createSchema(db: SqliteDatabase): void {
 }
 
 function migrateV1ToV2(db: SqliteDatabase): void {
+  addUserScopeToLegacySchema(db)
+}
+
+function repairMissingUserScope(db: SqliteDatabase): void {
+  const hasCompleteUserScope =
+    tableExists(db, 'users') &&
+    USER_SCOPED_TABLES.every((table) => !tableExists(db, table) || columnExists(db, table, 'user_id'))
+
+  if (hasCompleteUserScope) {
+    return
+  }
+
+  addUserScopeToLegacySchema(db)
+}
+
+function addUserScopeToLegacySchema(db: SqliteDatabase): void {
   const migratedAt = nowIso()
   const userId = crypto.randomUUID()
 
@@ -198,7 +224,7 @@ function migrateV1ToV2(db: SqliteDatabase): void {
     `
     ).run(userId, 'Lokaler Nutzer', 'local', null, null, null, migratedAt, migratedAt)
 
-    for (const table of ['folders', 'exams', 'exam_revisions', 'submissions', 'corrections', 'inline_comments', 'attachments', 'tags', 'exam_tags']) {
+    for (const table of USER_SCOPED_TABLES) {
       if (tableExists(db, table) && !columnExists(db, table, 'user_id')) {
         db.exec(`ALTER TABLE ${table} ADD COLUMN user_id TEXT`)
         db.prepare(`UPDATE ${table} SET user_id = ? WHERE user_id IS NULL`).run(userId)
@@ -206,10 +232,26 @@ function migrateV1ToV2(db: SqliteDatabase): void {
     }
 
     db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run('current_user_id', userId)
-    db.prepare('UPDATE meta SET value = ? WHERE key = ?').run(String(DATABASE_SCHEMA_VERSION), 'schema_version')
-    db.prepare('UPDATE meta SET value = ? WHERE key = ?').run(APP_VERSION, 'app_version')
+    db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run(
+      'schema_version',
+      String(DATABASE_SCHEMA_VERSION)
+    )
+    db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run('app_version', APP_VERSION)
+    db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run('last_migrated_at', migratedAt)
   })()
 }
+
+const USER_SCOPED_TABLES = [
+  'folders',
+  'exams',
+  'exam_revisions',
+  'submissions',
+  'corrections',
+  'inline_comments',
+  'attachments',
+  'tags',
+  'exam_tags'
+]
 
 function tableExists(db: SqliteDatabase, table: string): boolean {
   return Boolean(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(table))

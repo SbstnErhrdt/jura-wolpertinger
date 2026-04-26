@@ -1,6 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import Database from 'better-sqlite3'
 import JSZip from 'jszip'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { seedDemoDataIfEnabled } from '@main/services/demoData'
@@ -37,6 +38,126 @@ describe('AppServices', () => {
     expect(Number(row.value)).toBe(DATABASE_SCHEMA_VERSION)
     expect(columns.some((column) => column.name === 'trashed_at')).toBe(true)
     expect(columns.some((column) => column.name === 'user_id')).toBe(true)
+  })
+
+  it('repairs legacy databases that already report the current schema without users', async () => {
+    services.close()
+    await rm(dataDir, { recursive: true, force: true })
+    dataDir = await mkdtemp(join(tmpdir(), 'jura-services-legacy-'))
+
+    const db = new Database(join(dataDir, 'database.sqlite'))
+    const now = new Date().toISOString()
+    const folderId = crypto.randomUUID()
+    const examId = crypto.randomUUID()
+    db.exec(`
+      CREATE TABLE meta (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+      CREATE TABLE folders (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        parent_id TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        trashed_at TEXT
+      );
+      CREATE TABLE exams (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        folder_id TEXT,
+        status TEXT NOT NULL,
+        tags_json TEXT NOT NULL,
+        notes TEXT NOT NULL DEFAULT '',
+        current_revision_id TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE exam_revisions (
+        id TEXT PRIMARY KEY,
+        exam_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        content_format TEXT NOT NULL,
+        content_hash TEXT NOT NULL,
+        content_json TEXT NOT NULL
+      );
+      CREATE TABLE submissions (
+        id TEXT PRIMARY KEY,
+        exam_id TEXT NOT NULL,
+        submitted_at TEXT NOT NULL,
+        revision_id TEXT NOT NULL,
+        content_hash TEXT NOT NULL,
+        pdf_path TEXT
+      );
+      CREATE TABLE corrections (
+        id TEXT PRIMARY KEY,
+        submission_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        score_points INTEGER,
+        grading_comment TEXT NOT NULL,
+        tags_json TEXT NOT NULL
+      );
+      CREATE TABLE inline_comments (
+        id TEXT PRIMARY KEY,
+        correction_id TEXT NOT NULL,
+        submission_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        status TEXT NOT NULL,
+        body TEXT NOT NULL,
+        anchor_json TEXT NOT NULL,
+        tags_json TEXT NOT NULL
+      );
+      CREATE TABLE attachments (
+        id TEXT PRIMARY KEY,
+        exam_id TEXT NOT NULL,
+        original_name TEXT NOT NULL,
+        stored_name TEXT NOT NULL,
+        mime_type TEXT,
+        size INTEGER NOT NULL,
+        relative_path TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+      CREATE TABLE tags (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL
+      );
+      CREATE TABLE exam_tags (
+        exam_id TEXT NOT NULL,
+        tag_id TEXT NOT NULL,
+        PRIMARY KEY (exam_id, tag_id)
+      );
+    `)
+    db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)').run(
+      'schema_version',
+      String(DATABASE_SCHEMA_VERSION)
+    )
+    db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)').run('app_version', '0.1.0')
+    db.prepare(
+      'INSERT INTO folders (id, name, parent_id, created_at, updated_at, trashed_at) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(folderId, 'Zivilrecht', null, now, now, null)
+    db.prepare(
+      `
+      INSERT INTO exams
+        (id, title, folder_id, status, tags_json, notes, current_revision_id, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `
+    ).run(examId, 'Legacy Klausur', folderId, 'draft', '["zivilrecht"]', '', null, now, now)
+    db.close()
+
+    services = new AppServices(dataDir)
+
+    const currentUser = services.getCurrentUser()
+    const folderColumns = services.db.prepare("PRAGMA table_info('folders')").all() as Array<{ name: string }>
+    const examColumns = services.db.prepare("PRAGMA table_info('exams')").all() as Array<{ name: string }>
+
+    expect(currentUser.id).toMatch(UUID_PATTERN)
+    expect(folderColumns.some((column) => column.name === 'user_id')).toBe(true)
+    expect(examColumns.some((column) => column.name === 'user_id')).toBe(true)
+    expect(services.listFolders()).toEqual([expect.objectContaining({ id: folderId, userId: currentUser.id })])
+    expect(services.listExams()).toEqual([expect.objectContaining({ id: examId, userId: currentUser.id })])
   })
 
   it('isolates local data per user and stores onboarding status per user', () => {
