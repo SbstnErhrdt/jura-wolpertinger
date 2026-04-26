@@ -114,6 +114,7 @@ import {
   UserPlus
 } from 'lucide-vue-next'
 import type { AppUser } from '@shared/ipc'
+import { APP_VERSION } from '@shared/constants'
 import { api } from './api'
 import { startOnboardingTour } from './onboarding'
 import { useTheme } from './theme'
@@ -123,7 +124,7 @@ const router = useRouter()
 const isExamFocus = computed(() => route.name === 'exam-focus')
 const iconUrl = 'assets/icon.png'
 const welcomeImageUrl = 'assets/hello.png'
-const appVersion = import.meta.env.PACKAGE_VERSION
+const appVersion = APP_VERSION
 const { isDark, toggleTheme, applyTheme } = useTheme()
 const users = ref<AppUser[]>([])
 const currentUser = ref<AppUser | null>(null)

@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import vue from '@vitejs/plugin-vue'
@@ -14,8 +14,6 @@ const rendererAssets = [
     target: resolve('src/renderer', 'public', 'assets', 'hello.png')
   }
 ]
-const packageJson = JSON.parse(readFileSync(resolve('package.json'), 'utf8')) as { version: string }
-
 function syncRendererAssets(): void {
   for (const asset of rendererAssets) {
     if (!existsSync(asset.source)) continue
@@ -66,9 +64,6 @@ export default defineConfig({
   },
   renderer: {
     root: resolve('src/renderer'),
-    define: {
-      'import.meta.env.PACKAGE_VERSION': JSON.stringify(packageJson.version)
-    },
     resolve: {
       alias: {
         '@renderer': resolve('src/renderer/src'),
