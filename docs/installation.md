@@ -58,19 +58,9 @@ Aktueller Status im Projekt: Windows-Builds werden gebaut, aber noch nicht produ
 3. `Jura Wolpertinger.app` in den Programme-Ordner ziehen.
 4. Die App aus `Programme` starten.
 
-### Wenn macOS warnt
+### Wenn macOS nachfragt
 
-macOS Gatekeeper blockiert oder warnt bei Apps, die nicht mit einer Apple Developer ID signiert und nicht notarisiert sind.
-
-Für öffentliche macOS-Releases ist praktisch erforderlich:
-
-- Apple Developer Program Mitgliedschaft.
-- Developer ID Application Zertifikat.
-- Hardened Runtime.
-- Notarization über Apple.
-- Stapling des Notarisierungs-Tickets, damit die App auch offline sauber startet.
-
-Aktueller Status im Projekt: macOS-Builds werden für Apple Silicon und Intel gebaut, signiert und notariell vorbereitet, wenn die Apple-Secrets in GitHub Actions gesetzt sind.
+Wenn macOS beim ersten Start nachfragt, bestätige den Start der heruntergeladenen App. Die Release-Dateien werden für die normale Installation vorbereitet.
 
 ## Linux
 

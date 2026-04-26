@@ -62,8 +62,8 @@
           <li>Die App aus `Programme` starten.</li>
         </ol>
         <p>
-          Für öffentliche macOS-Releases sind Developer-ID-Signierung, Hardened Runtime und Notarisierung
-          praktisch notwendig, damit Gatekeeper die App normal startet.
+          Wenn macOS nachfragt, bestätige den Start der heruntergeladenen App. Die Release-Dateien
+          werden für die normale Installation vorbereitet.
         </p>
       </section>
 
@@ -83,8 +83,8 @@
       <section class="doc-section">
         <h2>Brauchen wir Zertifikate?</h2>
         <p>
-          Für interne Tests nicht zwingend. Für öffentliche Releases ja: macOS sollte signiert und notarisiert
-          werden, Windows sollte code-signiert werden, Linux sollte mindestens Checksums bekommen.
+          Für Nutzer ist hier nichts einzurichten. Die technischen Zertifikate und Release-Signaturen
+          werden im Projekt gepflegt.
         </p>
         <p>
           Die ausführliche Maintainer-Anleitung steht zusätzlich als Markdown-Datei im Repository:
