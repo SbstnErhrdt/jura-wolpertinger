@@ -1,12 +1,4 @@
 const releaseApiUrl = 'https://api.github.com/repos/SbstnErhrdt/jura-wolpertinger/releases/latest'
-const latestDownloadBaseUrl = 'https://github.com/SbstnErhrdt/jura-wolpertinger/releases/latest/download'
-
-const directDownloads = {
-  windows: `${latestDownloadBaseUrl}/Jura%20Wolpertinger-x64-win.exe`,
-  macosArm: `${latestDownloadBaseUrl}/Jura%20Wolpertinger-arm64-mac.dmg`,
-  macosIntel: `${latestDownloadBaseUrl}/Jura%20Wolpertinger-x64-mac.dmg`,
-  linux: `${latestDownloadBaseUrl}/Jura%20Wolpertinger-x64-linux.AppImage`
-}
 
 const assetMatchers = {
   windows: (name) => /win.*\.exe$/i.test(name) || /\.exe$/i.test(name),
@@ -46,9 +38,7 @@ function findAsset(assets, os) {
 function updateCard(card, asset, os) {
   const detail = card.querySelector('small')
   if (!asset) {
-    card.href = directDownloads[os]
-    card.setAttribute('download', '')
-    if (detail) detail.textContent = 'Direkter Download'
+    markUnavailable(card, detail)
     return
   }
 
@@ -56,6 +46,14 @@ function updateCard(card, asset, os) {
   card.setAttribute('download', '')
   if (detail) detail.textContent = formatAssetLabel(asset)
   if (getRecommendedDownloadKeys().includes(os)) card.classList.add('recommended')
+}
+
+function markUnavailable(card, detail) {
+  card.href = '#download'
+  card.removeAttribute('download')
+  card.setAttribute('aria-disabled', 'true')
+  card.classList.add('unavailable')
+  if (detail) detail.textContent = 'Download noch nicht bereit'
 }
 
 const detectedOs = detectOs()
@@ -106,11 +104,8 @@ async function loadDownloads() {
   } catch {
     for (const card of cards) {
       const detail = card.querySelector('small')
-      const os = card.dataset.os
-      card.href = directDownloads[os]
-      card.setAttribute('download', '')
-      if (detail) detail.textContent = 'Direkter Download'
-      if (getRecommendedDownloadKeys().includes(os)) card.classList.add('recommended')
+      markUnavailable(card, detail)
+      if (getRecommendedDownloadKeys().includes(card.dataset.os)) card.classList.add('recommended')
     }
   }
 }

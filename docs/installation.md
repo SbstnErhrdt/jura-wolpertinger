@@ -4,13 +4,10 @@ Diese Anleitung beschreibt, wie Nutzer Jura Wolpertinger installieren und was f�
 
 ## Download
 
-Die App wird 체ber GitHub Releases verteilt. Die Website verlinkt direkt auf die neuesten Dateien:
+Die App wird 체ber GitHub Releases verteilt. Die Website l채dt die aktuelle Release-Liste und verlinkt erst dann direkt auf Dateien, wenn die Assets tats채chlich vorhanden sind:
 
 ```text
-Windows: https://github.com/SbstnErhrdt/jura-wolpertinger/releases/latest/download/Jura%20Wolpertinger-x64-win.exe
-macOS Apple Silicon: https://github.com/SbstnErhrdt/jura-wolpertinger/releases/latest/download/Jura%20Wolpertinger-arm64-mac.dmg
-macOS Intel: https://github.com/SbstnErhrdt/jura-wolpertinger/releases/latest/download/Jura%20Wolpertinger-x64-mac.dmg
-Linux: https://github.com/SbstnErhrdt/jura-wolpertinger/releases/latest/download/Jura%20Wolpertinger-x64-linux.AppImage
+docs/index.html#download
 ```
 
 F체r macOS gibt es zwei Builds: `arm64` f체r Apple Silicon und `x64` f체r 채ltere Intel-Macs.
