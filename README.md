@@ -56,6 +56,12 @@ In der kleinen Geschichte hinter dem Projekt begleitet Wolpi, der Jura-Wolpertin
 
 Die App ist bewusst lokal und schlicht gebaut. Eine Prüfung soll sich anfühlen wie ein konzentrierter Arbeitsmodus: schreiben, speichern, abgeben, korrigieren, auswerten. Alles bleibt auf dem eigenen Rechner und funktioniert auch ohne Internetverbindung.
 
+## Warum Wolpertinger?
+
+Der Wolpertinger ist ein bayerisches Fabelwesen: ein wenig eigenwillig, regional verwurzelt und nicht ganz so ernst, wie Prüfungsstoff manchmal wirkt. Der Name passt deshalb zu einer App, die sich an bayerischen Übungsprüfungen orientiert, aber bewusst kein offizielles Prüfungsprodukt sein will.
+
+Im Projekt steht der Wolpertinger für einen freundlichen lokalen Begleiter, nicht für Autorität. Die App soll Ordnung, Ruhe und Auswertung in die Vorbereitung bringen, ohne vorzugeben, echte Prüfungsverfahren, Korrektorinnen oder Korrektoren zu ersetzen.
+
 ## Funktionsumfang
 
 - lokale Bibliothek für mehrere Prüfungen

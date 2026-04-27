@@ -1,6 +1,7 @@
 <template>
   <div class="app-shell" :class="{ 'exam-shell': isExamFocus }">
     <aside v-if="!isExamFocus" class="sidebar">
+      <div class="beta-banner" aria-label="Beta-Version">BETA</div>
       <RouterLink class="brand" to="/">
         <img :src="iconUrl" alt="" />
         <span>Jura Wolpertinger</span>
