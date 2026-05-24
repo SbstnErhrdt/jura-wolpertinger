@@ -18,12 +18,15 @@ import type {
   AiCorrectionDraft,
   Attachment,
   Correction,
+  ExamType,
   ExamRevision,
   InlineComment,
   LearningTask,
+  LegalArea,
   Submission,
   User
 } from '@shared/schemas'
+import { examTypeSchema, legalAreaSchema } from '@shared/schemas'
 
 const BROWSER_STORE_KEY = 'jura-wolpertinger-browser-dev-v1'
 
@@ -193,6 +196,8 @@ function createBrowserDevApi(): AppApi {
     async createExam(input: CreateExamInput) {
       const store = readStore()
       const user = ensureBrowserUser(store)
+      const legalArea = parseLegalArea(input.legalArea)
+      const examType = parseExamType(input.examType)
       const now = nowIso()
       const examId = newId()
       const revisionId = newId()
@@ -223,8 +228,8 @@ function createBrowserDevApi(): AppApi {
         lastSavedAt: now,
         currentRevisionId: revisionId,
         latestScore: null,
-        legalArea: input.legalArea ?? null,
-        examType: input.examType ?? null,
+        legalArea,
+        examType,
         sourceName: input.sourceName ?? null,
         sourceUrl: input.sourceUrl ?? null
       }
@@ -241,6 +246,8 @@ function createBrowserDevApi(): AppApi {
       const index = store.exams.findIndex((exam) => exam.id === input.id)
       if (index < 0) throw new Error(`Exam not found: ${input.id}`)
       const current = store.exams[index]
+      const legalArea = input.legalArea === undefined ? current.legalArea : parseLegalArea(input.legalArea)
+      const examType = input.examType === undefined ? current.examType : parseExamType(input.examType)
       const next: ExamListItem = {
         ...current,
         title: input.title ?? current.title,
@@ -252,8 +259,8 @@ function createBrowserDevApi(): AppApi {
         status: input.status ?? current.status,
         tags: input.tags ? normalizeTags(input.tags) : current.tags,
         notes: input.notes ?? current.notes,
-        legalArea: input.legalArea === undefined ? current.legalArea : input.legalArea,
-        examType: input.examType === undefined ? current.examType : input.examType,
+        legalArea,
+        examType,
         sourceName: input.sourceName === undefined ? current.sourceName : input.sourceName,
         sourceUrl: input.sourceUrl === undefined ? current.sourceUrl : input.sourceUrl,
         updatedAt: nowIso()
@@ -356,10 +363,14 @@ function createBrowserDevApi(): AppApi {
     async saveAiSettings(input) {
       const store = readStore()
       const updatedAt = nowIso()
+      const apiKey = input.apiKey.trim()
+      const model = input.model.trim()
+      if (!apiKey) throw new Error('OpenAI API key darf nicht leer sein')
+      if (!model) throw new Error('OpenAI model darf nicht leer sein')
       store.aiSettings = {
         provider: input.provider,
-        apiKey: input.apiKey,
-        model: input.model,
+        apiKey,
+        model,
         updatedAt
       }
       writeStore(store)
@@ -402,6 +413,7 @@ function createBrowserDevApi(): AppApi {
     async acceptAiCorrectionDraft(draftId: string) {
       const store = readStore()
       const draft = findAiDraft(store, draftId)
+      requireDraftStatus(draft, 'accept')
       const correction = ensureCorrectionForDraft(store, draft)
       correction.score = draft.score
       correction.gradingComment = draft.gradingComment
@@ -439,6 +451,7 @@ function createBrowserDevApi(): AppApi {
     async rejectAiCorrectionDraft(draftId: string) {
       const store = readStore()
       const draft = findAiDraft(store, draftId)
+      requireDraftStatus(draft, 'reject')
       draft.status = 'rejected'
       draft.updatedAt = nowIso()
       writeStore(store)
@@ -769,6 +782,12 @@ function findAiDraft(store: BrowserStore, draftId: string): AiCorrectionDraft {
   return draft
 }
 
+function requireDraftStatus(draft: AiCorrectionDraft, action: 'accept' | 'reject'): void {
+  if (draft.status !== 'draft') {
+    throw new Error(`AI correction draft must have status draft to ${action}; current status is ${draft.status}`)
+  }
+}
+
 function ensureCorrectionForDraft(store: BrowserStore, draft: AiCorrectionDraft): Correction {
   const existing = store.corrections.find((correction) => correction.targetSubmissionId === draft.submissionId)
   if (existing) return existing
@@ -818,6 +837,14 @@ function folderName(store: BrowserStore, folderId: string | null | undefined): s
 
 function normalizeTags(tags: string[]): string[] {
   return [...new Set(tags.map((tag) => tag.trim()).filter(Boolean))]
+}
+
+function parseLegalArea(value: CreateExamInput['legalArea']): LegalArea | null {
+  return value === undefined ? null : legalAreaSchema.nullable().parse(value)
+}
+
+function parseExamType(value: CreateExamInput['examType']): ExamType | null {
+  return value === undefined ? null : examTypeSchema.nullable().parse(value)
 }
 
 function nowIso(): string {
