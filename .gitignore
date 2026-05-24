@@ -1,5 +1,6 @@
 .idea
 .dev-data
+.superpowers/
 references
 node_modules
 dist
