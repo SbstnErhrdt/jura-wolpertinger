@@ -51,6 +51,8 @@ describe('browser development API', () => {
     }
     const now = '2026-05-24T12:00:00.000Z'
     const userId = '11111111-1111-4111-8111-111111111111'
+    const examId = '66666666-6666-4666-8666-666666666666'
+    const revisionId = '77777777-7777-4777-8777-777777777777'
     const submissionId = '22222222-2222-4222-8222-222222222222'
     const correctionId = '33333333-3333-4333-8333-333333333333'
     const draftId = '44444444-4444-4444-8444-444444444444'
@@ -71,9 +73,55 @@ describe('browser development API', () => {
         ],
         currentUserId: userId,
         folders: [],
-        exams: [],
-        revisions: [],
-        submissions: [],
+        exams: [
+          {
+            id: examId,
+            userId,
+            title: 'KI Klausur',
+            folderId: null,
+            status: 'submitted',
+            tags: [],
+            notes: '',
+            legalArea: null,
+            examType: null,
+            sourceName: null,
+            sourceUrl: null,
+            currentRevisionId: revisionId,
+            createdAt: now,
+            updatedAt: now,
+            lastSavedAt: now,
+            latestScore: null
+          }
+        ],
+        revisions: [
+          {
+            schemaVersion: 1,
+            id: revisionId,
+            userId,
+            examId,
+            createdAt: now,
+            kind: 'submission',
+            contentFormat: 'tiptap-v1',
+            contentHash: 'hash-1',
+            content: {
+              type: 'doc',
+              content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Anspruch entstanden.' }] }]
+            }
+          }
+        ],
+        submissions: [
+          {
+            schemaVersion: 1,
+            id: submissionId,
+            userId,
+            examId,
+            submittedAt: now,
+            revisionId,
+            contentHash: 'hash-1',
+            canContinueEditing: true,
+            pdfPath: null
+          }
+        ],
         attachments: [],
         corrections: [
           {
@@ -140,6 +188,13 @@ describe('browser development API', () => {
                 suffix: '.',
                 body: 'KI-Kommentar',
                 tags: ['ki']
+              },
+              {
+                selectedText: 'Halluzination',
+                prefix: '',
+                suffix: '',
+                body: 'Unverankerter KI-Kommentar',
+                tags: ['ki']
               }
             ]
           }
@@ -165,6 +220,11 @@ describe('browser development API', () => {
     }
 
     expect(stored.corrections[0].inlineComments).toHaveLength(2)
+    expect(
+      stored.corrections[0].inlineComments.some(
+        (comment) => comment.body === 'Unverankerter KI-Kommentar'
+      )
+    ).toBe(false)
     expect(stored.corrections[0].inlineComments).toEqual([
       expect.objectContaining({ body: 'Manueller Kommentar' }),
       expect.objectContaining({

@@ -757,6 +757,8 @@ export class AppServices {
       })
 
       for (const comment of draft.inlineComments) {
+        const anchor = buildAiInlineCommentAnchor(comment, submissionDetails.contentHash, submissionText)
+        if (!anchor) continue
         this.db
           .prepare(
             `
@@ -773,7 +775,7 @@ export class AppServices {
             updatedAt,
             'open',
             comment.body,
-            stringifyJson(buildAiInlineCommentAnchor(comment, submissionDetails.contentHash, submissionText)),
+            stringifyJson(anchor),
             stringifyJson(normalizeTags(comment.tags))
           )
       }
@@ -1551,12 +1553,12 @@ function buildAiInlineCommentAnchor(
   comment: AiCorrectionDraft['inlineComments'][number],
   contentHash: string,
   submissionText: string
-): CommentAnchor {
+): CommentAnchor | null {
   const anchoredText = `${comment.prefix}${comment.selectedText}${comment.suffix}`
   const anchoredIndex = comment.prefix || comment.suffix ? submissionText.indexOf(anchoredText) : -1
-  const from = anchoredIndex >= 0
-    ? anchoredIndex + comment.prefix.length
-    : Math.max(0, submissionText.indexOf(comment.selectedText))
+  const selectedTextIndex = submissionText.indexOf(comment.selectedText)
+  const from = anchoredIndex >= 0 ? anchoredIndex + comment.prefix.length : selectedTextIndex
+  if (from < 0) return null
   const to = from + comment.selectedText.length
   return commentAnchorSchema.parse({
     type: 'prosemirror-selection',

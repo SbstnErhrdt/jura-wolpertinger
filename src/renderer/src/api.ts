@@ -403,6 +403,8 @@ function createBrowserDevApi(): AppApi {
       const contentHash =
         submission?.contentHash ?? correction.inlineComments[0]?.anchor.contentHash ?? ''
       for (const comment of draft.inlineComments) {
+        const anchor = buildBrowserAiInlineCommentAnchor(comment, contentHash, submissionText)
+        if (!anchor) continue
         correction.inlineComments.push({
           schemaVersion: 1,
           id: newId(),
@@ -412,7 +414,7 @@ function createBrowserDevApi(): AppApi {
           createdAt: correction.updatedAt,
           status: 'open',
           body: comment.body,
-          anchor: buildBrowserAiInlineCommentAnchor(comment, contentHash, submissionText),
+          anchor,
           tags: normalizeTags(comment.tags)
         })
       }
@@ -808,12 +810,12 @@ function buildBrowserAiInlineCommentAnchor(
   comment: AiCorrectionDraft['inlineComments'][number],
   contentHash: string,
   submissionText: string
-): InlineComment['anchor'] {
+): InlineComment['anchor'] | null {
   const anchoredText = `${comment.prefix}${comment.selectedText}${comment.suffix}`
   const anchoredIndex = comment.prefix || comment.suffix ? submissionText.indexOf(anchoredText) : -1
-  const from = anchoredIndex >= 0
-    ? anchoredIndex + comment.prefix.length
-    : Math.max(0, submissionText.indexOf(comment.selectedText))
+  const selectedTextIndex = submissionText.indexOf(comment.selectedText)
+  const from = anchoredIndex >= 0 ? anchoredIndex + comment.prefix.length : selectedTextIndex
+  if (from < 0) return null
   return {
     type: 'prosemirror-selection',
     editorSchemaVersion: EDITOR_SCHEMA_VERSION,

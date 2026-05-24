@@ -20,7 +20,7 @@ flowchart LR
   end
 
   subgraph Preload["Preload Bridge"]
-    Api["window.jura API"]
+    Api["window.juraApi API"]
   end
 
   subgraph Main["Electron Main Process"]
@@ -311,7 +311,7 @@ Die Abgabe ist kein Endzustand für die Bearbeitung. Nutzer können nach der Abg
 ```mermaid
 sequenceDiagram
   participant R as Renderer Editor
-  participant A as window.jura
+  participant A as window.juraApi
   participant M as Main IPC
   participant S as AppServices
   participant D as SQLite
@@ -347,7 +347,7 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
   participant C as Korrekturansicht
-  participant A as window.jura
+  participant A as window.juraApi
   participant S as AppServices
   participant D as SQLite
 
@@ -377,7 +377,7 @@ Inline-Kommentare referenzieren eine Submission, nicht den aktuellen Arbeitsstan
 
 ## KI-Korrektur
 
-Die KI-Korrektur ist eine ausdrückliche Nutzeraktion und die einzige Stelle, an der normale Prüfungsdaten die lokale App verlassen. Der Renderer sieht weiterhin nur `window.jura`; API-Schlüssel, Dateizugriff, Promptbau und der Cloud-Aufruf laufen im Main Process über Services. Im MVP wird nur ein eigener OpenAI-Schlüssel unterstützt, den Nutzer:innen lokal hinterlegen.
+Die KI-Korrektur ist eine ausdrückliche Nutzeraktion und die einzige Stelle, an der normale Prüfungsdaten die lokale App verlassen. Der Renderer sieht weiterhin nur `window.juraApi`; API-Schlüssel, Dateizugriff, Promptbau und der Cloud-Aufruf laufen im Main Process über Services. Im MVP wird nur ein eigener OpenAI-Schlüssel unterstützt, den Nutzer:innen lokal hinterlegen.
 
 Eine KI-Antwort wird zuerst als `ai_correction_drafts` gespeichert. Erst wenn der Entwurf angenommen wird, entstehen normale Korrekturen, Inline-Kommentare und Lernaufgaben in den bestehenden Tabellen. Ablehnen oder Überschreiben verändert die Abgabe nicht. `.jura` Pakete exportieren angenommene Korrekturen als normale Korrekturdaten, schließen aber Secrets, AI Settings, rohe oder nicht angenommene KI-Entwürfe und lokale Lernaufgaben bewusst aus.
 
@@ -494,7 +494,7 @@ flowchart TB
 
 ## IPC Oberflaeche
 
-Der Renderer nutzt ausschliesslich `window.jura`. Die API ist in `src/shared/ipc.ts` typisiert und wird im Main Process auf sichere Handler gemappt.
+Der Renderer nutzt ausschliesslich `window.juraApi`. Die API ist in `src/shared/ipc.ts` typisiert und wird im Main Process auf sichere Handler gemappt.
 
 | Bereich | API |
 | --- | --- |

@@ -466,6 +466,13 @@ describe('AppServices', () => {
           suffix: '.',
           body: 'Hier genauer am Sachverhalt prüfen.',
           tags: ['sachverhalt']
+        },
+        {
+          selectedText: 'Halluzination',
+          prefix: '',
+          suffix: '',
+          body: 'Dieser Kommentar darf nicht falsch verankert werden.',
+          tags: ['ki']
         }
       ]
     })
@@ -500,6 +507,11 @@ describe('AppServices', () => {
         })
       })
     ])
+    expect(
+      details.corrections[0].inlineComments.some(
+        (comment) => comment.body === 'Dieser Kommentar darf nicht falsch verankert werden.'
+      )
+    ).toBe(false)
     expect(tasks).toEqual([
       expect.objectContaining({
         submissionId: submission.id,
