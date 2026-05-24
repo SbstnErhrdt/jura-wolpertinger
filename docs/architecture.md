@@ -513,7 +513,7 @@ Der Renderer nutzt ausschliesslich `window.jura`. Die API ist in `src/shared/ipc
 
 ## Migrationen
 
-Beim Datenbankstart wird `meta.schema_version` gelesen. Neue Installationen erzeugen Schema v1 und wenden danach Migrationen bis zur aktuellen Version an.
+Beim Datenbankstart wird `meta.schema_version` gelesen. Neue Installationen erzeugen direkt das aktuelle Schema; bestehende Datenbanken werden über die passenden Versionsschritte migriert.
 
 ```mermaid
 flowchart TD
