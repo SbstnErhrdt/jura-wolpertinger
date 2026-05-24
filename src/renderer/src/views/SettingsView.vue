@@ -29,6 +29,14 @@
         </label>
 
         <label class="settings-field">
+          Nutzername
+          <div class="settings-inline-control">
+            <input v-model="currentUserName" placeholder="Name" @keyup.enter="saveCurrentUserName" />
+            <button type="button" :disabled="!currentUser" @click="saveCurrentUserName">Speichern</button>
+          </div>
+        </label>
+
+        <label class="settings-field">
           Neuer Nutzer
           <div class="settings-inline-control">
             <input v-model="newUserName" placeholder="z. B. Sebastian" @keyup.enter="createUser" />
@@ -104,6 +112,7 @@ import { useTheme } from '../theme'
 const { isDark, toggleTheme, applyTheme } = useTheme()
 const users = ref<AppUser[]>([])
 const currentUser = ref<AppUser | null>(null)
+const currentUserName = ref('')
 const newUserName = ref('')
 const aiSettings = ref<{ configured: boolean; model: string | null }>({ configured: false, model: null })
 const aiApiKeyInput = ref('')
@@ -118,6 +127,7 @@ async function load(): Promise<void> {
   applyTheme()
   currentUser.value = await api.getCurrentUser()
   users.value = await api.listUsers()
+  currentUserName.value = currentUser.value.displayName
   aiSettings.value = await api.getAiSettingsStatus()
   aiModelInput.value = aiSettings.value.model ?? 'gpt-5'
 }
@@ -133,6 +143,24 @@ async function createUser(): Promise<void> {
   if (!name) return
   await api.createUser(name)
   window.location.reload()
+}
+
+async function saveCurrentUserName(): Promise<void> {
+  if (!currentUser.value) return
+  actionError.value = ''
+  actionNotice.value = ''
+  try {
+    currentUser.value = await api.updateUser({
+      id: currentUser.value.id,
+      displayName: currentUserName.value
+    })
+    currentUserName.value = currentUser.value.displayName
+    users.value = await api.listUsers()
+    window.dispatchEvent(new CustomEvent('jura:users-updated'))
+    actionNotice.value = 'Nutzername gespeichert.'
+  } catch (error) {
+    actionError.value = error instanceof Error ? error.message : String(error)
+  }
 }
 
 async function resetTour(): Promise<void> {

@@ -180,7 +180,7 @@ Als Nutzer:in möchte ich Nutzer, KI-Korrektur und Oberfläche an einer Stelle e
 Akzeptanz:
 
 - Die linke Navigation enthält eine Einstellungsseite.
-- Nutzerwechsel, neuer lokaler Nutzer und Tour-Aktionen sind dort erreichbar.
+- Nutzerwechsel, Nutzername, neuer lokaler Nutzer und Tour-Aktionen sind dort erreichbar.
 - OpenAI-Key und Modell können dort für KI-Korrekturen gespeichert werden.
 - Die Seite erklärt, dass KI-Korrekturen Daten nur auf ausdrückliche Anfrage an den konfigurierten Anbieter übertragen.
 

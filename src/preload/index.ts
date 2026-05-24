@@ -17,6 +17,7 @@ const api: AppApi = {
   getCurrentUser: () => ipcRenderer.invoke('users:current'),
   listUsers: () => ipcRenderer.invoke('users:list'),
   createUser: (displayName: string) => ipcRenderer.invoke('users:create', displayName),
+  updateUser: (input: { id: string; displayName: string }) => ipcRenderer.invoke('users:update', input),
   switchUser: (userId: string) => ipcRenderer.invoke('users:switch', userId),
   completeOnboarding: (userId: string) => ipcRenderer.invoke('users:completeOnboarding', userId),
   completeTour: (userId: string) => ipcRenderer.invoke('users:completeTour', userId),

@@ -178,6 +178,9 @@ function registerIpc(): void {
   ipcMain.handle('users:current', () => services.getCurrentUser())
   ipcMain.handle('users:list', () => services.listUsers())
   ipcMain.handle('users:create', (_event, displayName: string) => services.createUser(displayName))
+  ipcMain.handle('users:update', (_event, input: { id: string; displayName: string }) =>
+    services.updateUser(input)
+  )
   ipcMain.handle('users:switch', (_event, userId: string) => services.switchUser(userId))
   ipcMain.handle('users:completeOnboarding', (_event, userId: string) =>
     services.completeOnboarding(userId)

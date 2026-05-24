@@ -85,6 +85,15 @@ function createBrowserDevApi(): AppApi {
       writeStore(store)
       return user
     },
+    async updateUser(input) {
+      const store = readStore()
+      const user = ensureBrowserUser(store)
+      if (input.id !== user.id) throw new Error(`Cannot update inactive user: ${input.id}`)
+      user.displayName = input.displayName.trim() || 'Lokaler Nutzer'
+      user.updatedAt = nowIso()
+      writeStore(store)
+      return user
+    },
     async switchUser(userId: string) {
       const store = readStore()
       const user = store.users.find((candidate) => candidate.id === userId)

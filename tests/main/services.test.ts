@@ -224,6 +224,19 @@ describe('AppServices', () => {
     expect(services.listExams()).toEqual([expect.objectContaining({ id: secondExam.id, userId: secondUser.id })])
   })
 
+  it('renames the current user without changing their workspace', () => {
+    const user = services.getCurrentUser()
+    const exam = services.createExam({ title: 'Nutzername Klausur' })
+
+    const renamed = services.updateUser({ id: user.id, displayName: 'Sebastian' })
+
+    expect(renamed.id).toBe(user.id)
+    expect(renamed.displayName).toBe('Sebastian')
+    expect(services.getCurrentUser().displayName).toBe('Sebastian')
+    expect(services.listExams()).toEqual([expect.objectContaining({ id: exam.id, userId: user.id })])
+    expect(services.updateUser({ id: user.id, displayName: ' ' }).displayName).toBe('Lokaler Nutzer')
+  })
+
   it('creates, moves, tags, submits and corrects an exam', async () => {
     const folder = services.createFolder('Zivilrecht')
     const exam = services.createExam({

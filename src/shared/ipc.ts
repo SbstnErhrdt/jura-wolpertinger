@@ -140,6 +140,7 @@ export type AppApi = {
   getCurrentUser(): Promise<AppUser>
   listUsers(): Promise<AppUser[]>
   createUser(displayName: string): Promise<AppUser>
+  updateUser(input: { id: string; displayName: string }): Promise<AppUser>
   switchUser(userId: string): Promise<AppUser>
   completeOnboarding(userId: string): Promise<AppUser>
   completeTour(userId: string): Promise<AppUser>

@@ -118,6 +118,18 @@ export class AppServices {
     return this.getCurrentUser()
   }
 
+  updateUser(input: { id: string; displayName: string }): User {
+    const currentUserId = this.getCurrentUserId()
+    if (input.id !== currentUserId) {
+      throw new Error(`Cannot update inactive user: ${input.id}`)
+    }
+    const now = nowIso()
+    this.db
+      .prepare('UPDATE users SET display_name = ?, updated_at = ? WHERE id = ?')
+      .run(input.displayName.trim() || 'Lokaler Nutzer', now, input.id)
+    return this.getCurrentUser()
+  }
+
   switchUser(userId: string): User {
     const row = this.db.prepare('SELECT * FROM users WHERE id = ?').get(userId) as Row | undefined
     if (!row) throw new Error(`User not found: ${userId}`)

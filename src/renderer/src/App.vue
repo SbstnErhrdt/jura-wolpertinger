@@ -138,15 +138,20 @@ const showTourPrompt = ref(false)
 const showCreateUser = ref(false)
 const newUserName = ref('')
 const startTourListener = () => startTour()
+const usersUpdatedListener = () => {
+  void loadUsers()
+}
 
 onMounted(async () => {
   applyTheme()
   await loadUsers()
   window.addEventListener('jura:start-tour', startTourListener)
+  window.addEventListener('jura:users-updated', usersUpdatedListener)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('jura:start-tour', startTourListener)
+  window.removeEventListener('jura:users-updated', usersUpdatedListener)
 })
 
 async function loadUsers(): Promise<void> {
