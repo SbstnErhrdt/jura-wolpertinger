@@ -758,6 +758,25 @@ textarea {
   gap: 12px;
 }
 
+.settings-confirm-remove {
+  background: #fff7f7;
+  border: 1px solid #efc5c5;
+  border-radius: 6px;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.settings-confirm-remove strong {
+  color: #7f2525;
+}
+
+.settings-confirm-remove p {
+  color: #7d4a4a;
+  font-size: 13px;
+  margin: 0;
+}
+
 .settings-status-pill {
   align-self: start;
   background: #f1f6f9;
@@ -2402,6 +2421,19 @@ textarea {
 
 :root[data-theme='dark'] .settings-test-error {
   color: #ffb4aa !important;
+}
+
+:root[data-theme='dark'] .settings-confirm-remove {
+  background: #281313;
+  border-color: #693333;
+}
+
+:root[data-theme='dark'] .settings-confirm-remove strong {
+  color: #ffc2bd;
+}
+
+:root[data-theme='dark'] .settings-confirm-remove p {
+  color: #d9a29c;
 }
 
 :root[data-theme='dark'] .settings-status-pill.active,

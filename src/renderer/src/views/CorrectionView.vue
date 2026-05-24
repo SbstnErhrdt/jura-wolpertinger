@@ -83,8 +83,29 @@
                 >
                   {{ aiBusy ? 'Prüft ...' : 'Verbindung testen' }}
                 </button>
+                <button
+                  v-if="aiSettings.source === 'stored'"
+                  type="button"
+                  class="secondary danger-secondary"
+                  :disabled="aiBusy"
+                  @click="startRemoveAiSettings"
+                >
+                  App-Key entfernen
+                </button>
               </div>
-              <form v-else class="settings-key-form" @submit.prevent="saveAiSettings">
+              <div v-if="confirmRemoveAiKey" class="settings-confirm-remove">
+                <strong>App-Key entfernen?</strong>
+                <p>KI-Korrekturen nutzen danach keinen gespeicherten App-Key mehr.</p>
+                <div class="dialog-actions">
+                  <button type="button" class="danger-button" :disabled="aiBusy" @click="removeAiSettings">
+                    Entfernen
+                  </button>
+                  <button type="button" class="secondary" :disabled="aiBusy" @click="cancelRemoveAiSettings">
+                    Abbrechen
+                  </button>
+                </div>
+              </div>
+              <form v-if="showAiKeyForm" class="settings-key-form" @submit.prevent="saveAiSettings">
                 <label>
                   OpenAI API-Key
                   <input v-model="aiApiKeyInput" type="password" :placeholder="aiKeyPlaceholder" />
@@ -347,6 +368,7 @@ const aiSettings = ref<AiSettingsStatus>({
 const aiDrafts = ref<AiCorrectionDraft[]>([])
 const showAiSettings = ref(false)
 const showAiKeyForm = ref(false)
+const confirmRemoveAiKey = ref(false)
 const aiApiKeyInput = ref('')
 const aiModelInput = ref(DEFAULT_AI_MODEL)
 const aiBusy = ref(false)
@@ -490,6 +512,7 @@ async function saveAiSettings(): Promise<void> {
     aiModelInput.value = aiSettings.value.model ?? DEFAULT_AI_MODEL
     aiApiKeyInput.value = ''
     showAiKeyForm.value = false
+    confirmRemoveAiKey.value = false
     aiNotice.value = 'KI-Einstellungen gespeichert.'
   } catch (error) {
     actionError.value = error instanceof Error ? error.message : String(error)
@@ -502,6 +525,7 @@ function openAiKeyForm(): void {
   actionError.value = ''
   aiNotice.value = ''
   aiConnectionMessage.value = ''
+  confirmRemoveAiKey.value = false
   aiApiKeyInput.value = ''
   aiModelInput.value = aiSettings.value.model ?? DEFAULT_AI_MODEL
   showAiKeyForm.value = true
@@ -511,6 +535,40 @@ function cancelAiKeyForm(): void {
   aiApiKeyInput.value = ''
   aiModelInput.value = aiSettings.value.model ?? DEFAULT_AI_MODEL
   showAiKeyForm.value = false
+}
+
+function startRemoveAiSettings(): void {
+  actionError.value = ''
+  aiNotice.value = ''
+  aiConnectionMessage.value = ''
+  showAiKeyForm.value = false
+  confirmRemoveAiKey.value = true
+}
+
+function cancelRemoveAiSettings(): void {
+  confirmRemoveAiKey.value = false
+}
+
+async function removeAiSettings(): Promise<void> {
+  actionError.value = ''
+  aiNotice.value = ''
+  aiConnectionMessage.value = ''
+  aiBusy.value = true
+  try {
+    aiSettings.value = await api.removeAiSettings()
+    aiModelInput.value = aiSettings.value.model ?? DEFAULT_AI_MODEL
+    aiApiKeyInput.value = ''
+    showAiKeyForm.value = false
+    confirmRemoveAiKey.value = false
+    aiNotice.value =
+      aiSettings.value.source === 'environment'
+        ? 'App-Key entfernt. Der Entwicklungs-Key aus .env ist weiter aktiv.'
+        : 'OpenAI-Key entfernt.'
+  } catch (error) {
+    actionError.value = error instanceof Error ? error.message : String(error)
+  } finally {
+    aiBusy.value = false
+  }
 }
 
 async function testAiConnection(): Promise<void> {

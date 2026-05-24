@@ -67,6 +67,21 @@ test.describe('Jura Wolpertinger Electron app', () => {
       await expect(aiSettingsPanel).toContainText('OpenAI-Key gespeichert')
       await expect(aiSettingsPanel).toContainText('...test')
       await expect(aiSettingsPanel.locator('input[type="password"]')).toHaveCount(0)
+      await aiSettingsPanel.getByRole('button', { name: 'App-Key entfernen' }).click()
+      await expect(aiSettingsPanel).toContainText('App-Key entfernen?')
+      await aiSettingsPanel.getByRole('button', { name: 'Abbrechen' }).click()
+      await expect(aiSettingsPanel).toContainText('OpenAI-Key gespeichert')
+      await aiSettingsPanel.getByRole('button', { name: 'App-Key entfernen' }).click()
+      await aiSettingsPanel.getByRole('button', { name: 'Entfernen', exact: true }).click()
+      await expect(aiSettingsPanel).toContainText(/OpenAI-Key fehlt|Entwicklungs-Key aktiv/)
+      await expect(aiSettingsPanel).not.toContainText('...test')
+      await aiSettingsPanel
+        .getByRole('button', {
+          name: /OpenAI-Key einrichten|Eigenen App-Key speichern/
+        })
+        .click()
+      await aiSettingsPanel.locator('input[type="password"]').fill('sk-visible-test')
+      await aiSettingsPanel.getByRole('button', { name: 'Speichern' }).click()
       await aiSettingsPanel.getByRole('button', { name: 'Key oder Modell ändern' }).click()
       await expect(aiSettingsPanel.locator('input[type="password"]')).toBeVisible()
       await aiSettingsPanel.getByRole('button', { name: 'Abbrechen' }).click()

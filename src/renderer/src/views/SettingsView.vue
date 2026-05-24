@@ -98,13 +98,26 @@
             type="button"
             class="secondary danger-secondary"
             :disabled="aiBusy"
-            @click="removeAiSettings"
+            @click="startRemoveAiSettings"
           >
-            Key entfernen
+            App-Key entfernen
           </button>
         </div>
 
-        <form v-else class="settings-key-form" @submit.prevent="saveAiSettings">
+        <div v-if="confirmRemoveAiKey" class="settings-confirm-remove">
+          <strong>App-Key entfernen?</strong>
+          <p>KI-Korrekturen nutzen danach keinen gespeicherten App-Key mehr.</p>
+          <div class="settings-actions">
+            <button type="button" class="danger-button" :disabled="aiBusy" @click="removeAiSettings">
+              Entfernen
+            </button>
+            <button type="button" class="secondary" :disabled="aiBusy" @click="cancelRemoveAiSettings">
+              Abbrechen
+            </button>
+          </div>
+        </div>
+
+        <form v-if="showAiKeyForm" class="settings-key-form" @submit.prevent="saveAiSettings">
           <label class="settings-field">
             OpenAI API-Key
             <input v-model="aiApiKeyInput" type="password" :placeholder="aiKeyPlaceholder" />
@@ -173,6 +186,7 @@ const aiApiKeyInput = ref('')
 const aiModelInput = ref(DEFAULT_AI_MODEL)
 const aiBusy = ref(false)
 const showAiKeyForm = ref(false)
+const confirmRemoveAiKey = ref(false)
 const actionError = ref('')
 const actionNotice = ref('')
 const aiConnectionMessage = ref('')
@@ -220,6 +234,7 @@ function openAiKeyForm(): void {
   actionError.value = ''
   actionNotice.value = ''
   aiConnectionMessage.value = ''
+  confirmRemoveAiKey.value = false
   aiApiKeyInput.value = ''
   aiModelInput.value = aiSettings.value.model ?? DEFAULT_AI_MODEL
   showAiKeyForm.value = true
@@ -229,6 +244,18 @@ function cancelAiKeyForm(): void {
   aiApiKeyInput.value = ''
   aiModelInput.value = aiSettings.value.model ?? DEFAULT_AI_MODEL
   showAiKeyForm.value = false
+}
+
+function startRemoveAiSettings(): void {
+  actionError.value = ''
+  actionNotice.value = ''
+  aiConnectionMessage.value = ''
+  showAiKeyForm.value = false
+  confirmRemoveAiKey.value = true
+}
+
+function cancelRemoveAiSettings(): void {
+  confirmRemoveAiKey.value = false
 }
 
 async function switchUser(event: Event): Promise<void> {
@@ -304,6 +331,7 @@ async function removeAiSettings(): Promise<void> {
     aiModelInput.value = aiSettings.value.model ?? DEFAULT_AI_MODEL
     aiApiKeyInput.value = ''
     showAiKeyForm.value = false
+    confirmRemoveAiKey.value = false
     actionNotice.value =
       aiSettings.value.source === 'environment'
         ? 'App-Key entfernt. Der Entwicklungs-Key aus .env ist weiter aktiv.'
