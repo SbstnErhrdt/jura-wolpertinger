@@ -561,6 +561,68 @@ textarea {
   min-width: 10px;
 }
 
+.analytics-learning-panel {
+  min-width: 0;
+}
+
+.analytics-learning-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.analytics-learning-category {
+  background: #edf7fb;
+  border: 1px solid #cfe5ef;
+  border-radius: 999px;
+  color: #45636f;
+  font-size: 12px;
+  padding: 4px 9px;
+}
+
+.analytics-learning-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.analytics-learning-task {
+  align-items: start;
+  border-bottom: 1px solid #edf4f7;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding-bottom: 12px;
+}
+
+.analytics-learning-task:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.analytics-learning-task-body {
+  min-width: 0;
+}
+
+.analytics-learning-task-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.analytics-learning-task h3 {
+  font-size: 15px;
+  margin: 0;
+}
+
+.analytics-learning-task p {
+  color: #6a808b;
+  font-size: 13px;
+  margin: 4px 0 0;
+}
+
 .analytics-table-panel {
   min-width: 0;
 }
@@ -2186,8 +2248,15 @@ textarea {
 :root[data-theme='dark'] .analytics-range-copy,
 :root[data-theme='dark'] .analytics-panel-copy,
 :root[data-theme='dark'] .analytics-bar-meta span,
+:root[data-theme='dark'] .analytics-learning-task p,
 :root[data-theme='dark'] .analytics-table-head {
   color: #9aadb6;
+}
+
+:root[data-theme='dark'] .analytics-learning-category {
+  background: #102f3f;
+  border-color: #24546a;
+  color: #b8ddeb;
 }
 
 :root[data-theme='dark'] .analytics-preset.active {
@@ -2198,6 +2267,7 @@ textarea {
 
 :root[data-theme='dark'] .analytics-grid-line,
 :root[data-theme='dark'] .analytics-table-head,
+:root[data-theme='dark'] .analytics-learning-task,
 :root[data-theme='dark'] .analytics-table-row {
   border-color: #2a3941;
   stroke: #2a3941;
@@ -3182,7 +3252,8 @@ textarea {
   }
 
   .analytics-table-head,
-  .analytics-table-row {
+  .analytics-table-row,
+  .analytics-learning-task {
     grid-template-columns: 1fr;
   }
 

@@ -542,6 +542,43 @@ describe('AppServices', () => {
     expect(services.listLearningTasks()).toHaveLength(1)
   })
 
+  it('updates a learning task status after accepting an AI correction draft', () => {
+    const exam = services.createExam({ title: 'KI Lernaufgabe' })
+    services.saveRevision(exam.id, {
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Anspruch entstanden.' }] }]
+    })
+    const submission = services.submitExam(exam.id)
+    const draft = services.saveAiCorrectionDraft({
+      submissionId: submission.id,
+      provider: 'openai',
+      model: 'gpt-5',
+      scorePoints: 7.5,
+      scoreReasoning: 'Basis erkannt.',
+      gradingComment: 'Ordentliche Grundlage.',
+      strengths: [],
+      weaknesses: [],
+      tags: [],
+      confidence: 'medium',
+      improvementSuggestions: [
+        {
+          category: 'structure',
+          priority: 'high',
+          title: 'Schwerpunkt setzen',
+          detail: 'Beginne mit der zentralen Anspruchsgrundlage.'
+        }
+      ],
+      inlineComments: []
+    })
+
+    services.acceptAiCorrectionDraft(draft.id)
+    const task = services.listLearningTasks()[0]
+    const updated = services.updateLearningTaskStatus(task.id, 'done')
+
+    expect(updated.status).toBe('done')
+    expect(services.listLearningTasks()[0].status).toBe('done')
+  })
+
   it('rolls back AI draft acceptance if learning task persistence fails', () => {
     const exam = services.createExam({ title: 'KI Rollback' })
     services.saveRevision(exam.id, {
