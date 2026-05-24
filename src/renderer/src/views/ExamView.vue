@@ -98,7 +98,7 @@
               <option :value="null">Nicht gesetzt</option>
               <option value="civil">Zivilrecht</option>
               <option value="criminal">Strafrecht</option>
-              <option value="public">Oeffentliches Recht</option>
+              <option value="public">Öffentliches Recht</option>
               <option value="mixed">Gemischt</option>
               <option value="other">Sonstiges</option>
             </select>
@@ -152,10 +152,15 @@
           <div class="panel-header">
             <h2>Dateien</h2>
             <div class="panel-header-actions">
-              <select v-model="nextAttachmentRole" class="compact-select" title="Dateirolle">
+              <select
+                v-model="nextAttachmentRole"
+                class="compact-select"
+                title="Dateirolle"
+                aria-label="Dateirolle"
+              >
                 <option value="assignment">Aufgabenstellung</option>
                 <option value="candidate_note">Bearbeitervermerk</option>
-                <option value="model_solution">Musterloesung</option>
+                <option value="model_solution">Musterlösung</option>
                 <option value="other">Sonstiges</option>
               </select>
               <button title="Datei hinzufügen" @click="addAttachment"><Plus :size="16" /></button>
@@ -380,10 +385,6 @@ async function saveMeta(): Promise<void> {
     sourceUrl: sourceUrl.value
   })
   tags.value = [...exam.value.tags]
-  legalArea.value = exam.value.legalArea
-  examType.value = exam.value.examType
-  sourceName.value = exam.value.sourceName ?? ''
-  sourceUrl.value = exam.value.sourceUrl ?? ''
   tagSuggestions.value = [...new Set([...tagSuggestions.value, ...exam.value.tags])].sort((left, right) =>
     left.localeCompare(right, 'de-DE')
   )
@@ -458,7 +459,7 @@ function attachmentRoleLabel(role: string): string {
   const labels: Record<string, string> = {
     assignment: 'Aufgabenstellung',
     candidate_note: 'Bearbeitervermerk',
-    model_solution: 'Musterloesung',
+    model_solution: 'Musterlösung',
     other: 'Sonstiges'
   }
   return labels[role] ?? 'Sonstiges'
