@@ -740,9 +740,23 @@ textarea {
   margin: 0;
 }
 
+.panel-header-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
 .compact-button {
   min-height: 32px;
   padding: 0 10px;
+}
+
+.compact-select {
+  min-height: 32px;
+  min-width: 0;
+  padding: 5px 8px;
+  width: auto;
 }
 
 .inline-form {
@@ -765,6 +779,34 @@ textarea {
   justify-content: flex-start;
   margin-top: 4px;
   width: 100%;
+}
+
+.attachment-row {
+  align-items: flex-start;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.attachment-row svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.attachment-row-meta {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.attachment-row-meta span {
+  overflow-wrap: anywhere;
+}
+
+.attachment-row-meta small {
+  color: #6d828d;
+  font-size: 12px;
 }
 
 .folder-row.active {
@@ -2023,6 +2065,10 @@ textarea {
 :root[data-theme='dark'] .folder-row,
 :root[data-theme='dark'] .attachment-row {
   color: #d9e5ea;
+}
+
+:root[data-theme='dark'] .attachment-row-meta small {
+  color: #9dafb7;
 }
 
 :root[data-theme='dark'] .folder-row.active {

@@ -61,6 +61,16 @@ Akzeptanz:
 - Nach Neustart ist die letzte gespeicherte Fassung verfügbar.
 - Anhänge werden in den App-Speicher kopiert.
 
+### Quellen und Musterloesungen verwalten
+
+Als Referendar:in moechte ich Aufgabenstellung, Bearbeitervermerk und Musterloesung einer Pruefung zuordnen, damit eine spaetere KI-Korrektur den richtigen Kontext nutzt.
+
+Akzeptanz:
+
+- Rechtsgebiet, Klausurtyp, Quelle und optionale URL koennen an der Pruefung gespeichert werden.
+- Uploads erhalten Rollen wie Aufgabenstellung, Bearbeitervermerk oder Musterloesung.
+- Fremde Klausurentexte werden nicht mitgeliefert, sondern nur durch Nutzer:innen importiert.
+
 ### Klausur abgeben
 
 Als Examenskandidat:in möchte ich eine Klausur abgeben, damit ein fester Bewertungsstand entsteht.
