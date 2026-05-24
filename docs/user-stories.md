@@ -124,8 +124,9 @@ Akzeptanz:
 - Die KI-Korrektur nutzt Aufgabenstellung, Musterlösung und Bearbeitung, sofern diese als Anhänge vorliegen.
 - Der Vorschlag wird durch eine zweite KI-Prüfer-Runde auf Punktplausibilität, Halluzinationen, Textanker und konkrete Verbesserungshinweise geprüft.
 - Die Einstellungen zeigen klar, ob kein Key, ein gespeicherter App-Key oder ein Entwicklungs-Key aus `.env` aktiv ist.
+- Nach dem Speichern zeigt die App eine kurze Key-Endung und den Speicherzeitpunkt, damit der Zustand sichtbar ist.
 - Der OpenAI-Key wird nur in einem bewussten Einrichten- oder Ändern-Flow eingegeben; die normale Ansicht zeigt kein leeres Passwortfeld.
-- Eine Verbindung kann aus der App heraus getestet werden, ohne den Key im Renderer offenzulegen.
+- Eine Verbindung kann aus der App heraus getestet werden; laufender Test, Erfolg und Fehler erscheinen direkt in der KI-Karte.
 - Der Vorschlag zeigt Punkte, Gesamthinweis, Tags, Inline-Kommentare und Lernhinweise als Entwurf.
 - Annehmen überführt den Entwurf in normale Korrektur, Inline-Kommentare und Lernaufgaben.
 - Ablehnen verwirft den Vorschlag für den Arbeitsfluss, ohne Abgabe oder bestehende Korrektur zu verändern.

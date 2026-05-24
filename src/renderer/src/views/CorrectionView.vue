@@ -67,7 +67,11 @@
               <div class="settings-ai-status compact">
                 <strong>{{ aiStatusTitle }}</strong>
                 <p>{{ aiStatusDescription }}</p>
+                <span v-if="aiSettings.keyPreview">Key: {{ aiSettings.keyPreview }}</span>
                 <span>Modell: {{ aiSettings.model ?? DEFAULT_AI_MODEL }}</span>
+                <span v-if="aiConnectionMessage" :class="aiConnectionOk ? 'settings-test-ok' : 'settings-test-error'">
+                  {{ aiConnectionMessage }}
+                </span>
               </div>
               <div v-if="!showAiKeyForm" class="dialog-actions">
                 <button type="button" @click="openAiKeyForm">{{ aiSetupButtonLabel }}</button>
@@ -337,6 +341,7 @@ const aiSettings = ref<AiSettingsStatus>({
   configured: false,
   model: null,
   source: null,
+  keyPreview: null,
   updatedAt: null
 })
 const aiDrafts = ref<AiCorrectionDraft[]>([])
@@ -346,6 +351,8 @@ const aiApiKeyInput = ref('')
 const aiModelInput = ref(DEFAULT_AI_MODEL)
 const aiBusy = ref(false)
 const aiNotice = ref('')
+const aiConnectionMessage = ref('')
+const aiConnectionOk = ref(false)
 
 const renderedHtml = computed(() =>
   submission.value ? renderTiptapHtml(submission.value.content) : ''
@@ -494,6 +501,7 @@ async function saveAiSettings(): Promise<void> {
 function openAiKeyForm(): void {
   actionError.value = ''
   aiNotice.value = ''
+  aiConnectionMessage.value = ''
   aiApiKeyInput.value = ''
   aiModelInput.value = aiSettings.value.model ?? DEFAULT_AI_MODEL
   showAiKeyForm.value = true
@@ -508,12 +516,17 @@ function cancelAiKeyForm(): void {
 async function testAiConnection(): Promise<void> {
   actionError.value = ''
   aiNotice.value = ''
+  aiConnectionOk.value = false
+  aiConnectionMessage.value = 'Verbindungstest läuft ...'
   aiBusy.value = true
   try {
     const result = await api.testAiConnection()
-    if (result.ok) aiNotice.value = result.message
-    else actionError.value = result.message
+    aiConnectionOk.value = result.ok
+    aiConnectionMessage.value = result.message
+    if (!result.ok) actionError.value = result.message
   } catch (error) {
+    aiConnectionOk.value = false
+    aiConnectionMessage.value = 'Verbindung fehlgeschlagen. Bitte Key und Modell prüfen.'
     actionError.value = error instanceof Error ? error.message : String(error)
   } finally {
     aiBusy.value = false

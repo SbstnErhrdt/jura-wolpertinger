@@ -80,7 +80,12 @@
         <div class="settings-ai-status">
           <strong>{{ aiStatusTitle }}</strong>
           <p>{{ aiStatusDescription }}</p>
+          <span v-if="aiSettings.keyPreview">Key: {{ aiSettings.keyPreview }}</span>
+          <span v-if="aiSettings.updatedAt">Gespeichert: {{ formatDateTime(aiSettings.updatedAt) }}</span>
           <span>Modell: {{ aiSettings.model ?? DEFAULT_AI_MODEL }}</span>
+          <span v-if="aiConnectionMessage" :class="aiConnectionOk ? 'settings-test-ok' : 'settings-test-error'">
+            {{ aiConnectionMessage }}
+          </span>
         </div>
 
         <div v-if="!showAiKeyForm" class="settings-actions">
@@ -161,6 +166,7 @@ const aiSettings = ref<AiSettingsStatus>({
   configured: false,
   model: null,
   source: null,
+  keyPreview: null,
   updatedAt: null
 })
 const aiApiKeyInput = ref('')
@@ -169,6 +175,8 @@ const aiBusy = ref(false)
 const showAiKeyForm = ref(false)
 const actionError = ref('')
 const actionNotice = ref('')
+const aiConnectionMessage = ref('')
+const aiConnectionOk = ref(false)
 const aiKeyPlaceholder = computed(() =>
   aiSettings.value.source === 'stored' ? 'neuer Key oder leer lassen' : 'sk-...'
 )
@@ -190,6 +198,13 @@ const aiSetupButtonLabel = computed(() =>
       : 'OpenAI-Key einrichten'
 )
 
+function formatDateTime(value: string): string {
+  return new Intl.DateTimeFormat('de-DE', {
+    dateStyle: 'short',
+    timeStyle: 'short'
+  }).format(new Date(value))
+}
+
 onMounted(load)
 
 async function load(): Promise<void> {
@@ -204,6 +219,7 @@ async function load(): Promise<void> {
 function openAiKeyForm(): void {
   actionError.value = ''
   actionNotice.value = ''
+  aiConnectionMessage.value = ''
   aiApiKeyInput.value = ''
   aiModelInput.value = aiSettings.value.model ?? DEFAULT_AI_MODEL
   showAiKeyForm.value = true
@@ -259,6 +275,7 @@ function startTour(): void {
 async function saveAiSettings(): Promise<void> {
   actionError.value = ''
   actionNotice.value = ''
+  aiConnectionMessage.value = ''
   aiBusy.value = true
   try {
     aiSettings.value = await api.saveAiSettings({
@@ -280,6 +297,7 @@ async function saveAiSettings(): Promise<void> {
 async function removeAiSettings(): Promise<void> {
   actionError.value = ''
   actionNotice.value = ''
+  aiConnectionMessage.value = ''
   aiBusy.value = true
   try {
     aiSettings.value = await api.removeAiSettings()
@@ -300,12 +318,17 @@ async function removeAiSettings(): Promise<void> {
 async function testAiConnection(): Promise<void> {
   actionError.value = ''
   actionNotice.value = ''
+  aiConnectionOk.value = false
+  aiConnectionMessage.value = 'Verbindungstest läuft ...'
   aiBusy.value = true
   try {
     const result = await api.testAiConnection()
-    if (result.ok) actionNotice.value = result.message
-    else actionError.value = result.message
+    aiConnectionOk.value = result.ok
+    aiConnectionMessage.value = result.message
+    if (!result.ok) actionError.value = result.message
   } catch (error) {
+    aiConnectionOk.value = false
+    aiConnectionMessage.value = 'Verbindung fehlgeschlagen. Bitte Key und Modell prüfen.'
     actionError.value = error instanceof Error ? error.message : String(error)
   } finally {
     aiBusy.value = false

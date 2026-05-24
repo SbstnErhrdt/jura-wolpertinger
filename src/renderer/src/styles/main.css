@@ -743,6 +743,16 @@ textarea {
   margin: 0;
 }
 
+.settings-test-ok {
+  color: #24744a !important;
+  font-weight: 700;
+}
+
+.settings-test-error {
+  color: #9f2e2e !important;
+  font-weight: 700;
+}
+
 .settings-key-form {
   display: grid;
   gap: 12px;
@@ -2384,6 +2394,14 @@ textarea {
 :root[data-theme='dark'] .settings-ai-status span,
 :root[data-theme='dark'] .settings-field-note {
   color: #9aadb6;
+}
+
+:root[data-theme='dark'] .settings-test-ok {
+  color: #8ee3b1 !important;
+}
+
+:root[data-theme='dark'] .settings-test-error {
+  color: #ffb4aa !important;
 }
 
 :root[data-theme='dark'] .settings-status-pill.active,

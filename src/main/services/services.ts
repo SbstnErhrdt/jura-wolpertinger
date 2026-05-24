@@ -525,6 +525,7 @@ export class AppServices {
         configured: true,
         model: row.model,
         source: 'stored',
+        keyPreview: previewSecret(storedApiKey),
         updatedAt: row.updated_at
       }
     }
@@ -535,6 +536,7 @@ export class AppServices {
       configured: Boolean(envCredentials),
       model: envCredentials?.model ?? null,
       source: envCredentials ? 'environment' : null,
+      keyPreview: envCredentials ? previewSecret(envCredentials.apiKey) : null,
       updatedAt: null
     }
   }
@@ -581,10 +583,18 @@ export class AppServices {
         message: 'OpenAI-Key fehlt.'
       }
     }
-    return requestOpenAiConnectionTest({
-      apiKey: settings.apiKey,
-      model: settings.model
-    })
+    try {
+      return await requestOpenAiConnectionTest({
+        apiKey: settings.apiKey,
+        model: settings.model
+      })
+    } catch {
+      return {
+        ok: false,
+        model: settings.model,
+        message: 'Verbindung fehlgeschlagen. Bitte Key und Modell prüfen.'
+      }
+    }
   }
 
   async generateAiCorrectionDraft(submissionId: string): Promise<AiCorrectionDraft> {
@@ -1501,6 +1511,10 @@ function getOpenAiEnvironmentCredentials(): { provider: 'openai'; apiKey: string
     apiKey,
     model
   }
+}
+
+function previewSecret(value: string): string {
+  return `...${value.slice(-4)}`
 }
 
 function readEnvValue(name: string): string | undefined {

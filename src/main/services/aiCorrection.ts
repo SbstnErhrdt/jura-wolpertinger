@@ -245,6 +245,7 @@ export async function requestOpenAiConnectionTest(input: RequestOpenAiConnection
 }> {
   const response = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST',
+    signal: AbortSignal.timeout(15000),
     headers: {
       Authorization: `Bearer ${input.apiKey}`,
       'Content-Type': 'application/json'

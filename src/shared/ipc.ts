@@ -104,6 +104,7 @@ export type AiSettingsStatus = {
   configured: boolean
   model: string | null
   source: 'stored' | 'environment' | null
+  keyPreview: string | null
   updatedAt: string | null
 }
 

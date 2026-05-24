@@ -677,6 +677,7 @@ describe('AppServices', () => {
       configured: false,
       model: null,
       source: null,
+      keyPreview: null,
       updatedAt: null
     })
 
@@ -689,6 +690,7 @@ describe('AppServices', () => {
     expect(saved.configured).toBe(true)
     expect(saved.model).toBe('gpt-5')
     expect(saved.source).toBe('stored')
+    expect(saved.keyPreview).toBe('...test')
     expect(saved.updatedAt).not.toBeNull()
 
     services.close()
@@ -729,6 +731,7 @@ describe('AppServices', () => {
         configured: true,
         model: 'gpt-5.5',
         source: 'environment',
+        keyPreview: '...test',
         updatedAt: null
       })
 
@@ -740,6 +743,7 @@ describe('AppServices', () => {
         configured: true,
         model: 'gpt-5.5',
         source: 'environment',
+        keyPreview: '...test',
         updatedAt: null
       })
     } finally {
@@ -786,6 +790,7 @@ describe('AppServices', () => {
       configured: false,
       model: null,
       source: null,
+      keyPreview: null,
       updatedAt: null
     })
   })
@@ -808,6 +813,28 @@ describe('AppServices', () => {
       ok: true,
       model: 'gpt-5.5',
       message: 'Verbindung erfolgreich.'
+    })
+  })
+
+  it('returns a user-facing AI connection error instead of throwing raw OpenAI failures', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        text: vi.fn().mockResolvedValue('invalid api key')
+      })
+    )
+    services.saveAiSettings({
+      provider: 'openai',
+      apiKey: 'sk-test',
+      model: 'gpt-5.5'
+    })
+
+    await expect(services.testAiConnection()).resolves.toEqual({
+      ok: false,
+      model: 'gpt-5.5',
+      message: 'Verbindung fehlgeschlagen. Bitte Key und Modell prüfen.'
     })
   })
 

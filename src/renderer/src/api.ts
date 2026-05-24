@@ -815,6 +815,7 @@ function aiSettingsStatus(settings: BrowserStore['aiSettings']): AiSettingsStatu
     configured: Boolean(settings?.configured),
     model: settings?.model ?? null,
     source: settings?.configured ? 'stored' : null,
+    keyPreview: settings?.configured ? 'gespeichert' : null,
     updatedAt: settings?.updatedAt ?? null
   }
 }
