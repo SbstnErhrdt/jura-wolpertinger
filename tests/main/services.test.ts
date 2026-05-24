@@ -311,6 +311,74 @@ describe('AppServices', () => {
     expect(storedPath).toContain(join('files', 'exams', exam.id, 'attachments'))
   })
 
+  it('stores exam metadata and attachment roles', async () => {
+    const exam = services.createExam({
+      title: 'ZR Urteil',
+      legalArea: 'civil',
+      examType: 'judgment',
+      sourceName: 'Hemmer',
+      sourceUrl: 'https://example.test/klausur'
+    })
+
+    expect(exam.legalArea).toBe('civil')
+    expect(exam.examType).toBe('judgment')
+    expect(exam.sourceName).toBe('Hemmer')
+
+    const sourcePath = join(dataDir, 'musterloesung.pdf')
+    await writeFile(sourcePath, 'Musterloesung')
+    const attachment = await services.addAttachmentFromPath(exam.id, sourcePath, 'model_solution')
+
+    expect(attachment.role).toBe('model_solution')
+    expect(services.getExam(exam.id).attachments[0].role).toBe('model_solution')
+  })
+
+  it('stores AI drafts and accepts them into the existing correction structure', () => {
+    const exam = services.createExam({ title: 'KI Klausur', legalArea: 'civil', examType: 'judgment' })
+    services.saveRevision(exam.id, {
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Anspruch entstanden.' }] }]
+    })
+    const submission = services.submitExam(exam.id)
+    const draft = services.saveAiCorrectionDraft({
+      submissionId: submission.id,
+      provider: 'openai',
+      model: 'gpt-5',
+      scorePoints: 7.5,
+      scoreReasoning: 'Basis erkannt, Schwerpunkt fehlt.',
+      gradingComment: 'Ordentliche Grundlage.',
+      strengths: ['Anspruchsaufbau vorhanden'],
+      weaknesses: ['Schwerpunktsetzung fehlt'],
+      tags: ['schwerpunktsetzung'],
+      confidence: 'medium',
+      improvementSuggestions: [
+        {
+          category: 'structure',
+          priority: 'high',
+          title: 'Schwerpunkt setzen',
+          detail: 'Beginne mit der zentralen Anspruchsgrundlage.'
+        }
+      ],
+      inlineComments: []
+    })
+
+    const accepted = services.acceptAiCorrectionDraft(draft.id)
+    const details = services.getSubmission(submission.id)
+    const tasks = services.listLearningTasks()
+
+    expect(accepted.status).toBe('accepted')
+    expect(details.corrections[0].score.points).toBe(7.5)
+    expect(details.corrections[0].gradingComment).toContain('Ordentliche Grundlage')
+    expect(details.corrections[0].tags).toEqual(['schwerpunktsetzung'])
+    expect(tasks).toEqual([
+      expect.objectContaining({
+        submissionId: submission.id,
+        category: 'structure',
+        priority: 'high',
+        status: 'open'
+      })
+    ])
+  })
+
   it('exports and imports .jura packages with content, attachments and corrections', async () => {
     const exam = services.createExam({ title: 'Exportklausur', tags: ['strafrecht'] })
     services.saveRevision(exam.id, {

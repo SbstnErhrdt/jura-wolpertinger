@@ -11,6 +11,7 @@ import {
   JURA_FORMAT_VERSION
 } from '@shared/constants'
 import {
+  aiCorrectionDraftSchema,
   attachmentSchema,
   commentAnchorSchema,
   correctionSchema,
@@ -18,16 +19,20 @@ import {
   examListItemSchema,
   folderSchema,
   juraManifestSchema,
+  learningTaskSchema,
   revisionSchema,
   scoreSchema,
   submissionSchema,
   userSchema,
   type Attachment,
+  type AttachmentRole,
+  type AiCorrectionDraft,
   type CommentAnchor,
   type Correction,
   type ExamRevision,
   type ExamStatus,
   type InlineComment,
+  type LearningTask,
   type JuraDocument,
   type JuraManifest,
   type Submission,
@@ -40,6 +45,7 @@ import type {
   ExamDetails,
   ExamListItem,
   FolderDto,
+  SaveAiCorrectionDraftInput,
   SubmissionDetails,
   TrashFolderInput,
   UpdateCorrectionInput,
@@ -238,8 +244,8 @@ export class AppServices {
           .prepare(
             `
             INSERT INTO exams
-              (id, user_id, title, folder_id, status, tags_json, notes, current_revision_id, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              (id, user_id, title, folder_id, status, tags_json, notes, legal_area, exam_type, source_name, source_url, current_revision_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `
           )
           .run(
@@ -250,6 +256,10 @@ export class AppServices {
             'draft',
             stringifyJson(tags),
             '',
+            input.legalArea ?? null,
+            input.examType ?? null,
+            input.sourceName ?? null,
+            input.sourceUrl ?? null,
             revisionId,
             createdAt,
             createdAt
@@ -304,14 +314,18 @@ export class AppServices {
       folderId: input.folderId === undefined ? current.folderId : input.folderId,
       status: input.status ?? current.status,
       tags: input.tags ? normalizeTags(input.tags) : current.tags,
-      notes: input.notes ?? current.notes
+      notes: input.notes ?? current.notes,
+      legalArea: input.legalArea === undefined ? current.legalArea : input.legalArea,
+      examType: input.examType === undefined ? current.examType : input.examType,
+      sourceName: input.sourceName === undefined ? current.sourceName : input.sourceName,
+      sourceUrl: input.sourceUrl === undefined ? current.sourceUrl : input.sourceUrl
     }
 
     this.db
       .prepare(
         `
         UPDATE exams
-        SET title = ?, folder_id = ?, status = ?, tags_json = ?, notes = ?, updated_at = ?
+        SET title = ?, folder_id = ?, status = ?, tags_json = ?, notes = ?, legal_area = ?, exam_type = ?, source_name = ?, source_url = ?, updated_at = ?
         WHERE id = ?
       `
       )
@@ -321,6 +335,10 @@ export class AppServices {
         next.status,
         stringifyJson(next.tags),
         next.notes,
+        next.legalArea ?? null,
+        next.examType ?? null,
+        next.sourceName ?? null,
+        next.sourceUrl ?? null,
         updatedAt,
         input.id
       )
@@ -542,7 +560,158 @@ export class AppServices {
     return this.getInlineComment(id)
   }
 
-  async addAttachmentFromPath(examId: string, sourcePath: string): Promise<Attachment> {
+  saveAiCorrectionDraft(input: SaveAiCorrectionDraftInput): AiCorrectionDraft {
+    scoreSchema.parse({ system: 'bayern-0-18', points: input.scorePoints })
+    const parsed = aiCorrectionDraftSchema.parse({
+      schemaVersion: 1,
+      id: newId(),
+      userId: this.getCurrentUserId(),
+      submissionId: input.submissionId,
+      correctionId: null,
+      status: 'draft',
+      provider: input.provider,
+      model: input.model,
+      promptVersion: 'ai-correction-v1',
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+      score: { system: 'bayern-0-18', points: input.scorePoints },
+      scoreReasoning: input.scoreReasoning,
+      gradingComment: input.gradingComment,
+      strengths: input.strengths,
+      weaknesses: input.weaknesses,
+      tags: normalizeTags(input.tags),
+      confidence: input.confidence,
+      improvementSuggestions: input.improvementSuggestions,
+      inlineComments: input.inlineComments
+    })
+    this.getSubmissionRecord(parsed.submissionId)
+
+    this.db
+      .prepare(
+        `
+        INSERT INTO ai_correction_drafts
+          (id, user_id, submission_id, correction_id, status, provider, model, prompt_version, created_at, updated_at, score_points, score_reasoning, grading_comment, strengths_json, weaknesses_json, tags_json, confidence, improvement_suggestions_json, inline_comments_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `
+      )
+      .run(
+        parsed.id,
+        parsed.userId,
+        parsed.submissionId,
+        null,
+        parsed.status,
+        parsed.provider,
+        parsed.model,
+        parsed.promptVersion,
+        parsed.createdAt,
+        parsed.updatedAt,
+        parsed.score.points,
+        parsed.scoreReasoning,
+        parsed.gradingComment,
+        stringifyJson(parsed.strengths),
+        stringifyJson(parsed.weaknesses),
+        stringifyJson(parsed.tags),
+        parsed.confidence,
+        stringifyJson(parsed.improvementSuggestions),
+        stringifyJson(parsed.inlineComments)
+      )
+
+    return this.getAiCorrectionDraft(parsed.id)
+  }
+
+  listAiCorrectionDrafts(submissionId: string): AiCorrectionDraft[] {
+    this.getSubmissionRecord(submissionId)
+    const rows = this.db
+      .prepare(
+        'SELECT * FROM ai_correction_drafts WHERE submission_id = ? AND user_id = ? ORDER BY updated_at DESC'
+      )
+      .all(submissionId, this.getCurrentUserId()) as Row[]
+    return rows.map(aiCorrectionDraftFromRow)
+  }
+
+  acceptAiCorrectionDraft(draftId: string): AiCorrectionDraft {
+    const draft = this.getAiCorrectionDraft(draftId)
+    const correction = this.createCorrection(draft.submissionId)
+    const updatedCorrection = this.updateCorrection({
+      correctionId: correction.id,
+      scorePoints: draft.score.points,
+      gradingComment: draft.gradingComment,
+      tags: draft.tags
+    })
+    const updatedAt = nowIso()
+
+    this.db.transaction(() => {
+      for (const suggestion of draft.improvementSuggestions) {
+        this.db
+          .prepare(
+            `
+            INSERT INTO learning_tasks
+              (id, user_id, submission_id, correction_id, ai_draft_id, category, priority, status, title, detail, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `
+          )
+          .run(
+            newId(),
+            draft.userId,
+            draft.submissionId,
+            updatedCorrection.id,
+            draft.id,
+            suggestion.category,
+            suggestion.priority,
+            'open',
+            suggestion.title,
+            suggestion.detail,
+            updatedAt,
+            updatedAt
+          )
+      }
+
+      this.db
+        .prepare('UPDATE ai_correction_drafts SET status = ?, correction_id = ?, updated_at = ? WHERE id = ?')
+        .run('accepted', updatedCorrection.id, updatedAt, draft.id)
+      this.db
+        .prepare(
+          `
+          UPDATE ai_correction_drafts
+          SET status = ?, updated_at = ?
+          WHERE submission_id = ? AND id != ? AND status = ?
+        `
+        )
+        .run('superseded', updatedAt, draft.submissionId, draft.id, 'draft')
+    })()
+
+    return this.getAiCorrectionDraft(draft.id)
+  }
+
+  rejectAiCorrectionDraft(draftId: string): AiCorrectionDraft {
+    this.getAiCorrectionDraft(draftId)
+    this.db
+      .prepare('UPDATE ai_correction_drafts SET status = ?, updated_at = ? WHERE id = ? AND user_id = ?')
+      .run('rejected', nowIso(), draftId, this.getCurrentUserId())
+    return this.getAiCorrectionDraft(draftId)
+  }
+
+  listLearningTasks(): LearningTask[] {
+    const rows = this.db
+      .prepare('SELECT * FROM learning_tasks WHERE user_id = ? ORDER BY created_at ASC, id ASC')
+      .all(this.getCurrentUserId()) as Row[]
+    return rows.map(learningTaskFromRow)
+  }
+
+  updateLearningTaskStatus(taskId: string, status: LearningTask['status']): LearningTask {
+    learningTaskSchema.shape.status.parse(status)
+    this.getLearningTask(taskId)
+    this.db
+      .prepare('UPDATE learning_tasks SET status = ?, updated_at = ? WHERE id = ? AND user_id = ?')
+      .run(status, nowIso(), taskId, this.getCurrentUserId())
+    return this.getLearningTask(taskId)
+  }
+
+  async addAttachmentFromPath(
+    examId: string,
+    sourcePath: string,
+    role: AttachmentRole = 'other'
+  ): Promise<Attachment> {
     this.getExam(examId)
     const sourceStats = await stat(sourcePath)
     const id = newId()
@@ -560,11 +729,11 @@ export class AppServices {
       .prepare(
         `
         INSERT INTO attachments
-          (id, user_id, exam_id, original_name, stored_name, mime_type, size, relative_path, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (id, user_id, exam_id, original_name, stored_name, mime_type, size, relative_path, role, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `
       )
-      .run(id, userId, examId, originalName, storedName, null, sourceStats.size, relativePath, createdAt)
+      .run(id, userId, examId, originalName, storedName, null, sourceStats.size, relativePath, role, createdAt)
 
     return attachmentSchema.parse({
       schemaVersion: 1,
@@ -576,6 +745,7 @@ export class AppServices {
       mimeType: null,
       size: sourceStats.size,
       relativePath,
+      role,
       createdAt
     })
   }
@@ -781,8 +951,8 @@ export class AppServices {
           .prepare(
             `
             INSERT INTO exams
-              (id, user_id, title, folder_id, status, tags_json, notes, current_revision_id, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              (id, user_id, title, folder_id, status, tags_json, notes, legal_area, exam_type, source_name, source_url, current_revision_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `
           )
           .run(
@@ -793,6 +963,10 @@ export class AppServices {
             document.status,
             stringifyJson(document.tags),
             document.notes,
+            document.legalArea,
+            document.examType,
+            document.sourceName,
+            document.sourceUrl,
             currentRevisionId,
             document.createdAt || createdAt,
             createdAt
@@ -893,8 +1067,8 @@ export class AppServices {
             .prepare(
               `
               INSERT INTO attachments
-                (id, user_id, exam_id, original_name, stored_name, mime_type, size, relative_path, created_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (id, user_id, exam_id, original_name, stored_name, mime_type, size, relative_path, role, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `
             )
             .run(
@@ -906,6 +1080,7 @@ export class AppServices {
               imported.attachment.mimeType,
               imported.payload.byteLength,
               relativePath,
+              imported.attachment.role,
               imported.attachment.createdAt
             )
         }
@@ -980,6 +1155,22 @@ export class AppServices {
       .prepare('SELECT * FROM inline_comments WHERE correction_id = ? AND user_id = ? ORDER BY created_at ASC')
       .all(correctionId, this.getCurrentUserId()) as Row[]
     return rows.map(inlineCommentFromRow)
+  }
+
+  private getAiCorrectionDraft(id: string): AiCorrectionDraft {
+    const row = this.db
+      .prepare('SELECT * FROM ai_correction_drafts WHERE id = ? AND user_id = ?')
+      .get(id, this.getCurrentUserId()) as Row | undefined
+    if (!row) throw new Error(`AI correction draft not found: ${id}`)
+    return aiCorrectionDraftFromRow(row)
+  }
+
+  private getLearningTask(id: string): LearningTask {
+    const row = this.db
+      .prepare('SELECT * FROM learning_tasks WHERE id = ? AND user_id = ?')
+      .get(id, this.getCurrentUserId()) as Row | undefined
+    if (!row) throw new Error(`Learning task not found: ${id}`)
+    return learningTaskFromRow(row)
   }
 
   private listAttachmentsForExam(examId: string): Attachment[] {
@@ -1125,7 +1316,11 @@ function examListItemFromRow(row: Row): ExamListItem {
     updatedAt: String(row.updated_at),
     lastSavedAt: row.last_saved_at ? String(row.last_saved_at) : String(row.created_at),
     currentRevisionId: row.current_revision_id ? String(row.current_revision_id) : null,
-    latestScore: row.latest_score === null || row.latest_score === undefined ? null : Number(row.latest_score)
+    latestScore: row.latest_score === null || row.latest_score === undefined ? null : Number(row.latest_score),
+    legalArea: row.legal_area ? String(row.legal_area) : null,
+    examType: row.exam_type ? String(row.exam_type) : null,
+    sourceName: row.source_name ? String(row.source_name) : null,
+    sourceUrl: row.source_url ? String(row.source_url) : null
   })
 }
 
@@ -1202,7 +1397,54 @@ function attachmentFromRow(row: Row): Attachment {
     mimeType: row.mime_type ? String(row.mime_type) : null,
     size: Number(row.size),
     relativePath: String(row.relative_path),
+    role: row.role ? String(row.role) : 'other',
     createdAt: String(row.created_at)
+  })
+}
+
+function aiCorrectionDraftFromRow(row: Row): AiCorrectionDraft {
+  return aiCorrectionDraftSchema.parse({
+    schemaVersion: 1,
+    id: String(row.id),
+    userId: String(row.user_id),
+    submissionId: String(row.submission_id),
+    correctionId: row.correction_id ? String(row.correction_id) : null,
+    status: String(row.status),
+    provider: String(row.provider),
+    model: String(row.model),
+    promptVersion: String(row.prompt_version),
+    createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at),
+    score: {
+      system: 'bayern-0-18',
+      points: row.score_points === null || row.score_points === undefined ? null : Number(row.score_points)
+    },
+    scoreReasoning: String(row.score_reasoning),
+    gradingComment: String(row.grading_comment),
+    strengths: parseJson(String(row.strengths_json), [] as string[]),
+    weaknesses: parseJson(String(row.weaknesses_json), [] as string[]),
+    tags: parseJson(String(row.tags_json), [] as string[]),
+    confidence: String(row.confidence),
+    improvementSuggestions: parseJson(String(row.improvement_suggestions_json), []),
+    inlineComments: parseJson(String(row.inline_comments_json), [])
+  })
+}
+
+function learningTaskFromRow(row: Row): LearningTask {
+  return learningTaskSchema.parse({
+    schemaVersion: 1,
+    id: String(row.id),
+    userId: String(row.user_id),
+    submissionId: String(row.submission_id),
+    correctionId: row.correction_id ? String(row.correction_id) : null,
+    aiDraftId: row.ai_draft_id ? String(row.ai_draft_id) : null,
+    category: String(row.category),
+    priority: String(row.priority),
+    status: String(row.status),
+    title: String(row.title),
+    detail: String(row.detail),
+    createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at)
   })
 }
 
