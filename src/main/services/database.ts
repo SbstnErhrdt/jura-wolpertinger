@@ -48,6 +48,7 @@ export function initializeDatabase(db: SqliteDatabase): void {
 
   if (version === targetSchemaVersion) {
     repairMissingUserScope(db)
+    if (DATABASE_SCHEMA_VERSION === 3) repairMissingV3Schema(db)
     updateAppVersion(db)
     return
   }
@@ -248,7 +249,7 @@ function createSchema(db: SqliteDatabase): void {
 }
 
 function migrateV1ToV2(db: SqliteDatabase): void {
-  addUserScopeToLegacySchema(db)
+  addUserScopeToLegacySchema(db, 2)
 }
 
 function migrateV2ToV3(db: SqliteDatabase): void {
@@ -323,10 +324,24 @@ function repairMissingUserScope(db: SqliteDatabase): void {
     return
   }
 
-  addUserScopeToLegacySchema(db)
+  addUserScopeToLegacySchema(db, DATABASE_SCHEMA_VERSION)
 }
 
-function addUserScopeToLegacySchema(db: SqliteDatabase): void {
+function repairMissingV3Schema(db: SqliteDatabase): void {
+  const hasV3Schema =
+    columnExists(db, 'exams', 'legal_area') &&
+    columnExists(db, 'exams', 'exam_type') &&
+    columnExists(db, 'exams', 'source_name') &&
+    columnExists(db, 'exams', 'source_url') &&
+    columnExists(db, 'attachments', 'role') &&
+    tableExists(db, 'ai_correction_drafts') &&
+    tableExists(db, 'learning_tasks') &&
+    tableExists(db, 'ai_settings')
+
+  if (!hasV3Schema) migrateV2ToV3(db)
+}
+
+function addUserScopeToLegacySchema(db: SqliteDatabase, targetSchemaVersion: number): void {
   const migratedAt = nowIso()
   const userId = crypto.randomUUID()
 
@@ -361,7 +376,7 @@ function addUserScopeToLegacySchema(db: SqliteDatabase): void {
     db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run('current_user_id', userId)
     db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run(
       'schema_version',
-      String(DATABASE_SCHEMA_VERSION)
+      String(targetSchemaVersion)
     )
     db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run('app_version', APP_VERSION)
     db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run('last_migrated_at', migratedAt)

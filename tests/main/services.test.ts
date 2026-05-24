@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import Database from 'better-sqlite3'
@@ -152,12 +152,51 @@ describe('AppServices', () => {
     const currentUser = services.getCurrentUser()
     const folderColumns = services.db.prepare("PRAGMA table_info('folders')").all() as Array<{ name: string }>
     const examColumns = services.db.prepare("PRAGMA table_info('exams')").all() as Array<{ name: string }>
+    const attachmentColumns = services.db.prepare("PRAGMA table_info('attachments')").all() as Array<{ name: string }>
 
     expect(currentUser.id).toMatch(UUID_PATTERN)
     expect(folderColumns.some((column) => column.name === 'user_id')).toBe(true)
     expect(examColumns.some((column) => column.name === 'user_id')).toBe(true)
+    expect(examColumns.some((column) => column.name === 'legal_area')).toBe(true)
+    expect(attachmentColumns.some((column) => column.name === 'role')).toBe(true)
+    expect(tableExists(services.db, 'ai_correction_drafts')).toBe(true)
+    expect(tableExists(services.db, 'learning_tasks')).toBe(true)
+    expect(tableExists(services.db, 'ai_settings')).toBe(true)
     expect(services.listFolders()).toEqual([expect.objectContaining({ id: folderId, userId: currentUser.id })])
     expect(services.listExams()).toEqual([expect.objectContaining({ id: examId, userId: currentUser.id })])
+  })
+
+  it('migrates legacy v1 databases to schema 3 with AI tables and metadata columns', async () => {
+    services.close()
+    await rm(dataDir, { recursive: true, force: true })
+    dataDir = await mkdtemp(join(tmpdir(), 'jura-services-v1-'))
+    seedLegacyDatabase(dataDir, 1)
+
+    services = new AppServices(dataDir)
+
+    expect(schemaVersion(services.db)).toBe(3)
+    expect(columnExists(services.db, 'exams', 'user_id')).toBe(true)
+    expect(columnExists(services.db, 'exams', 'legal_area')).toBe(true)
+    expect(columnExists(services.db, 'attachments', 'role')).toBe(true)
+    expect(tableExists(services.db, 'ai_correction_drafts')).toBe(true)
+    expect(tableExists(services.db, 'learning_tasks')).toBe(true)
+    expect(tableExists(services.db, 'ai_settings')).toBe(true)
+  })
+
+  it('migrates legacy v2 databases to schema 3 with AI tables and metadata columns', async () => {
+    services.close()
+    await rm(dataDir, { recursive: true, force: true })
+    dataDir = await mkdtemp(join(tmpdir(), 'jura-services-v2-'))
+    seedLegacyDatabase(dataDir, 2)
+
+    services = new AppServices(dataDir)
+
+    expect(schemaVersion(services.db)).toBe(3)
+    expect(columnExists(services.db, 'exams', 'legal_area')).toBe(true)
+    expect(columnExists(services.db, 'attachments', 'role')).toBe(true)
+    expect(tableExists(services.db, 'ai_correction_drafts')).toBe(true)
+    expect(tableExists(services.db, 'learning_tasks')).toBe(true)
+    expect(tableExists(services.db, 'ai_settings')).toBe(true)
   })
 
   it('isolates local data per user and stores onboarding status per user', () => {
@@ -332,6 +371,32 @@ describe('AppServices', () => {
     expect(services.getExam(exam.id).attachments[0].role).toBe('model_solution')
   })
 
+  it('rejects invalid exam metadata without persisting a bad exam row', () => {
+    expect(() =>
+      services.createExam({
+        title: 'Ungueltige Metadaten',
+        legalArea: 'invalid' as never
+      })
+    ).toThrow()
+
+    const row = services.db.prepare('SELECT COUNT(*) AS count FROM exams').get() as { count: number }
+    expect(row.count).toBe(0)
+  })
+
+  it('rejects invalid attachment roles before copying or inserting', async () => {
+    const exam = services.createExam({ title: 'Anlagenrolle' })
+    const sourcePath = join(dataDir, 'anlage.pdf')
+    await writeFile(sourcePath, 'Anlage')
+
+    await expect(
+      services.addAttachmentFromPath(exam.id, sourcePath, 'invalid' as never)
+    ).rejects.toThrow()
+
+    const row = services.db.prepare('SELECT COUNT(*) AS count FROM attachments').get() as { count: number }
+    expect(row.count).toBe(0)
+    await expect(stat(join(dataDir, 'files'))).rejects.toThrow()
+  })
+
   it('stores AI drafts and accepts them into the existing correction structure', () => {
     const exam = services.createExam({ title: 'KI Klausur', legalArea: 'civil', examType: 'judgment' })
     services.saveRevision(exam.id, {
@@ -379,6 +444,42 @@ describe('AppServices', () => {
     ])
   })
 
+  it('rejects accepting or rejecting non-draft AI correction drafts', () => {
+    const exam = services.createExam({ title: 'KI Status' })
+    services.saveRevision(exam.id, {
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Anspruch entstanden.' }] }]
+    })
+    const submission = services.submitExam(exam.id)
+    const draft = services.saveAiCorrectionDraft({
+      submissionId: submission.id,
+      provider: 'openai',
+      model: 'gpt-5',
+      scorePoints: 7.5,
+      scoreReasoning: 'Basis erkannt.',
+      gradingComment: 'Ordentliche Grundlage.',
+      strengths: [],
+      weaknesses: [],
+      tags: [],
+      confidence: 'medium',
+      improvementSuggestions: [
+        {
+          category: 'structure',
+          priority: 'high',
+          title: 'Schwerpunkt setzen',
+          detail: 'Beginne mit der zentralen Anspruchsgrundlage.'
+        }
+      ],
+      inlineComments: []
+    })
+
+    services.acceptAiCorrectionDraft(draft.id)
+
+    expect(() => services.acceptAiCorrectionDraft(draft.id)).toThrow(/draft/i)
+    expect(() => services.rejectAiCorrectionDraft(draft.id)).toThrow(/draft/i)
+    expect(services.listLearningTasks()).toHaveLength(1)
+  })
+
   it('persists AI settings for the current user', () => {
     expect(services.getAiSettingsStatus()).toEqual({
       provider: 'openai',
@@ -401,6 +502,26 @@ describe('AppServices', () => {
     services = new AppServices(dataDir)
 
     expect(services.getAiSettingsStatus()).toEqual(saved)
+  })
+
+  it('rejects empty AI settings credentials', () => {
+    expect(() =>
+      services.saveAiSettings({
+        provider: 'openai',
+        apiKey: ' ',
+        model: 'gpt-5'
+      })
+    ).toThrow(/API key/i)
+
+    expect(() =>
+      services.saveAiSettings({
+        provider: 'openai',
+        apiKey: 'sk-test',
+        model: ' '
+      })
+    ).toThrow(/model/i)
+
+    expect(services.getAiSettingsStatus().configured).toBe(false)
   })
 
   it('exports and imports .jura packages with content, attachments and corrections', async () => {
@@ -567,3 +688,150 @@ describe('AppServices', () => {
 })
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+function schemaVersion(db: Database.Database): number {
+  const row = db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get() as { value: string }
+  return Number(row.value)
+}
+
+function tableExists(db: Database.Database, table: string): boolean {
+  return Boolean(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(table))
+}
+
+function columnExists(db: Database.Database, table: string, column: string): boolean {
+  const rows = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
+  return rows.some((row) => row.name === column)
+}
+
+function seedLegacyDatabase(targetDataDir: string, version: 1 | 2): void {
+  const db = new Database(join(targetDataDir, 'database.sqlite'))
+  const now = new Date().toISOString()
+  const userId = crypto.randomUUID()
+  const userColumn = version === 2 ? 'user_id TEXT NOT NULL,' : ''
+  const userReference = version === 2 ? 'user_id,' : ''
+  const userValue = version === 2 ? `'${userId}',` : ''
+
+  db.exec(`
+    CREATE TABLE meta (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+    ${
+      version === 2
+        ? `CREATE TABLE users (
+            id TEXT PRIMARY KEY,
+            display_name TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            remote_user_id TEXT,
+            onboarding_completed_at TEXT,
+            tour_completed_at TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+          );`
+        : ''
+    }
+    CREATE TABLE folders (
+      id TEXT PRIMARY KEY,
+      ${userColumn}
+      name TEXT NOT NULL,
+      parent_id TEXT,
+      trashed_at TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE exams (
+      id TEXT PRIMARY KEY,
+      ${userColumn}
+      title TEXT NOT NULL,
+      folder_id TEXT,
+      status TEXT NOT NULL,
+      tags_json TEXT NOT NULL,
+      notes TEXT NOT NULL DEFAULT '',
+      current_revision_id TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE exam_revisions (
+      id TEXT PRIMARY KEY,
+      ${userColumn}
+      exam_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      content_format TEXT NOT NULL,
+      content_hash TEXT NOT NULL,
+      content_json TEXT NOT NULL
+    );
+    CREATE TABLE submissions (
+      id TEXT PRIMARY KEY,
+      ${userColumn}
+      exam_id TEXT NOT NULL,
+      submitted_at TEXT NOT NULL,
+      revision_id TEXT NOT NULL,
+      content_hash TEXT NOT NULL,
+      pdf_path TEXT
+    );
+    CREATE TABLE corrections (
+      id TEXT PRIMARY KEY,
+      ${userColumn}
+      submission_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      score_points INTEGER,
+      grading_comment TEXT NOT NULL,
+      tags_json TEXT NOT NULL
+    );
+    CREATE TABLE inline_comments (
+      id TEXT PRIMARY KEY,
+      ${userColumn}
+      correction_id TEXT NOT NULL,
+      submission_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      status TEXT NOT NULL,
+      body TEXT NOT NULL,
+      anchor_json TEXT NOT NULL,
+      tags_json TEXT NOT NULL
+    );
+    CREATE TABLE attachments (
+      id TEXT PRIMARY KEY,
+      ${userColumn}
+      exam_id TEXT NOT NULL,
+      original_name TEXT NOT NULL,
+      stored_name TEXT NOT NULL,
+      mime_type TEXT,
+      size INTEGER NOT NULL,
+      relative_path TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE tags (
+      id TEXT PRIMARY KEY,
+      ${userColumn}
+      name TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE exam_tags (
+      ${userColumn}
+      exam_id TEXT NOT NULL,
+      tag_id TEXT NOT NULL,
+      PRIMARY KEY (exam_id, tag_id)
+    );
+  `)
+  db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)').run('schema_version', String(version))
+  db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)').run('app_version', '0.1.0')
+  if (version === 2) {
+    db.prepare(
+      `
+      INSERT INTO users
+        (id, display_name, kind, remote_user_id, onboarding_completed_at, tour_completed_at, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `
+    ).run(userId, 'Lokaler Nutzer', 'local', null, null, null, now, now)
+    db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)').run('current_user_id', userId)
+  }
+  db.prepare(
+    `
+    INSERT INTO folders (${userReference}id, name, parent_id, trashed_at, created_at, updated_at)
+    VALUES (${userValue}?, ?, ?, ?, ?, ?)
+  `
+  ).run(crypto.randomUUID(), 'Legacy', null, null, now, now)
+  db.close()
+}

@@ -12,14 +12,17 @@ import {
 } from '@shared/constants'
 import {
   aiCorrectionDraftSchema,
+  attachmentRoleSchema,
   attachmentSchema,
   commentAnchorSchema,
   correctionSchema,
   documentSchema,
   examListItemSchema,
+  examTypeSchema,
   folderSchema,
   juraManifestSchema,
   learningTaskSchema,
+  legalAreaSchema,
   revisionSchema,
   scoreSchema,
   submissionSchema,
@@ -232,6 +235,8 @@ export class AppServices {
 
   createExam(input: CreateExamInput): ExamDetails {
     if (input.folderId) this.requireActiveFolder(input.folderId)
+    const legalArea = input.legalArea === undefined ? null : legalAreaSchema.nullable().parse(input.legalArea)
+    const examType = input.examType === undefined ? null : examTypeSchema.nullable().parse(input.examType)
     const id = newId()
     const userId = this.getCurrentUserId()
     const revisionId = newId()
@@ -258,8 +263,8 @@ export class AppServices {
             'draft',
             stringifyJson(tags),
             '',
-            input.legalArea ?? null,
-            input.examType ?? null,
+            legalArea,
+            examType,
             input.sourceName ?? null,
             input.sourceUrl ?? null,
             revisionId,
@@ -311,14 +316,18 @@ export class AppServices {
     const current = this.getExam(input.id)
     const updatedAt = nowIso()
     if (input.folderId) this.requireActiveFolder(input.folderId)
+    const legalArea =
+      input.legalArea === undefined ? current.legalArea : legalAreaSchema.nullable().parse(input.legalArea)
+    const examType =
+      input.examType === undefined ? current.examType : examTypeSchema.nullable().parse(input.examType)
     const next = {
       title: input.title ?? current.title,
       folderId: input.folderId === undefined ? current.folderId : input.folderId,
       status: input.status ?? current.status,
       tags: input.tags ? normalizeTags(input.tags) : current.tags,
       notes: input.notes ?? current.notes,
-      legalArea: input.legalArea === undefined ? current.legalArea : input.legalArea,
-      examType: input.examType === undefined ? current.examType : input.examType,
+      legalArea,
+      examType,
       sourceName: input.sourceName === undefined ? current.sourceName : input.sourceName,
       sourceUrl: input.sourceUrl === undefined ? current.sourceUrl : input.sourceUrl
     }
@@ -496,6 +505,10 @@ export class AppServices {
   saveAiSettings(input: SaveAiSettingsInput): AiSettingsStatus {
     const userId = this.getCurrentUserId()
     const updatedAt = nowIso()
+    const apiKey = input.apiKey.trim()
+    const model = input.model.trim()
+    if (!apiKey) throw new Error('OpenAI API key darf nicht leer sein')
+    if (!model) throw new Error('OpenAI model darf nicht leer sein')
     this.db
       .prepare(
         `
@@ -508,7 +521,7 @@ export class AppServices {
           updated_at = excluded.updated_at
       `
       )
-      .run(userId, input.provider, input.apiKey, input.model, updatedAt)
+      .run(userId, input.provider, apiKey, model, updatedAt)
     return this.getAiSettingsStatus()
   }
 
@@ -667,6 +680,9 @@ export class AppServices {
 
   acceptAiCorrectionDraft(draftId: string): AiCorrectionDraft {
     const draft = this.getAiCorrectionDraft(draftId)
+    if (draft.status !== 'draft') {
+      throw new Error(`AI correction draft must have status draft to accept; current status is ${draft.status}`)
+    }
     const correction = this.createCorrection(draft.submissionId)
     const updatedCorrection = this.updateCorrection({
       correctionId: correction.id,
@@ -720,7 +736,10 @@ export class AppServices {
   }
 
   rejectAiCorrectionDraft(draftId: string): AiCorrectionDraft {
-    this.getAiCorrectionDraft(draftId)
+    const draft = this.getAiCorrectionDraft(draftId)
+    if (draft.status !== 'draft') {
+      throw new Error(`AI correction draft must have status draft to reject; current status is ${draft.status}`)
+    }
     this.db
       .prepare('UPDATE ai_correction_drafts SET status = ?, updated_at = ? WHERE id = ? AND user_id = ?')
       .run('rejected', nowIso(), draftId, this.getCurrentUserId())
@@ -748,6 +767,7 @@ export class AppServices {
     sourcePath: string,
     role: AttachmentRole = 'other'
   ): Promise<Attachment> {
+    const parsedRole = attachmentRoleSchema.parse(role)
     this.getExam(examId)
     const sourceStats = await stat(sourcePath)
     const id = newId()
@@ -769,7 +789,7 @@ export class AppServices {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `
       )
-      .run(id, userId, examId, originalName, storedName, null, sourceStats.size, relativePath, role, createdAt)
+      .run(id, userId, examId, originalName, storedName, null, sourceStats.size, relativePath, parsedRole, createdAt)
 
     return attachmentSchema.parse({
       schemaVersion: 1,
@@ -781,7 +801,7 @@ export class AppServices {
       mimeType: null,
       size: sourceStats.size,
       relativePath,
-      role,
+      role: parsedRole,
       createdAt
     })
   }
