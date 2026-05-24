@@ -49,7 +49,7 @@
             <button type="button" :disabled="aiBusy || !aiSettings.configured" @click="generateAiDraft">
               {{ aiBusy ? 'KI arbeitet...' : 'KI-Korrektur vorschlagen' }}
             </button>
-            <button @click="saveCorrection">Speichern</button>
+            <button :disabled="aiBusy" @click="saveCorrection">Speichern</button>
           </div>
         </header>
 
@@ -147,9 +147,25 @@
                   >
                     <div>
                       <strong>{{ suggestion.title }}</strong>
-                      <span>{{ suggestion.category }} · {{ suggestion.priority }}</span>
+                      <span>
+                        {{ formatImprovementCategory(suggestion.category) }} ·
+                        {{ formatLearningTaskPriority(suggestion.priority) }}
+                      </span>
                     </div>
                     <p>{{ suggestion.detail }}</p>
+                  </li>
+                </ul>
+              </div>
+
+              <div v-if="selectedAiDraft.inlineComments.length" class="ai-draft-section">
+                <h3>Inline-Kommentare</h3>
+                <ul class="ai-inline-comment-list">
+                  <li
+                    v-for="comment in selectedAiDraft.inlineComments"
+                    :key="`${comment.selectedText}-${comment.body}`"
+                  >
+                    <blockquote>{{ comment.selectedText }}</blockquote>
+                    <p>{{ comment.body }}</p>
                   </li>
                 </ul>
               </div>
@@ -199,11 +215,7 @@
                   <button type="button" class="secondary" @click="clearSelectedText">
                     Abbrechen
                   </button>
-                  <button
-                    type="button"
-                    :disabled="!canAddComment"
-                    @click="addComment"
-                  >
+                  <button type="button" :disabled="!canAddComment" @click="addComment">
                     Kommentar setzen
                   </button>
                 </div>
@@ -307,7 +319,7 @@ const aiNotice = ref('')
 const renderedHtml = computed(() =>
   submission.value ? renderTiptapHtml(submission.value.content) : ''
 )
-const canAddComment = computed(() => Boolean(selectedText.value && commentBody.value.trim()))
+const canAddComment = computed(() => Boolean(!aiBusy.value && selectedText.value && commentBody.value.trim()))
 const openSubmissionCount = computed(
   () => submittedItems.value.filter((item) => item.scorePoints === null).length
 )
@@ -390,7 +402,7 @@ async function loadSubmittedItems(): Promise<void> {
 }
 
 async function saveCorrection(): Promise<void> {
-  if (!correction.value) return
+  if (!correction.value || aiBusy.value) return
   actionError.value = ''
   aiNotice.value = ''
   try {
@@ -663,5 +675,28 @@ function normalizeScoreInput(): void {
 function formatScoreInput(value: number | null): string {
   if (value === null) return ''
   return Number.isInteger(value) ? String(value) : value.toFixed(1).replace('.', ',')
+}
+
+function formatImprovementCategory(category: AiCorrectionDraft['improvementSuggestions'][number]['category']): string {
+  const labels: Record<AiCorrectionDraft['improvementSuggestions'][number]['category'], string> = {
+    issue_spotting: 'Problemerkennung',
+    law: 'Rechtliche Grundlagen',
+    procedure: 'Verfahren',
+    structure: 'Aufbau',
+    argumentation: 'Argumentation',
+    style: 'Stil',
+    time_management: 'Zeitmanagement',
+    other: 'Sonstiges'
+  }
+  return labels[category]
+}
+
+function formatLearningTaskPriority(priority: AiCorrectionDraft['improvementSuggestions'][number]['priority']): string {
+  const labels: Record<AiCorrectionDraft['improvementSuggestions'][number]['priority'], string> = {
+    low: 'niedrig',
+    medium: 'mittel',
+    high: 'hoch'
+  }
+  return labels[priority]
 }
 </script>

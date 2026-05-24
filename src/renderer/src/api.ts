@@ -42,9 +42,9 @@ type BrowserStore = {
   corrections: Correction[]
   aiSettings: {
     provider: 'openai'
-    apiKey: string
+    configured: boolean
     model: string
-    updatedAt: string
+    updatedAt: string | null
   } | null
   aiCorrectionDrafts: AiCorrectionDraft[]
   learningTasks: LearningTask[]
@@ -373,7 +373,7 @@ function createBrowserDevApi(): AppApi {
       if (!model) throw new Error('OpenAI model darf nicht leer sein')
       store.aiSettings = {
         provider,
-        apiKey,
+        configured: true,
         model,
         updatedAt
       }
@@ -569,6 +569,12 @@ function readStore(): BrowserStore {
       userId: correction.userId ?? user.id,
       inlineComments: correction.inlineComments.map((comment) => ({ ...comment, userId: comment.userId ?? user.id }))
     }))
+    const normalizedAiSettings = normalizeBrowserAiSettings(parsed.aiSettings)
+    const strippedAiSecret = Boolean(
+      parsed.aiSettings && 'apiKey' in parsed.aiSettings
+    )
+    parsed.aiSettings = normalizedAiSettings
+    if (strippedAiSecret) writeStore(parsed)
     if (normalizedIds) writeStore(parsed)
     return parsed
   } catch {
@@ -639,7 +645,10 @@ function buildBrowserIdMap(items: Array<{ id: string }>): Map<string, string> {
 }
 
 function writeStore(store: BrowserStore): void {
-  localStorage.setItem(BROWSER_STORE_KEY, JSON.stringify(store))
+  localStorage.setItem(BROWSER_STORE_KEY, JSON.stringify({
+    ...store,
+    aiSettings: normalizeBrowserAiSettings(store.aiSettings)
+  }))
 }
 
 function emptyStore(): BrowserStore {
@@ -747,9 +756,27 @@ function submissionDetails(store: BrowserStore, id: string): SubmissionDetails {
 function aiSettingsStatus(settings: BrowserStore['aiSettings']): AiSettingsStatus {
   return {
     provider: 'openai',
-    configured: Boolean(settings?.apiKey),
+    configured: Boolean(settings?.configured),
     model: settings?.model ?? null,
     updatedAt: settings?.updatedAt ?? null
+  }
+}
+
+function normalizeBrowserAiSettings(settings: unknown): BrowserStore['aiSettings'] {
+  if (!settings || typeof settings !== 'object') return null
+  const candidate = settings as {
+    provider?: unknown
+    apiKey?: unknown
+    configured?: unknown
+    model?: unknown
+    updatedAt?: unknown
+  }
+  if (candidate.provider !== 'openai' || typeof candidate.model !== 'string') return null
+  return {
+    provider: 'openai',
+    configured: Boolean(candidate.configured) || Boolean(candidate.apiKey),
+    model: candidate.model,
+    updatedAt: typeof candidate.updatedAt === 'string' ? candidate.updatedAt : null
   }
 }
 
