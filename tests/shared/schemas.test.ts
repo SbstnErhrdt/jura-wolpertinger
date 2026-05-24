@@ -172,9 +172,18 @@ describe('shared schemas', () => {
           detail: 'Pruefe die zentrale Anspruchsgrundlage vor Nebenfragen.'
         }
       ],
-      inlineComments: []
+      inlineComments: [
+        {
+          selectedText: 'zentrale Anspruchsgrundlage',
+          prefix: 'Pruefe die ',
+          suffix: ' vor Nebenfragen.',
+          body: 'Hier sollte der Schwerpunkt der Klausur frueher sichtbar werden.',
+          tags: ['schwerpunktsetzung']
+        }
+      ]
     })
     expect(draft.score.points).toBe(8.5)
+    expect(draft.inlineComments[0].selectedText).toBe('zentrale Anspruchsgrundlage')
 
     expect(
       learningTaskSchema.parse({
