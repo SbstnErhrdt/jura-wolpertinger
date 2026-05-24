@@ -84,8 +84,8 @@ function seedDemoExams(services: AppServices, exams: DemoExam[]): void {
       .prepare(
         `
         INSERT INTO exams
-          (id, user_id, title, folder_id, status, tags_json, notes, current_revision_id, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (id, user_id, title, folder_id, status, tags_json, notes, legal_area, exam_type, source_name, source_url, current_revision_id, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `
       )
       .run(
@@ -96,6 +96,10 @@ function seedDemoExams(services: AppServices, exams: DemoExam[]): void {
         'corrected',
         stringifyJson(exam.tags),
         'Demo-Datensatz für Screenshots',
+        'civil',
+        'judgment',
+        'Demo',
+        null,
         revisionId,
         createdAt,
         correctedAt

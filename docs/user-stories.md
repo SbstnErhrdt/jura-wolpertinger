@@ -113,6 +113,18 @@ Akzeptanz:
 - Kommentare werden in der Randspalte ungefähr auf Höhe der Textstelle angezeigt.
 - Hover über einen Kommentar hebt die zugehörige Textstelle hervor.
 
+### KI-Korrektur prüfen
+
+Als Examenskandidat:in möchte ich für eine abgegebene Prüfung einen KI-Korrekturvorschlag anfordern und vor der Übernahme prüfen, damit automatisches Feedback nicht ungeprüft meine Bewertung verändert.
+
+Akzeptanz:
+
+- Die Anfrage wird nur bewusst gestartet und nutzt den lokal hinterlegten eigenen OpenAI-Schlüssel.
+- Der Vorschlag zeigt Punkte, Gesamthinweis, Tags, Inline-Kommentare und Lernhinweise als Entwurf.
+- Annehmen überführt den Entwurf in normale Korrektur, Inline-Kommentare und Lernaufgaben.
+- Ablehnen verwirft den Vorschlag für den Arbeitsfluss, ohne Abgabe oder bestehende Korrektur zu verändern.
+- Rohentwürfe, API-Schlüssel und KI-Einstellungen werden nicht in `.jura` Pakete exportiert.
+
 ## Tags und Auswertung
 
 ### Tags konsequent nutzen
@@ -134,6 +146,30 @@ Akzeptanz:
 - Zeitraumfilter und Tag-Filter bleiben nach Reload erhalten.
 - Durchschnitt, Verlauf und Tabellenansicht sind sichtbar.
 - Auswertungen funktionieren offline.
+
+### Lernaufgaben nachverfolgen
+
+Als Examenskandidat:in möchte ich Lernaufgaben aus angenommenen KI-Korrekturen in der Auswertung sehen, damit ich wiederkehrende Schwächen gezielt bearbeiten kann.
+
+Akzeptanz:
+
+- Offene Lernaufgaben erscheinen lokal in der Auswertung.
+- Lernaufgaben haben Kategorie, Priorität und Status.
+- Statusänderungen bleiben lokal erhalten.
+- Lernaufgaben werden vorerst nicht in `.jura` Pakete exportiert.
+
+## Datenschutz und Cloud-Grenze
+
+### Lokale Daten schützen
+
+Als Nutzer:in möchte ich klar kontrollieren, wann Prüfungsdaten die App verlassen, damit lokale Übungsdaten nicht unbeabsichtigt in eine Cloud übertragen werden.
+
+Akzeptanz:
+
+- Schreiben, Speichern, Bewerten, Auswerten, PDF-Export und `.jura` Import/Export funktionieren lokal.
+- Eine Cloud-Anfrage passiert nur bei ausdrücklicher KI-Korrektur.
+- Die App nutzt im MVP nur einen selbst hinterlegten OpenAI-Schlüssel und keinen gebündelten Providerzugang.
+- `.jura` Pakete enthalten Prüfungsdaten wie Metadaten, Abgaben, Korrekturen und Attachment-Rollen, aber keine API-Schlüssel, KI-Einstellungen, rohe KI-Entwürfe oder lokale Lernaufgaben.
 
 ## Nutzer und Onboarding
 

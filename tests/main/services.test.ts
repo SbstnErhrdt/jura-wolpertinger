@@ -1,4 +1,4 @@
-import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import Database from 'better-sqlite3'
@@ -329,6 +329,10 @@ describe('AppServices', () => {
       expect(analytics.at(-1)?.scorePoints).toBe(9)
       expect(exams.every((exam) => exam.status === 'corrected')).toBe(true)
       expect(exams.some((exam) => exam.tags.includes('2-examen'))).toBe(true)
+      expect(exams.every((exam) => exam.legalArea === 'civil')).toBe(true)
+      expect(exams.every((exam) => exam.examType === 'judgment')).toBe(true)
+      expect(exams.every((exam) => exam.sourceName === 'Demo')).toBe(true)
+      expect(exams.every((exam) => exam.sourceUrl === null)).toBe(true)
     } finally {
       if (previousDemoSetting === undefined) {
         delete process.env.JURA_DEMO_DATA
@@ -698,26 +702,74 @@ describe('AppServices', () => {
     expect(services.getAiSettingsStatus().configured).toBe(false)
   })
 
-  it('exports and imports .jura packages with content, attachments and corrections', async () => {
-    const exam = services.createExam({ title: 'Exportklausur', tags: ['strafrecht'] })
+  it('exports and imports .jura packages with exam metadata, attachment roles and accepted corrections only', async () => {
+    const exam = services.createExam({
+      title: 'Exportklausur',
+      tags: ['strafrecht'],
+      legalArea: 'criminal',
+      examType: 'expert_opinion',
+      sourceName: 'Demo',
+      sourceUrl: 'https://example.test/klausur'
+    })
     services.saveRevision(exam.id, {
       type: 'doc',
       content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Tatbestand.' }] }]
     })
     const sourcePath = join(dataDir, 'anlage.txt')
     await writeFile(sourcePath, 'Anlage')
-    await services.addAttachmentFromPath(exam.id, sourcePath)
+    const attachment = await services.addAttachmentFromPath(exam.id, sourcePath, 'model_solution')
     const submission = services.submitExam(exam.id)
-    const correction = services.createCorrection(submission.id)
-    services.updateCorrection({
-      correctionId: correction.id,
-      scorePoints: 14.5,
-      gradingComment: 'Gut.',
-      tags: []
+    services.saveAiSettings({
+      provider: 'openai',
+      apiKey: 'sk-test-secret',
+      model: 'gpt-5'
     })
+    const draft = services.saveAiCorrectionDraft({
+      submissionId: submission.id,
+      provider: 'openai',
+      model: 'gpt-5',
+      scorePoints: 14.5,
+      scoreReasoning: 'Tatbestand tragfähig.',
+      gradingComment: 'Gut.',
+      strengths: ['Klare Struktur'],
+      weaknesses: ['Kurz'],
+      tags: ['ki-vorschlag'],
+      confidence: 'medium',
+      improvementSuggestions: [
+        {
+          category: 'structure',
+          priority: 'medium',
+          title: 'Schwerpunkte markieren',
+          detail: 'Gliedere die tragenden Punkte noch sichtbarer.'
+        }
+      ],
+      inlineComments: []
+    })
+    services.acceptAiCorrectionDraft(draft.id)
 
     const packagePath = join(dataDir, 'export.jura')
     await services.exportExamPackage(exam.id, packagePath)
+    const zip = await JSZip.loadAsync(await readFile(packagePath))
+    const document = JSON.parse(await zip.file('document.json')!.async('string')) as Record<string, unknown>
+    const attachmentDocument = JSON.parse(
+      await zip.file(`attachments/${attachment.id}/attachment.json`)!.async('string')
+    ) as Record<string, unknown>
+    const packageFileNames = Object.keys(zip.files)
+
+    expect(document).toEqual(
+      expect.objectContaining({
+        legalArea: 'criminal',
+        examType: 'expert_opinion',
+        sourceName: 'Demo',
+        sourceUrl: 'https://example.test/klausur'
+      })
+    )
+    expect(attachmentDocument.role).toBe('model_solution')
+    expect(packageFileNames.some((file) => file.includes('ai_') || file.includes('learning'))).toBe(false)
+    const packageText = (
+      await Promise.all(packageFileNames.map((file) => zip.file(file)?.async('string') ?? Promise.resolve('')))
+    ).join('\n')
+    expect(packageText).not.toContain('sk-test-secret')
 
     const importedDir = await mkdtemp(join(tmpdir(), 'jura-import-'))
     const importedServices = new AppServices(importedDir)
@@ -725,9 +777,17 @@ describe('AppServices', () => {
       const imported = await importedServices.importExamPackage(packagePath)
       expect(imported.title).toBe('Exportklausur')
       expect(imported.tags).toEqual(['strafrecht'])
+      expect(imported.legalArea).toBe('criminal')
+      expect(imported.examType).toBe('expert_opinion')
+      expect(imported.sourceName).toBe('Demo')
+      expect(imported.sourceUrl).toBe('https://example.test/klausur')
       expect(imported.attachments).toHaveLength(1)
+      expect(imported.attachments[0].role).toBe('model_solution')
       expect(imported.submissions).toHaveLength(1)
       expect(importedServices.getSubmission(imported.submissions[0].id).corrections[0].score.points).toBe(14.5)
+      expect(importedServices.listAiCorrectionDrafts(imported.submissions[0].id)).toEqual([])
+      expect(importedServices.getAiSettingsStatus().configured).toBe(false)
+      expect(importedServices.listLearningTasks()).toEqual([])
     } finally {
       importedServices.close()
       await rm(importedDir, { recursive: true, force: true })
