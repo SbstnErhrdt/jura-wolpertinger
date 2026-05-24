@@ -81,11 +81,27 @@ Im Projekt steht der Wolpertinger für einen freundlichen lokalen Begleiter, nic
 - PDF-Export
 - Korrekturansicht mit Gesamtbewertung nach Bayern `0-18`, inklusive halber Punkte
 - Bewertungskommentar und Inline-Kommentare auf Textauswahlen
-- KI-Korrekturvorschläge mit eigenem OpenAI-Schlüssel, Musterlösungs-Kontext, `gpt-5.5` und zweiter Prüfer-Runde
+- KI-Korrekturvorschläge mit eigenem OpenAI-Schlüssel, Musterlösungs-Kontext, `gpt-5.5`, zweiter Prüfer-Runde und Verbindungstest
 - Tag-System mit Chip-Eingabe und Vorschlägen
 - Auswertungsseite mit Zeitraumfilter, Tag-Filter, Presets und Charts
 - Onboarding-Tour mit Driver.js und Hilfeseite mit FAQ
 - versionierte Datenstruktur mit SQLite-Migrationen
+
+## KI-Korrektur
+
+Die KI-Korrektur ist als Korrekturhilfe für Übungsklausuren gedacht. Sie nimmt die Rolle eines
+zusätzlichen Korrektors ein: Aufgabenstellung, Musterlösung und Abgabe werden nur auf ausdrückliche
+Anfrage übertragen, ausgewertet und als Entwurf in die bestehende Korrekturstruktur übernommen.
+Menschliche Korrektorinnen und Korrektoren behalten die fachliche Entscheidung.
+
+Der Vorschlag enthält eine Punktbewertung nach `0-18`, eine Begründung, Stärken, Schwächen,
+konkrete Verbesserungshinweise, Tags und Inline-Kommentare. Eine zweite Prüfer-Runde prüft den
+Entwurf noch einmal auf Plausibilität, Textanker und hilfreiche Hinweise.
+
+Die App nutzt keinen gebündelten Plattform-Key. Nutzerinnen und Nutzer hinterlegen ihren eigenen
+OpenAI-Key lokal in den Einstellungen. Der Key kann getestet, geändert und wieder entfernt werden.
+Für Entwicklung und lokale Tests kann alternativ ein Key in `.env` oder `.env.local` liegen; ein in
+der App gespeicherter Key hat Vorrang und überschreibt den Entwicklungs-Key.
 
 ## Screenshots
 
