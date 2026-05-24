@@ -85,6 +85,9 @@
             Gespeichert: {{ formatDateTime(aiSettings.updatedAt) }}
           </span>
           <span>Modell: {{ aiSettings.model ?? DEFAULT_AI_MODEL }}</span>
+          <span v-if="storedKeyOverridesEnvironment" class="settings-ai-hint">
+            Gespeicherter App-Key überschreibt deinen .env-Key.
+          </span>
           <span v-if="aiConnectionMessage" :class="aiConnectionOk ? 'settings-test-ok' : 'settings-test-error'">
             {{ aiConnectionMessage }}
           </span>
@@ -94,6 +97,15 @@
           <button type="button" @click="openAiKeyForm">{{ aiSetupButtonLabel }}</button>
           <button type="button" class="secondary" :disabled="!aiSettings.configured || aiBusy" @click="testAiConnection">
             {{ aiBusy ? 'Prüft ...' : 'Verbindung testen' }}
+          </button>
+          <button
+            v-if="storedKeyOverridesEnvironment"
+            type="button"
+            class="secondary"
+            :disabled="aiBusy"
+            @click="testEnvironmentConnection"
+          >
+            .env-Key testen
           </button>
           <button
             v-if="effectiveAiSource === 'stored'"
@@ -182,6 +194,7 @@ const aiSettings = ref<AiSettingsStatus>({
   model: null,
   source: null,
   keyPreview: null,
+  environmentAvailable: false,
   updatedAt: null
 })
 const aiApiKeyInput = ref('')
@@ -201,6 +214,9 @@ const aiKeyPreview = computed(() =>
 )
 const aiKeyPlaceholder = computed(() =>
   effectiveAiSource.value === 'stored' ? 'neuer Key oder leer lassen' : 'sk-...'
+)
+const storedKeyOverridesEnvironment = computed(
+  () => effectiveAiSource.value === 'stored' && Boolean(aiSettings.value.environmentAvailable)
 )
 const aiStatusTitle = computed(() => {
   if (effectiveAiSource.value === 'stored') return 'OpenAI-Key gespeichert'
@@ -351,11 +367,12 @@ async function removeAiSettings(): Promise<void> {
   }
 }
 
-async function testAiConnection(): Promise<void> {
+async function runAiConnectionTest(source: 'active' | 'environment'): Promise<void> {
   actionError.value = ''
   actionNotice.value = ''
   aiConnectionOk.value = false
-  aiConnectionMessage.value = 'Verbindungstest läuft ...'
+  aiConnectionMessage.value =
+    source === 'environment' ? '.env-Verbindungstest läuft ...' : 'Verbindungstest läuft ...'
   aiBusy.value = true
   try {
     if (typeof api.testAiConnection !== 'function') {
@@ -364,7 +381,7 @@ async function testAiConnection(): Promise<void> {
       actionError.value = aiConnectionMessage.value
       return
     }
-    const result = await api.testAiConnection()
+    const result = await api.testAiConnection({ source })
     aiConnectionOk.value = result.ok
     aiConnectionMessage.value = result.message
     if (!result.ok) actionError.value = result.message
@@ -375,6 +392,14 @@ async function testAiConnection(): Promise<void> {
   } finally {
     aiBusy.value = false
   }
+}
+
+async function testAiConnection(): Promise<void> {
+  await runAiConnectionTest('active')
+}
+
+async function testEnvironmentConnection(): Promise<void> {
+  await runAiConnectionTest('environment')
 }
 
 function setLightTheme(): void {

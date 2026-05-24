@@ -401,12 +401,14 @@ function createBrowserDevApi(): AppApi {
         return {
           ok: false,
           model: null,
+          source: null,
           message: 'OpenAI-Key fehlt.'
         }
       }
       return {
         ok: false,
         model: settings.model,
+        source: 'stored',
         message: 'Verbindungstest ist nur in der Electron-App verfuegbar.'
       }
     },
@@ -816,6 +818,7 @@ function aiSettingsStatus(settings: BrowserStore['aiSettings']): AiSettingsStatu
     model: settings?.model ?? null,
     source: settings?.configured ? 'stored' : null,
     keyPreview: settings?.configured ? 'gespeichert' : null,
+    environmentAvailable: false,
     updatedAt: settings?.updatedAt ?? null
   }
 }

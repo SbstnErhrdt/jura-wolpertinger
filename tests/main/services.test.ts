@@ -678,6 +678,7 @@ describe('AppServices', () => {
       model: null,
       source: null,
       keyPreview: null,
+      environmentAvailable: false,
       updatedAt: null
     })
 
@@ -732,6 +733,7 @@ describe('AppServices', () => {
         model: 'gpt-5.5',
         source: 'environment',
         keyPreview: '...test',
+        environmentAvailable: true,
         updatedAt: null
       })
 
@@ -744,6 +746,7 @@ describe('AppServices', () => {
         model: 'gpt-5.5',
         source: 'environment',
         keyPreview: '...test',
+        environmentAvailable: true,
         updatedAt: null
       })
     } finally {
@@ -753,6 +756,34 @@ describe('AppServices', () => {
       else process.env.OPENAI_API_KEY = previousOpenAiApiKey
       if (previousOpenAiModel === undefined) delete process.env.OPENAI_MODEL
       else process.env.OPENAI_MODEL = previousOpenAiModel
+    }
+  })
+
+  it('shows when a stored OpenAI key overrides an available environment key', () => {
+    const previousOpenApiKey = process.env.OPEN_API_KEY
+    const previousOpenAiApiKey = process.env.OPENAI_API_KEY
+    delete process.env.OPENAI_API_KEY
+    process.env.OPEN_API_KEY = 'sk-env-test'
+
+    try {
+      const saved = services.saveAiSettings({
+        provider: 'openai',
+        apiKey: 'sk-stored-test',
+        model: 'gpt-5.5'
+      })
+
+      expect(saved).toMatchObject({
+        configured: true,
+        model: 'gpt-5.5',
+        source: 'stored',
+        keyPreview: '...test',
+        environmentAvailable: true
+      })
+    } finally {
+      if (previousOpenApiKey === undefined) delete process.env.OPEN_API_KEY
+      else process.env.OPEN_API_KEY = previousOpenApiKey
+      if (previousOpenAiApiKey === undefined) delete process.env.OPENAI_API_KEY
+      else process.env.OPENAI_API_KEY = previousOpenAiApiKey
     }
   })
 
@@ -791,6 +822,7 @@ describe('AppServices', () => {
       model: null,
       source: null,
       keyPreview: null,
+      environmentAvailable: false,
       updatedAt: null
     })
   })
@@ -812,11 +844,51 @@ describe('AppServices', () => {
     await expect(services.testAiConnection()).resolves.toEqual({
       ok: true,
       model: 'gpt-5.5',
+      source: 'stored',
       message: 'Verbindung erfolgreich.'
     })
   })
 
-  it('returns a user-facing AI connection error instead of throwing raw OpenAI failures', async () => {
+  it('can test the environment AI connection explicitly while a stored key exists', async () => {
+    const previousOpenApiKey = process.env.OPEN_API_KEY
+    const previousOpenAiApiKey = process.env.OPENAI_API_KEY
+    delete process.env.OPENAI_API_KEY
+    process.env.OPEN_API_KEY = 'sk-env-test'
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({ output_text: 'OK' })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    services.saveAiSettings({
+      provider: 'openai',
+      apiKey: 'sk-stored-test',
+      model: 'gpt-5.5'
+    })
+
+    try {
+      await expect(services.testAiConnection({ source: 'environment' })).resolves.toEqual({
+        ok: true,
+        model: 'gpt-5.5',
+        source: 'environment',
+        message: 'Verbindung erfolgreich.'
+      })
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://api.openai.com/v1/responses',
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            Authorization: 'Bearer sk-env-test'
+          })
+        })
+      )
+    } finally {
+      if (previousOpenApiKey === undefined) delete process.env.OPEN_API_KEY
+      else process.env.OPEN_API_KEY = previousOpenApiKey
+      if (previousOpenAiApiKey === undefined) delete process.env.OPENAI_API_KEY
+      else process.env.OPENAI_API_KEY = previousOpenAiApiKey
+    }
+  })
+
+  it('returns a source-specific AI connection error instead of throwing raw OpenAI failures', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({
@@ -834,7 +906,9 @@ describe('AppServices', () => {
     await expect(services.testAiConnection()).resolves.toEqual({
       ok: false,
       model: 'gpt-5.5',
-      message: 'Verbindung fehlgeschlagen. Bitte Key und Modell prüfen.'
+      source: 'stored',
+      message:
+        'Verbindung mit gespeichertem App-Key fehlgeschlagen. Der .env-Key wird nicht verwendet, solange ein App-Key gespeichert ist.'
     })
   })
 

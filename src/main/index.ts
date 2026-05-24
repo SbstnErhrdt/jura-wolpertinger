@@ -18,6 +18,7 @@ import type {
   GenerateAiCorrectionInput,
   SaveRevisionInput,
   SaveAiSettingsInput,
+  TestAiConnectionInput,
   TrashFolderInput,
   UpdateCorrectionInput,
   UpdateFolderInput,
@@ -217,7 +218,9 @@ function registerIpc(): void {
     services.saveAiSettings(input)
   )
   ipcMain.handle('ai:removeSettings', () => services.removeAiSettings())
-  ipcMain.handle('ai:testConnection', () => services.testAiConnection())
+  ipcMain.handle('ai:testConnection', (_event, input?: TestAiConnectionInput) =>
+    services.testAiConnection(input)
+  )
   ipcMain.handle('ai:generateCorrectionDraft', (_event, input: GenerateAiCorrectionInput) =>
     services.generateAiCorrectionDraft(input.submissionId)
   )

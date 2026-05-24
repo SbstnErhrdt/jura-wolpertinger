@@ -124,6 +124,7 @@ Akzeptanz:
 - Die KI-Korrektur nutzt Aufgabenstellung, Musterlösung und Bearbeitung, sofern diese als Anhänge vorliegen.
 - Der Vorschlag wird durch eine zweite KI-Prüfer-Runde auf Punktplausibilität, Halluzinationen, Textanker und konkrete Verbesserungshinweise geprüft.
 - Die Einstellungen zeigen klar, ob kein Key, ein gespeicherter App-Key oder ein Entwicklungs-Key aus `.env` aktiv ist.
+- Wenn ein gespeicherter App-Key einen vorhandenen `.env`-Key übersteuert, wird das sichtbar und der `.env`-Key kann separat getestet werden.
 - Nach dem Speichern zeigt die App eine kurze Key-Endung und den Speicherzeitpunkt, damit der Zustand sichtbar ist.
 - Der OpenAI-Key wird nur in einem bewussten Einrichten- oder Ändern-Flow eingegeben; die normale Ansicht zeigt kein leeres Passwortfeld.
 - Eine Verbindung kann aus der App heraus getestet werden; laufender Test, Erfolg und Fehler erscheinen direkt in der KI-Karte.
@@ -189,6 +190,7 @@ Akzeptanz:
 - Die linke Navigation enthält eine Einstellungsseite.
 - Nutzerwechsel, Nutzername, neuer lokaler Nutzer und Tour-Aktionen sind dort erreichbar.
 - OpenAI-Key und Modell können dort für KI-Korrekturen gespeichert werden.
+- Gespeicherter App-Key und Entwicklungs-Key aus `.env` werden als getrennte Quellen erklärt, damit ein fehlerhafter App-Key nicht mit einem funktionierenden `.env`-Key verwechselt wird.
 - Die Seite erklärt, dass KI-Korrekturen Daten nur auf ausdrückliche Anfrage an den konfigurierten Anbieter übertragen.
 
 ### Arbeitsbereich wechseln

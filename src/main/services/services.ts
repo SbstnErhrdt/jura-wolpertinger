@@ -54,6 +54,7 @@ import type {
   SaveAiCorrectionDraftInput,
   SaveAiSettingsInput,
   SubmissionDetails,
+  TestAiConnectionInput,
   TrashFolderInput,
   UpdateCorrectionInput,
   UpdateFolderInput,
@@ -70,6 +71,13 @@ import {
 import { ensureParentDir, hashJson, newId, nowIso, parseJson, stringifyJson } from './utils'
 
 type Row = Record<string, unknown>
+type AiCredentialSource = 'stored' | 'environment'
+type OpenAiCredentials = {
+  provider: 'openai'
+  apiKey: string
+  model: string
+  source: AiCredentialSource
+}
 type ImportedAttachment = {
   attachment: Attachment
   payload: Buffer
@@ -519,6 +527,7 @@ export class AppServices {
       | undefined
 
     const storedApiKey = row?.api_key?.trim()
+    const envCredentials = getOpenAiEnvironmentCredentials()
     if (row && storedApiKey) {
       return {
         provider: 'openai',
@@ -526,17 +535,18 @@ export class AppServices {
         model: row.model,
         source: 'stored',
         keyPreview: previewSecret(storedApiKey),
+        environmentAvailable: Boolean(envCredentials),
         updatedAt: row.updated_at
       }
     }
 
-    const envCredentials = getOpenAiEnvironmentCredentials()
     return {
       provider: 'openai',
       configured: Boolean(envCredentials),
       model: envCredentials?.model ?? null,
       source: envCredentials ? 'environment' : null,
       keyPreview: envCredentials ? previewSecret(envCredentials.apiKey) : null,
+      environmentAvailable: Boolean(envCredentials),
       updatedAt: null
     }
   }
@@ -574,25 +584,43 @@ export class AppServices {
     return this.getAiSettingsStatus()
   }
 
-  async testAiConnection(): Promise<{ ok: boolean; model: string | null; message: string }> {
-    const settings = this.getAiSettingsCredentials()
+  async testAiConnection(input: TestAiConnectionInput = {}): Promise<{
+    ok: boolean
+    model: string | null
+    source: 'stored' | 'environment' | null
+    message: string
+  }> {
+    const settings =
+      input.source === 'environment' ? getOpenAiEnvironmentCredentials() : this.getAiSettingsCredentials()
     if (!settings) {
       return {
         ok: false,
         model: null,
-        message: 'OpenAI-Key fehlt.'
+        source: input.source === 'environment' ? 'environment' : null,
+        message:
+          input.source === 'environment'
+            ? '.env-Key fehlt. Setze OPENAI_API_KEY oder OPEN_API_KEY.'
+            : 'OpenAI-Key fehlt.'
       }
     }
     try {
-      return await requestOpenAiConnectionTest({
+      const result = await requestOpenAiConnectionTest({
         apiKey: settings.apiKey,
         model: settings.model
       })
+      return {
+        ...result,
+        source: settings.source
+      }
     } catch {
       return {
         ok: false,
         model: settings.model,
-        message: 'Verbindung fehlgeschlagen. Bitte Key und Modell prüfen.'
+        source: settings.source,
+        message:
+          settings.source === 'stored'
+            ? 'Verbindung mit gespeichertem App-Key fehlgeschlagen. Der .env-Key wird nicht verwendet, solange ein App-Key gespeichert ist.'
+            : 'Verbindung mit .env-Key fehlgeschlagen. Bitte .env-Key und Modell prüfen.'
       }
     }
   }
@@ -1372,7 +1400,7 @@ export class AppServices {
     return aiCorrectionDraftFromRow(row)
   }
 
-  private getAiSettingsCredentials(): { provider: 'openai'; apiKey: string; model: string } | null {
+  private getAiSettingsCredentials(): OpenAiCredentials | null {
     const row = this.db
       .prepare('SELECT provider, api_key, model FROM ai_settings WHERE user_id = ?')
       .get(this.getCurrentUserId()) as
@@ -1386,7 +1414,8 @@ export class AppServices {
     return {
       provider: 'openai',
       apiKey,
-      model
+      model,
+      source: 'stored'
     }
   }
 
@@ -1502,14 +1531,15 @@ export class AppServices {
   }
 }
 
-function getOpenAiEnvironmentCredentials(): { provider: 'openai'; apiKey: string; model: string } | null {
+function getOpenAiEnvironmentCredentials(): OpenAiCredentials | null {
   const apiKey = (readEnvValue('OPENAI_API_KEY') ?? readEnvValue('OPEN_API_KEY') ?? '').trim()
   if (!apiKey) return null
   const model = (readEnvValue('OPENAI_MODEL') ?? DEFAULT_AI_MODEL).trim() || DEFAULT_AI_MODEL
   return {
     provider: 'openai',
     apiKey,
-    model
+    model,
+    source: 'environment'
   }
 }
 

@@ -753,6 +753,11 @@ textarea {
   font-weight: 700;
 }
 
+.settings-ai-hint {
+  color: #8a5a00 !important;
+  font-weight: 700;
+}
+
 .settings-key-form {
   display: grid;
   gap: 12px;
@@ -2421,6 +2426,10 @@ textarea {
 
 :root[data-theme='dark'] .settings-test-error {
   color: #ffb4aa !important;
+}
+
+:root[data-theme='dark'] .settings-ai-hint {
+  color: #ffd37a !important;
 }
 
 :root[data-theme='dark'] .settings-confirm-remove {

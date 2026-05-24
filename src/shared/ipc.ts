@@ -105,12 +105,18 @@ export type AiSettingsStatus = {
   model: string | null
   source: 'stored' | 'environment' | null
   keyPreview: string | null
+  environmentAvailable: boolean
   updatedAt: string | null
+}
+
+export type TestAiConnectionInput = {
+  source?: 'active' | 'environment'
 }
 
 export type AiConnectionTestResult = {
   ok: boolean
   model: string | null
+  source: 'stored' | 'environment' | null
   message: string
 }
 
@@ -171,7 +177,7 @@ export type AppApi = {
   getAiSettingsStatus(): Promise<AiSettingsStatus>
   saveAiSettings(input: SaveAiSettingsInput): Promise<AiSettingsStatus>
   removeAiSettings(): Promise<AiSettingsStatus>
-  testAiConnection(): Promise<AiConnectionTestResult>
+  testAiConnection(input?: TestAiConnectionInput): Promise<AiConnectionTestResult>
   generateAiCorrectionDraft(input: GenerateAiCorrectionInput): Promise<AiCorrectionDraft>
   listAiCorrectionDrafts(submissionId: string): Promise<AiCorrectionDraft[]>
   acceptAiCorrectionDraft(draftId: string): Promise<AiCorrectionDraft>

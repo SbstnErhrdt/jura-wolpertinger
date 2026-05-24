@@ -6,6 +6,7 @@ import type {
   CreateExamInput,
   SaveRevisionInput,
   SaveAiSettingsInput,
+  TestAiConnectionInput,
   TrashFolderInput,
   UpdateCorrectionInput,
   UpdateFolderInput,
@@ -41,7 +42,7 @@ const api: AppApi = {
   getAiSettingsStatus: () => ipcRenderer.invoke('ai:settingsStatus'),
   saveAiSettings: (input: SaveAiSettingsInput) => ipcRenderer.invoke('ai:saveSettings', input),
   removeAiSettings: () => ipcRenderer.invoke('ai:removeSettings'),
-  testAiConnection: () => ipcRenderer.invoke('ai:testConnection'),
+  testAiConnection: (input?: TestAiConnectionInput) => ipcRenderer.invoke('ai:testConnection', input),
   generateAiCorrectionDraft: (input: GenerateAiCorrectionInput) =>
     ipcRenderer.invoke('ai:generateCorrectionDraft', input),
   listAiCorrectionDrafts: (submissionId: string) =>
