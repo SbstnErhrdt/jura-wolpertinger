@@ -455,12 +455,15 @@ function createBrowserDevApi(): AppApi {
       return draft
     },
     async listLearningTasks() {
-      return readStore().learningTasks
+      const store = readStore()
+      const user = ensureBrowserUser(store)
+      return store.learningTasks.filter((task) => task.userId === user.id)
     },
     async updateLearningTaskStatus(taskId, status) {
       const store = readStore()
+      const user = ensureBrowserUser(store)
       const nextStatus = learningTaskStatusSchema.parse(status)
-      const task = store.learningTasks.find((candidate) => candidate.id === taskId)
+      const task = store.learningTasks.find((candidate) => candidate.id === taskId && candidate.userId === user.id)
       if (!task) throw new Error(`Learning task not found: ${taskId}`)
       task.status = nextStatus
       task.updatedAt = nowIso()

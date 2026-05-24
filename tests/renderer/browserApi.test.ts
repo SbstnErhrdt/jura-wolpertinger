@@ -180,4 +180,94 @@ describe('browser development API', () => {
       })
     ])
   })
+
+  it('isolates learning tasks by current user in the browser fallback', async () => {
+    const apiModulePath = '../../src/renderer/src/api'
+    const { getApi } = (await import(/* @vite-ignore */ apiModulePath)) as {
+      getApi: () => AppApi
+    }
+    const now = '2026-05-24T12:00:00.000Z'
+    const currentUserId = '11111111-1111-4111-8111-111111111111'
+    const otherUserId = '22222222-2222-4222-8222-222222222222'
+    const currentTaskId = '33333333-3333-4333-8333-333333333333'
+    const otherTaskId = '44444444-4444-4444-8444-444444444444'
+    localStorageMock.setItem(
+      browserStoreKey,
+      JSON.stringify({
+        users: [
+          {
+            id: currentUserId,
+            displayName: 'Nutzer A',
+            kind: 'local',
+            remoteUserId: null,
+            onboardingCompletedAt: null,
+            tourCompletedAt: null,
+            createdAt: now,
+            updatedAt: now
+          },
+          {
+            id: otherUserId,
+            displayName: 'Nutzer B',
+            kind: 'local',
+            remoteUserId: null,
+            onboardingCompletedAt: null,
+            tourCompletedAt: null,
+            createdAt: now,
+            updatedAt: now
+          }
+        ],
+        currentUserId,
+        folders: [],
+        exams: [],
+        revisions: [],
+        submissions: [],
+        attachments: [],
+        corrections: [],
+        aiSettings: null,
+        aiCorrectionDrafts: [],
+        learningTasks: [
+          {
+            schemaVersion: 1,
+            id: currentTaskId,
+            userId: currentUserId,
+            submissionId: '55555555-5555-4555-8555-555555555555',
+            correctionId: null,
+            aiDraftId: null,
+            category: 'structure',
+            priority: 'high',
+            status: 'open',
+            title: 'Eigene Aufgabe',
+            detail: 'Aufbau wiederholen.',
+            createdAt: now,
+            updatedAt: now
+          },
+          {
+            schemaVersion: 1,
+            id: otherTaskId,
+            userId: otherUserId,
+            submissionId: '66666666-6666-4666-8666-666666666666',
+            correctionId: null,
+            aiDraftId: null,
+            category: 'law',
+            priority: 'medium',
+            status: 'open',
+            title: 'Fremde Aufgabe',
+            detail: 'Definition wiederholen.',
+            createdAt: now,
+            updatedAt: now
+          }
+        ]
+      })
+    )
+
+    const api = getApi()
+
+    expect(await api.listLearningTasks()).toEqual([expect.objectContaining({ id: currentTaskId })])
+    await expect(api.updateLearningTaskStatus(otherTaskId, 'done')).rejects.toThrow(/Learning task not found/i)
+
+    const updated = await api.updateLearningTaskStatus(currentTaskId, 'done')
+
+    expect(updated.status).toBe('done')
+    expect(await api.listLearningTasks()).toEqual([expect.objectContaining({ id: currentTaskId, status: 'done' })])
+  })
 })

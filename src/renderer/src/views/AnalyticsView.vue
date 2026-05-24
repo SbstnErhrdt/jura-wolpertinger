@@ -151,6 +151,8 @@
         </span>
       </div>
 
+      <p v-if="learningTasksError" class="analytics-learning-error">{{ learningTasksError }}</p>
+
       <div v-if="visibleLearningTasks.length" class="analytics-learning-list">
         <article v-for="task in visibleLearningTasks" :key="task.id" class="analytics-learning-task">
           <div class="analytics-learning-task-body">
@@ -164,7 +166,10 @@
           <button class="secondary" type="button" @click="() => void markTaskDone(task.id)">Erledigt</button>
         </article>
       </div>
-      <p v-else class="empty-state">Keine offenen Lernaufgaben.</p>
+      <p v-if="hiddenLearningTaskCount > 0" class="analytics-learning-more">
+        {{ hiddenLearningTaskLabel }}
+      </p>
+      <p v-if="!visibleLearningTasks.length && !learningTasksError" class="empty-state">Keine offenen Lernaufgaben.</p>
     </section>
 
     <section class="analytics-panel analytics-table-panel">
@@ -230,6 +235,7 @@ const rangePresets: Array<{ id: RangePresetId; label: string; months: number }> 
 
 const entries = ref<AnalyticsEntry[]>([])
 const learningTasks = ref<LearningTask[]>([])
+const learningTasksError = ref('')
 const filters = ref<AnalyticsFilters>(loadFilters())
 
 onMounted(load)
@@ -290,6 +296,16 @@ const recentEntries = computed(() =>
 const openLearningTasks = computed(() => learningTasks.value.filter((task) => task.status !== 'done'))
 
 const visibleLearningTasks = computed(() => openLearningTasks.value.slice(0, 8))
+
+const hiddenLearningTaskCount = computed(() =>
+  Math.max(0, openLearningTasks.value.length - visibleLearningTasks.value.length)
+)
+
+const hiddenLearningTaskLabel = computed(() =>
+  hiddenLearningTaskCount.value === 1
+    ? 'Eine weitere offene Lernaufgabe wird nicht angezeigt.'
+    : `Weitere ${hiddenLearningTaskCount.value} offene Lernaufgaben werden nicht angezeigt.`
+)
 
 const topLearningCategories = computed(() => {
   const counts = new Map<LearningTask['category'], number>()
@@ -399,14 +415,33 @@ const monthlyBars = computed(() => {
 })
 
 async function load(): Promise<void> {
-  const [nextEntries, nextTasks] = await Promise.all([api.listAnalyticsEntries(), api.listLearningTasks()])
-  entries.value = nextEntries
-  learningTasks.value = nextTasks
+  const [entriesResult, tasksResult] = await Promise.allSettled([
+    api.listAnalyticsEntries(),
+    api.listLearningTasks()
+  ])
+  if (entriesResult.status === 'fulfilled') {
+    entries.value = entriesResult.value
+  } else {
+    throw entriesResult.reason
+  }
+
+  if (tasksResult.status === 'fulfilled') {
+    learningTasks.value = tasksResult.value
+    learningTasksError.value = ''
+  } else {
+    learningTasks.value = []
+    learningTasksError.value = 'Lernaufgaben konnten nicht geladen werden.'
+  }
 }
 
 async function markTaskDone(taskId: string): Promise<void> {
-  await api.updateLearningTaskStatus(taskId, 'done')
-  learningTasks.value = await api.listLearningTasks()
+  try {
+    await api.updateLearningTaskStatus(taskId, 'done')
+    learningTasks.value = await api.listLearningTasks()
+    learningTasksError.value = ''
+  } catch {
+    learningTasksError.value = 'Lernaufgabe konnte nicht aktualisiert werden.'
+  }
 }
 
 function setStartDate(value: string): void {

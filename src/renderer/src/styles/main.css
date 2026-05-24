@@ -581,6 +581,17 @@ textarea {
   padding: 4px 9px;
 }
 
+.analytics-learning-error,
+.analytics-learning-more {
+  color: #6a808b;
+  font-size: 13px;
+  margin: 12px 0 0;
+}
+
+.analytics-learning-error {
+  color: #9a5a18;
+}
+
 .analytics-learning-list {
   display: grid;
   gap: 12px;
@@ -2249,8 +2260,13 @@ textarea {
 :root[data-theme='dark'] .analytics-panel-copy,
 :root[data-theme='dark'] .analytics-bar-meta span,
 :root[data-theme='dark'] .analytics-learning-task p,
+:root[data-theme='dark'] .analytics-learning-more,
 :root[data-theme='dark'] .analytics-table-head {
   color: #9aadb6;
+}
+
+:root[data-theme='dark'] .analytics-learning-error {
+  color: #e2a253;
 }
 
 :root[data-theme='dark'] .analytics-learning-category {
