@@ -67,7 +67,7 @@
               <div class="settings-ai-status compact">
                 <strong>{{ aiStatusTitle }}</strong>
                 <p>{{ aiStatusDescription }}</p>
-                <span v-if="aiSettings.keyPreview">Key: {{ aiSettings.keyPreview }}</span>
+                <span v-if="aiKeyPreview">Key: {{ aiKeyPreview }}</span>
                 <span>Modell: {{ aiSettings.model ?? DEFAULT_AI_MODEL }}</span>
                 <span v-if="aiConnectionMessage" :class="aiConnectionOk ? 'settings-test-ok' : 'settings-test-error'">
                   {{ aiConnectionMessage }}
@@ -84,7 +84,7 @@
                   {{ aiBusy ? 'Prüft ...' : 'Verbindung testen' }}
                 </button>
                 <button
-                  v-if="aiSettings.source === 'stored'"
+                  v-if="effectiveAiSource === 'stored'"
                   type="button"
                   class="secondary danger-secondary"
                   :disabled="aiBusy"
@@ -109,7 +109,7 @@
                 <label>
                   OpenAI API-Key
                   <input v-model="aiApiKeyInput" type="password" :placeholder="aiKeyPlaceholder" />
-                  <span v-if="aiSettings.source === 'stored'" class="settings-field-note">
+                  <span v-if="effectiveAiSource === 'stored'" class="settings-field-note">
                     Der gespeicherte Key bleibt erhalten, wenn du hier nichts eingibst.
                   </span>
                 </label>
@@ -375,6 +375,12 @@ const aiBusy = ref(false)
 const aiNotice = ref('')
 const aiConnectionMessage = ref('')
 const aiConnectionOk = ref(false)
+const effectiveAiSource = computed(() =>
+  aiSettings.value.source ?? (aiSettings.value.configured ? 'stored' : null)
+)
+const aiKeyPreview = computed(() =>
+  aiSettings.value.keyPreview ?? (effectiveAiSource.value === 'stored' ? 'gespeichert' : null)
+)
 
 const renderedHtml = computed(() =>
   submission.value ? renderTiptapHtml(submission.value.content) : ''
@@ -393,22 +399,22 @@ const selectedAiDraft = computed(
   () => aiDrafts.value.find((draft) => draft.status === 'draft') ?? null
 )
 const aiKeyPlaceholder = computed(() =>
-  aiSettings.value.source === 'stored' ? 'neuer Key oder leer lassen' : 'sk-...'
+  effectiveAiSource.value === 'stored' ? 'neuer Key oder leer lassen' : 'sk-...'
 )
 const aiStatusTitle = computed(() => {
-  if (aiSettings.value.source === 'stored') return 'OpenAI-Key gespeichert'
-  if (aiSettings.value.source === 'environment') return 'Entwicklungs-Key aktiv'
+  if (effectiveAiSource.value === 'stored') return 'OpenAI-Key gespeichert'
+  if (effectiveAiSource.value === 'environment') return 'Entwicklungs-Key aktiv'
   return 'OpenAI-Key fehlt'
 })
 const aiStatusDescription = computed(() => {
-  if (aiSettings.value.source === 'stored') return 'KI-Korrekturen nutzen den lokal gespeicherten App-Key.'
-  if (aiSettings.value.source === 'environment') return 'Der Key kommt aus deiner lokalen .env-Datei.'
+  if (effectiveAiSource.value === 'stored') return 'KI-Korrekturen nutzen den lokal gespeicherten App-Key.'
+  if (effectiveAiSource.value === 'environment') return 'Der Key kommt aus deiner lokalen .env-Datei.'
   return 'Richte einen eigenen OpenAI-Key ein, bevor KI-Korrekturen gestartet werden.'
 })
 const aiSetupButtonLabel = computed(() =>
-  aiSettings.value.source === 'stored'
+  effectiveAiSource.value === 'stored'
     ? 'Key oder Modell ändern'
-    : aiSettings.value.source === 'environment'
+    : effectiveAiSource.value === 'environment'
       ? 'Eigenen App-Key speichern'
       : 'OpenAI-Key einrichten'
 )
@@ -561,7 +567,7 @@ async function removeAiSettings(): Promise<void> {
     showAiKeyForm.value = false
     confirmRemoveAiKey.value = false
     aiNotice.value =
-      aiSettings.value.source === 'environment'
+      effectiveAiSource.value === 'environment'
         ? 'App-Key entfernt. Der Entwicklungs-Key aus .env ist weiter aktiv.'
         : 'OpenAI-Key entfernt.'
   } catch (error) {
@@ -578,6 +584,12 @@ async function testAiConnection(): Promise<void> {
   aiConnectionMessage.value = 'Verbindungstest läuft ...'
   aiBusy.value = true
   try {
+    if (typeof api.testAiConnection !== 'function') {
+      aiConnectionOk.value = false
+      aiConnectionMessage.value = 'Bitte App neu starten, damit der Verbindungstest verfügbar ist.'
+      actionError.value = aiConnectionMessage.value
+      return
+    }
     const result = await api.testAiConnection()
     aiConnectionOk.value = result.ok
     aiConnectionMessage.value = result.message
