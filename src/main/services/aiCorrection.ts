@@ -132,6 +132,11 @@ export type RequestOpenAiCorrectionInput = {
   attachments: AiCorrectionRequestAttachment[]
 }
 
+export type RequestOpenAiConnectionTestInput = {
+  apiKey: string
+  model: string
+}
+
 export function buildAiCorrectionPrompt(context: AiCorrectionPromptContext): string {
   const attachmentList =
     context.attachments && context.attachments.length > 0
@@ -231,6 +236,48 @@ export async function requestOpenAiCorrection(
     model: input.model,
     content: reviewContent
   })
+}
+
+export async function requestOpenAiConnectionTest(input: RequestOpenAiConnectionTestInput): Promise<{
+  ok: boolean
+  model: string
+  message: string
+}> {
+  const response = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${input.apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: input.model,
+      store: false,
+      input: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'input_text',
+              text: 'Verbindungstest fuer Jura Wolpertinger. Antworte kurz mit OK.'
+            }
+          ]
+        }
+      ]
+    })
+  })
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => '')
+    const detail = body ? `: ${body.slice(0, 500)}` : ''
+    throw new Error(`OpenAI connection test failed (${response.status})${detail}`)
+  }
+
+  await response.json()
+  return {
+    ok: true,
+    model: input.model,
+    message: 'Verbindung erfolgreich.'
+  }
 }
 
 function buildAiCorrectionReviewPrompt(

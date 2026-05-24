@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import Database from 'better-sqlite3'
 import JSZip from 'jszip'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { seedDemoDataIfEnabled } from '@main/services/demoData'
 import { AppServices } from '@main/services/services'
 import {
@@ -676,6 +676,7 @@ describe('AppServices', () => {
       provider: 'openai',
       configured: false,
       model: null,
+      source: null,
       updatedAt: null
     })
 
@@ -687,6 +688,7 @@ describe('AppServices', () => {
 
     expect(saved.configured).toBe(true)
     expect(saved.model).toBe('gpt-5')
+    expect(saved.source).toBe('stored')
     expect(saved.updatedAt).not.toBeNull()
 
     services.close()
@@ -726,6 +728,7 @@ describe('AppServices', () => {
         provider: 'openai',
         configured: true,
         model: 'gpt-5.5',
+        source: 'environment',
         updatedAt: null
       })
 
@@ -736,6 +739,7 @@ describe('AppServices', () => {
         provider: 'openai',
         configured: true,
         model: 'gpt-5.5',
+        source: 'environment',
         updatedAt: null
       })
     } finally {
@@ -766,6 +770,45 @@ describe('AppServices', () => {
     ).toThrow(/model/i)
 
     expect(services.getAiSettingsStatus().configured).toBe(false)
+  })
+
+  it('removes stored AI settings for the current user', () => {
+    services.saveAiSettings({
+      provider: 'openai',
+      apiKey: 'sk-test',
+      model: 'gpt-5.5'
+    })
+
+    const status = services.removeAiSettings()
+
+    expect(status).toEqual({
+      provider: 'openai',
+      configured: false,
+      model: null,
+      source: null,
+      updatedAt: null
+    })
+  })
+
+  it('tests the configured AI connection without exposing credentials', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue({ output_text: 'OK' })
+      })
+    )
+    services.saveAiSettings({
+      provider: 'openai',
+      apiKey: 'sk-test',
+      model: 'gpt-5.5'
+    })
+
+    await expect(services.testAiConnection()).resolves.toEqual({
+      ok: true,
+      model: 'gpt-5.5',
+      message: 'Verbindung erfolgreich.'
+    })
   })
 
   it('rejects unsupported AI settings providers at runtime', () => {

@@ -40,6 +40,8 @@ const api: AppApi = {
   listAnalyticsEntries: () => ipcRenderer.invoke('analytics:list'),
   getAiSettingsStatus: () => ipcRenderer.invoke('ai:settingsStatus'),
   saveAiSettings: (input: SaveAiSettingsInput) => ipcRenderer.invoke('ai:saveSettings', input),
+  removeAiSettings: () => ipcRenderer.invoke('ai:removeSettings'),
+  testAiConnection: () => ipcRenderer.invoke('ai:testConnection'),
   generateAiCorrectionDraft: (input: GenerateAiCorrectionInput) =>
     ipcRenderer.invoke('ai:generateCorrectionDraft', input),
   listAiCorrectionDrafts: (submissionId: string) =>

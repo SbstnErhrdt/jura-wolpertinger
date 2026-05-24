@@ -3,6 +3,7 @@ import {
   buildAiCorrectionPrompt,
   extractOpenAiResponseText,
   parseAiCorrectionResponse,
+  requestOpenAiConnectionTest,
   requestOpenAiCorrection
 } from '@main/services/aiCorrection'
 
@@ -267,6 +268,32 @@ describe('AI correction service', () => {
         attachments: []
       })
     ).rejects.toThrow('OpenAI correction request failed (429): rate limit')
+  })
+
+  it('tests OpenAI connectivity with a non-stored lightweight request', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({ output_text: 'OK' })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await requestOpenAiConnectionTest({
+      apiKey: 'test-key',
+      model: 'gpt-test'
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      model: 'gpt-test',
+      message: 'Verbindung erfolgreich.'
+    })
+    const [, requestInit] = fetchMock.mock.calls[0]
+    const body = JSON.parse(requestInit.body)
+    expect(body).toMatchObject({
+      model: 'gpt-test',
+      store: false
+    })
+    expect(body.input[0].content[0].text).toContain('Verbindungstest')
   })
 })
 

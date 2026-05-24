@@ -64,19 +64,43 @@
                 Aufgabenstellung, Musterlösung und Abgabe werden für die Korrektur an den
                 konfigurierten KI-Anbieter übertragen.
               </p>
-              <label>
-                OpenAI API-Key
-                <input v-model="aiApiKeyInput" type="password" :placeholder="aiKeyPlaceholder" />
-              </label>
-              <label>
-                Modell
-                <input v-model="aiModelInput" :placeholder="DEFAULT_AI_MODEL" />
-              </label>
-              <div class="dialog-actions">
-                <button type="button" :disabled="aiBusy" @click="saveAiSettings">
-                  Speichern
+              <div class="settings-ai-status compact">
+                <strong>{{ aiStatusTitle }}</strong>
+                <p>{{ aiStatusDescription }}</p>
+                <span>Modell: {{ aiSettings.model ?? DEFAULT_AI_MODEL }}</span>
+              </div>
+              <div v-if="!showAiKeyForm" class="dialog-actions">
+                <button type="button" @click="openAiKeyForm">{{ aiSetupButtonLabel }}</button>
+                <button
+                  type="button"
+                  class="secondary"
+                  :disabled="!aiSettings.configured || aiBusy"
+                  @click="testAiConnection"
+                >
+                  {{ aiBusy ? 'Prüft ...' : 'Verbindung testen' }}
                 </button>
               </div>
+              <form v-else class="settings-key-form" @submit.prevent="saveAiSettings">
+                <label>
+                  OpenAI API-Key
+                  <input v-model="aiApiKeyInput" type="password" :placeholder="aiKeyPlaceholder" />
+                  <span v-if="aiSettings.source === 'stored'" class="settings-field-note">
+                    Der gespeicherte Key bleibt erhalten, wenn du hier nichts eingibst.
+                  </span>
+                </label>
+                <label>
+                  Modell
+                  <input v-model="aiModelInput" :placeholder="DEFAULT_AI_MODEL" />
+                </label>
+                <div class="dialog-actions">
+                  <button type="submit" :disabled="aiBusy">
+                    {{ aiBusy ? 'Speichert ...' : 'Speichern' }}
+                  </button>
+                  <button type="button" class="secondary" :disabled="aiBusy" @click="cancelAiKeyForm">
+                    Abbrechen
+                  </button>
+                </div>
+              </form>
             </div>
           </section>
 
@@ -279,7 +303,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { CheckCircle2, Clock3 } from 'lucide-vue-next'
 import { DEFAULT_AI_MODEL, EDITOR_SCHEMA_VERSION } from '@shared/constants'
-import type { SubmissionDetails } from '@shared/ipc'
+import type { AiSettingsStatus, SubmissionDetails } from '@shared/ipc'
 import type { AiCorrectionDraft, Correction, InlineComment } from '@shared/schemas'
 import { api } from '../api'
 import { renderTiptapHtml } from '../utils/renderTiptap'
@@ -308,9 +332,16 @@ const activeCommentId = ref<string | null>(null)
 const commentPositions = ref<Record<string, number>>({})
 const commentRailHeight = ref(760)
 const selectionPopover = ref({ x: 0, y: 0 })
-const aiSettings = ref<{ configured: boolean; model: string | null }>({ configured: false, model: null })
+const aiSettings = ref<AiSettingsStatus>({
+  provider: 'openai',
+  configured: false,
+  model: null,
+  source: null,
+  updatedAt: null
+})
 const aiDrafts = ref<AiCorrectionDraft[]>([])
 const showAiSettings = ref(false)
+const showAiKeyForm = ref(false)
 const aiApiKeyInput = ref('')
 const aiModelInput = ref(DEFAULT_AI_MODEL)
 const aiBusy = ref(false)
@@ -333,7 +364,24 @@ const selectedAiDraft = computed(
   () => aiDrafts.value.find((draft) => draft.status === 'draft') ?? null
 )
 const aiKeyPlaceholder = computed(() =>
-  aiSettings.value.configured ? 'gespeichert - leer lassen zum Behalten' : 'sk-...'
+  aiSettings.value.source === 'stored' ? 'neuer Key oder leer lassen' : 'sk-...'
+)
+const aiStatusTitle = computed(() => {
+  if (aiSettings.value.source === 'stored') return 'OpenAI-Key gespeichert'
+  if (aiSettings.value.source === 'environment') return 'Entwicklungs-Key aktiv'
+  return 'OpenAI-Key fehlt'
+})
+const aiStatusDescription = computed(() => {
+  if (aiSettings.value.source === 'stored') return 'KI-Korrekturen nutzen den lokal gespeicherten App-Key.'
+  if (aiSettings.value.source === 'environment') return 'Der Key kommt aus deiner lokalen .env-Datei.'
+  return 'Richte einen eigenen OpenAI-Key ein, bevor KI-Korrekturen gestartet werden.'
+})
+const aiSetupButtonLabel = computed(() =>
+  aiSettings.value.source === 'stored'
+    ? 'Key oder Modell ändern'
+    : aiSettings.value.source === 'environment'
+      ? 'Eigenen App-Key speichern'
+      : 'OpenAI-Key einrichten'
 )
 
 onMounted(() => {
@@ -434,7 +482,37 @@ async function saveAiSettings(): Promise<void> {
     })
     aiModelInput.value = aiSettings.value.model ?? DEFAULT_AI_MODEL
     aiApiKeyInput.value = ''
+    showAiKeyForm.value = false
     aiNotice.value = 'KI-Einstellungen gespeichert.'
+  } catch (error) {
+    actionError.value = error instanceof Error ? error.message : String(error)
+  } finally {
+    aiBusy.value = false
+  }
+}
+
+function openAiKeyForm(): void {
+  actionError.value = ''
+  aiNotice.value = ''
+  aiApiKeyInput.value = ''
+  aiModelInput.value = aiSettings.value.model ?? DEFAULT_AI_MODEL
+  showAiKeyForm.value = true
+}
+
+function cancelAiKeyForm(): void {
+  aiApiKeyInput.value = ''
+  aiModelInput.value = aiSettings.value.model ?? DEFAULT_AI_MODEL
+  showAiKeyForm.value = false
+}
+
+async function testAiConnection(): Promise<void> {
+  actionError.value = ''
+  aiNotice.value = ''
+  aiBusy.value = true
+  try {
+    const result = await api.testAiConnection()
+    if (result.ok) aiNotice.value = result.message
+    else actionError.value = result.message
   } catch (error) {
     actionError.value = error instanceof Error ? error.message : String(error)
   } finally {

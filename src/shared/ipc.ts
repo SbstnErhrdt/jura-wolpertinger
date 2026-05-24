@@ -103,7 +103,14 @@ export type AiSettingsStatus = {
   provider: 'openai'
   configured: boolean
   model: string | null
+  source: 'stored' | 'environment' | null
   updatedAt: string | null
+}
+
+export type AiConnectionTestResult = {
+  ok: boolean
+  model: string | null
+  message: string
 }
 
 export type GenerateAiCorrectionInput = {
@@ -162,6 +169,8 @@ export type AppApi = {
   listAnalyticsEntries(): Promise<AnalyticsEntry[]>
   getAiSettingsStatus(): Promise<AiSettingsStatus>
   saveAiSettings(input: SaveAiSettingsInput): Promise<AiSettingsStatus>
+  removeAiSettings(): Promise<AiSettingsStatus>
+  testAiConnection(): Promise<AiConnectionTestResult>
   generateAiCorrectionDraft(input: GenerateAiCorrectionInput): Promise<AiCorrectionDraft>
   listAiCorrectionDrafts(submissionId: string): Promise<AiCorrectionDraft[]>
   acceptAiCorrectionDraft(draftId: string): Promise<AiCorrectionDraft>

@@ -77,20 +77,50 @@
           </span>
         </div>
 
-        <label class="settings-field">
-          OpenAI API-Key
-          <input v-model="aiApiKeyInput" type="password" :placeholder="aiKeyPlaceholder" />
-        </label>
-        <label class="settings-field">
-          Modell
-          <input v-model="aiModelInput" :placeholder="DEFAULT_AI_MODEL" />
-        </label>
+        <div class="settings-ai-status">
+          <strong>{{ aiStatusTitle }}</strong>
+          <p>{{ aiStatusDescription }}</p>
+          <span>Modell: {{ aiSettings.model ?? DEFAULT_AI_MODEL }}</span>
+        </div>
 
-        <div class="settings-actions">
-          <button type="button" :disabled="aiBusy" @click="saveAiSettings">
-            {{ aiBusy ? 'Speichert ...' : 'KI-Einstellungen speichern' }}
+        <div v-if="!showAiKeyForm" class="settings-actions">
+          <button type="button" @click="openAiKeyForm">{{ aiSetupButtonLabel }}</button>
+          <button type="button" class="secondary" :disabled="!aiSettings.configured || aiBusy" @click="testAiConnection">
+            {{ aiBusy ? 'Prüft ...' : 'Verbindung testen' }}
+          </button>
+          <button
+            v-if="aiSettings.source === 'stored'"
+            type="button"
+            class="secondary danger-secondary"
+            :disabled="aiBusy"
+            @click="removeAiSettings"
+          >
+            Key entfernen
           </button>
         </div>
+
+        <form v-else class="settings-key-form" @submit.prevent="saveAiSettings">
+          <label class="settings-field">
+            OpenAI API-Key
+            <input v-model="aiApiKeyInput" type="password" :placeholder="aiKeyPlaceholder" />
+            <span v-if="aiSettings.source === 'stored'" class="settings-field-note">
+              Der gespeicherte Key bleibt erhalten, wenn du hier nichts eingibst.
+            </span>
+          </label>
+          <label class="settings-field">
+            Modell
+            <input v-model="aiModelInput" :placeholder="DEFAULT_AI_MODEL" />
+          </label>
+
+          <div class="settings-actions">
+            <button type="submit" :disabled="aiBusy">
+              {{ aiBusy ? 'Speichert ...' : 'Speichern' }}
+            </button>
+            <button type="button" class="secondary" :disabled="aiBusy" @click="cancelAiKeyForm">
+              Abbrechen
+            </button>
+          </div>
+        </form>
       </section>
 
       <section class="settings-panel">
@@ -116,7 +146,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import type { AppUser } from '@shared/ipc'
+import type { AiSettingsStatus, AppUser } from '@shared/ipc'
 import { DEFAULT_AI_MODEL } from '@shared/constants'
 import { api } from '../api'
 import { useTheme } from '../theme'
@@ -126,14 +156,38 @@ const users = ref<AppUser[]>([])
 const currentUser = ref<AppUser | null>(null)
 const currentUserName = ref('')
 const newUserName = ref('')
-const aiSettings = ref<{ configured: boolean; model: string | null }>({ configured: false, model: null })
+const aiSettings = ref<AiSettingsStatus>({
+  provider: 'openai',
+  configured: false,
+  model: null,
+  source: null,
+  updatedAt: null
+})
 const aiApiKeyInput = ref('')
 const aiModelInput = ref(DEFAULT_AI_MODEL)
 const aiBusy = ref(false)
+const showAiKeyForm = ref(false)
 const actionError = ref('')
 const actionNotice = ref('')
 const aiKeyPlaceholder = computed(() =>
-  aiSettings.value.configured ? 'gespeichert - leer lassen zum Behalten' : 'sk-...'
+  aiSettings.value.source === 'stored' ? 'neuer Key oder leer lassen' : 'sk-...'
+)
+const aiStatusTitle = computed(() => {
+  if (aiSettings.value.source === 'stored') return 'OpenAI-Key gespeichert'
+  if (aiSettings.value.source === 'environment') return 'Entwicklungs-Key aktiv'
+  return 'OpenAI-Key fehlt'
+})
+const aiStatusDescription = computed(() => {
+  if (aiSettings.value.source === 'stored') return 'KI-Korrekturen nutzen den lokal gespeicherten App-Key.'
+  if (aiSettings.value.source === 'environment') return 'Der Key kommt aus deiner lokalen .env-Datei.'
+  return 'Richte einen eigenen OpenAI-Key ein, bevor KI-Korrekturen gestartet werden.'
+})
+const aiSetupButtonLabel = computed(() =>
+  aiSettings.value.source === 'stored'
+    ? 'Key oder Modell ändern'
+    : aiSettings.value.source === 'environment'
+      ? 'Eigenen App-Key speichern'
+      : 'OpenAI-Key einrichten'
 )
 
 onMounted(load)
@@ -145,6 +199,20 @@ async function load(): Promise<void> {
   currentUserName.value = currentUser.value.displayName
   aiSettings.value = await api.getAiSettingsStatus()
   aiModelInput.value = aiSettings.value.model ?? DEFAULT_AI_MODEL
+}
+
+function openAiKeyForm(): void {
+  actionError.value = ''
+  actionNotice.value = ''
+  aiApiKeyInput.value = ''
+  aiModelInput.value = aiSettings.value.model ?? DEFAULT_AI_MODEL
+  showAiKeyForm.value = true
+}
+
+function cancelAiKeyForm(): void {
+  aiApiKeyInput.value = ''
+  aiModelInput.value = aiSettings.value.model ?? DEFAULT_AI_MODEL
+  showAiKeyForm.value = false
 }
 
 async function switchUser(event: Event): Promise<void> {
@@ -200,7 +268,43 @@ async function saveAiSettings(): Promise<void> {
     })
     aiModelInput.value = aiSettings.value.model ?? DEFAULT_AI_MODEL
     aiApiKeyInput.value = ''
+    showAiKeyForm.value = false
     actionNotice.value = 'KI-Einstellungen gespeichert.'
+  } catch (error) {
+    actionError.value = error instanceof Error ? error.message : String(error)
+  } finally {
+    aiBusy.value = false
+  }
+}
+
+async function removeAiSettings(): Promise<void> {
+  actionError.value = ''
+  actionNotice.value = ''
+  aiBusy.value = true
+  try {
+    aiSettings.value = await api.removeAiSettings()
+    aiModelInput.value = aiSettings.value.model ?? DEFAULT_AI_MODEL
+    aiApiKeyInput.value = ''
+    showAiKeyForm.value = false
+    actionNotice.value =
+      aiSettings.value.source === 'environment'
+        ? 'App-Key entfernt. Der Entwicklungs-Key aus .env ist weiter aktiv.'
+        : 'OpenAI-Key entfernt.'
+  } catch (error) {
+    actionError.value = error instanceof Error ? error.message : String(error)
+  } finally {
+    aiBusy.value = false
+  }
+}
+
+async function testAiConnection(): Promise<void> {
+  actionError.value = ''
+  actionNotice.value = ''
+  aiBusy.value = true
+  try {
+    const result = await api.testAiConnection()
+    if (result.ok) actionNotice.value = result.message
+    else actionError.value = result.message
   } catch (error) {
     actionError.value = error instanceof Error ? error.message : String(error)
   } finally {

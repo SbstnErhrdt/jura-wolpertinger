@@ -62,6 +62,7 @@ import type {
 import { openDatabase, type SqliteDatabase } from './database'
 import {
   buildAiCorrectionPrompt,
+  requestOpenAiConnectionTest,
   requestOpenAiCorrection,
   tiptapToPlainText,
   type AiCorrectionRequestAttachment
@@ -523,6 +524,7 @@ export class AppServices {
         provider: 'openai',
         configured: true,
         model: row.model,
+        source: 'stored',
         updatedAt: row.updated_at
       }
     }
@@ -532,6 +534,7 @@ export class AppServices {
       provider: 'openai',
       configured: Boolean(envCredentials),
       model: envCredentials?.model ?? null,
+      source: envCredentials ? 'environment' : null,
       updatedAt: null
     }
   }
@@ -562,6 +565,26 @@ export class AppServices {
       )
       .run(userId, provider, apiKey, model, updatedAt)
     return this.getAiSettingsStatus()
+  }
+
+  removeAiSettings(): AiSettingsStatus {
+    this.db.prepare('DELETE FROM ai_settings WHERE user_id = ?').run(this.getCurrentUserId())
+    return this.getAiSettingsStatus()
+  }
+
+  async testAiConnection(): Promise<{ ok: boolean; model: string | null; message: string }> {
+    const settings = this.getAiSettingsCredentials()
+    if (!settings) {
+      return {
+        ok: false,
+        model: null,
+        message: 'OpenAI-Key fehlt.'
+      }
+    }
+    return requestOpenAiConnectionTest({
+      apiKey: settings.apiKey,
+      model: settings.model
+    })
   }
 
   async generateAiCorrectionDraft(submissionId: string): Promise<AiCorrectionDraft> {

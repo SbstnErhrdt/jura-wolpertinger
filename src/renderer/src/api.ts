@@ -389,6 +389,27 @@ function createBrowserDevApi(): AppApi {
       writeStore(store)
       return aiSettingsStatus(store.aiSettings)
     },
+    async removeAiSettings() {
+      const store = readStore()
+      store.aiSettings = null
+      writeStore(store)
+      return aiSettingsStatus(store.aiSettings)
+    },
+    async testAiConnection() {
+      const settings = readStore().aiSettings
+      if (!settings?.configured) {
+        return {
+          ok: false,
+          model: null,
+          message: 'OpenAI-Key fehlt.'
+        }
+      }
+      return {
+        ok: false,
+        model: settings.model,
+        message: 'Verbindungstest ist nur in der Electron-App verfuegbar.'
+      }
+    },
     async generateAiCorrectionDraft() {
       throw new Error(AI_CORRECTION_NOT_IMPLEMENTED_MESSAGE)
     },
@@ -793,6 +814,7 @@ function aiSettingsStatus(settings: BrowserStore['aiSettings']): AiSettingsStatu
     provider: 'openai',
     configured: Boolean(settings?.configured),
     model: settings?.model ?? null,
+    source: settings?.configured ? 'stored' : null,
     updatedAt: settings?.updatedAt ?? null
   }
 }

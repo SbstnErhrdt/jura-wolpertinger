@@ -52,8 +52,18 @@ test.describe('Jura Wolpertinger Electron app', () => {
       await expect(userSettingsPanel).toContainText('Lokaler Nutzer')
       await expect(newUserSettingsPanel).toContainText('Anlegen')
       const aiSettingsPanel = page.locator('.settings-panel', { hasText: 'KI-Korrektur' })
+      await expect(aiSettingsPanel).toContainText(/OpenAI-Key (fehlt|gespeichert)|Entwicklungs-Key aktiv/)
+      await expect(aiSettingsPanel.locator('input[type="password"]')).toHaveCount(0)
+      await aiSettingsPanel
+        .getByRole('button', {
+          name: /OpenAI-Key einrichten|Eigenen App-Key speichern|Key oder Modell ändern/
+        })
+        .click()
       await expect(aiSettingsPanel).toContainText('OpenAI API-Key')
+      await expect(aiSettingsPanel.locator('input[type="password"]')).toBeVisible()
       await expect(aiSettingsPanel.locator('input[placeholder="gpt-5.5"]')).toBeVisible()
+      await aiSettingsPanel.getByRole('button', { name: 'Abbrechen' }).click()
+      await expect(aiSettingsPanel.locator('input[type="password"]')).toHaveCount(0)
       await expect(page.locator('.settings-panel', { hasText: 'Oberfläche' })).toContainText('Dunkelmodus')
       await userSettingsPanel.locator('input[placeholder="Name"]').fill('Sebastian')
       await userSettingsPanel.locator('button:has-text("Speichern")').click()

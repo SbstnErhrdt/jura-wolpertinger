@@ -717,6 +717,37 @@ textarea {
   gap: 8px;
 }
 
+.settings-ai-status {
+  background: #f7fbfd;
+  border: 1px solid #d4e6ef;
+  border-radius: 6px;
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+}
+
+.settings-ai-status.compact {
+  margin: 10px 0;
+}
+
+.settings-ai-status strong {
+  color: #1f3744;
+  font-size: 15px;
+}
+
+.settings-ai-status p,
+.settings-ai-status span,
+.settings-field-note {
+  color: #637883;
+  font-size: 13px;
+  margin: 0;
+}
+
+.settings-key-form {
+  display: grid;
+  gap: 12px;
+}
+
 .settings-status-pill {
   align-self: start;
   background: #f1f6f9;
@@ -733,6 +764,10 @@ textarea {
   background: #e2f3fb;
   border-color: #9ed0e8;
   color: #006ea8;
+}
+
+.danger-secondary {
+  color: #9f2e2e;
 }
 
 .about-view {
@@ -2333,6 +2368,21 @@ textarea {
 :root[data-theme='dark'] .settings-status-pill {
   background: #111b20;
   border-color: #31424a;
+  color: #9aadb6;
+}
+
+:root[data-theme='dark'] .settings-ai-status {
+  background: #111b20;
+  border-color: #31424a;
+}
+
+:root[data-theme='dark'] .settings-ai-status strong {
+  color: #dcebf0;
+}
+
+:root[data-theme='dark'] .settings-ai-status p,
+:root[data-theme='dark'] .settings-ai-status span,
+:root[data-theme='dark'] .settings-field-note {
   color: #9aadb6;
 }
 

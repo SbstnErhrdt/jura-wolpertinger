@@ -216,6 +216,8 @@ function registerIpc(): void {
   ipcMain.handle('ai:saveSettings', (_event, input: SaveAiSettingsInput) =>
     services.saveAiSettings(input)
   )
+  ipcMain.handle('ai:removeSettings', () => services.removeAiSettings())
+  ipcMain.handle('ai:testConnection', () => services.testAiConnection())
   ipcMain.handle('ai:generateCorrectionDraft', (_event, input: GenerateAiCorrectionInput) =>
     services.generateAiCorrectionDraft(input.submissionId)
   )
