@@ -419,6 +419,23 @@ describe('AppServices', () => {
       content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Anspruch entstanden.' }] }]
     })
     const submission = services.submitExam(exam.id)
+    const existingCorrection = services.createCorrection(submission.id)
+    const manualComment = services.addInlineComment({
+      correctionId: existingCorrection.id,
+      submissionId: submission.id,
+      body: 'Manueller Kommentar bleibt erhalten.',
+      tags: [],
+      anchor: {
+        type: 'prosemirror-selection',
+        editorSchemaVersion: EDITOR_SCHEMA_VERSION,
+        from: 0,
+        to: 8,
+        selectedText: 'Anspruch',
+        prefix: '',
+        suffix: ' entstanden.',
+        contentHash: submission.contentHash
+      }
+    })
     const draft = services.saveAiCorrectionDraft({
       submissionId: submission.id,
       provider: 'openai',
@@ -438,7 +455,15 @@ describe('AppServices', () => {
           detail: 'Beginne mit der zentralen Anspruchsgrundlage.'
         }
       ],
-      inlineComments: []
+      inlineComments: [
+        {
+          selectedText: 'entstanden',
+          prefix: 'Anspruch ',
+          suffix: '.',
+          body: 'Hier genauer am Sachverhalt prüfen.',
+          tags: ['sachverhalt']
+        }
+      ]
     })
 
     const accepted = services.acceptAiCorrectionDraft(draft.id)
@@ -449,6 +474,28 @@ describe('AppServices', () => {
     expect(details.corrections[0].score.points).toBe(7.5)
     expect(details.corrections[0].gradingComment).toContain('Ordentliche Grundlage')
     expect(details.corrections[0].tags).toEqual(['schwerpunktsetzung'])
+    expect(details.corrections[0].inlineComments).toEqual([
+      expect.objectContaining({
+        id: manualComment.id,
+        body: 'Manueller Kommentar bleibt erhalten.'
+      }),
+      expect.objectContaining({
+        targetSubmissionId: submission.id,
+        correctionId: existingCorrection.id,
+        userId: draft.userId,
+        status: 'open',
+        body: 'Hier genauer am Sachverhalt prüfen.',
+        tags: ['sachverhalt'],
+        anchor: expect.objectContaining({
+          type: 'prosemirror-selection',
+          editorSchemaVersion: EDITOR_SCHEMA_VERSION,
+          selectedText: 'entstanden',
+          prefix: 'Anspruch ',
+          suffix: '.',
+          contentHash: submission.contentHash
+        })
+      })
+    ])
     expect(tasks).toEqual([
       expect.objectContaining({
         submissionId: submission.id,

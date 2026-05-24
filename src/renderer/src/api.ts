@@ -1,4 +1,4 @@
-import { EMPTY_TIPTAP_DOCUMENT } from '@shared/constants'
+import { EDITOR_SCHEMA_VERSION, EMPTY_TIPTAP_DOCUMENT } from '@shared/constants'
 import type {
   AddInlineCommentInput,
   AiSettingsStatus,
@@ -395,6 +395,27 @@ function createBrowserDevApi(): AppApi {
       correction.gradingComment = draft.gradingComment
       correction.tags = [...draft.tags]
       correction.updatedAt = nowIso()
+      const submission = store.submissions.find((candidate) => candidate.id === draft.submissionId)
+      const revision = submission
+        ? store.revisions.find((candidate) => candidate.id === submission.revisionId)
+        : null
+      const submissionText = revision ? plainTextFromTipTapNode(revision.content) : ''
+      const contentHash =
+        submission?.contentHash ?? correction.inlineComments[0]?.anchor.contentHash ?? ''
+      for (const comment of draft.inlineComments) {
+        correction.inlineComments.push({
+          schemaVersion: 1,
+          id: newId(),
+          userId: draft.userId,
+          targetSubmissionId: draft.submissionId,
+          correctionId: correction.id,
+          createdAt: correction.updatedAt,
+          status: 'open',
+          body: comment.body,
+          anchor: buildBrowserAiInlineCommentAnchor(comment, contentHash, submissionText),
+          tags: normalizeTags(comment.tags)
+        })
+      }
       draft.status = 'accepted'
       draft.correctionId = correction.id
       draft.updatedAt = correction.updatedAt
@@ -780,6 +801,28 @@ function normalizeBrowserAiSettings(settings: unknown): BrowserStore['aiSettings
   }
 }
 
+function buildBrowserAiInlineCommentAnchor(
+  comment: AiCorrectionDraft['inlineComments'][number],
+  contentHash: string,
+  submissionText: string
+): InlineComment['anchor'] {
+  const anchoredText = `${comment.prefix}${comment.selectedText}${comment.suffix}`
+  const anchoredIndex = comment.prefix || comment.suffix ? submissionText.indexOf(anchoredText) : -1
+  const from = anchoredIndex >= 0
+    ? anchoredIndex + comment.prefix.length
+    : Math.max(0, submissionText.indexOf(comment.selectedText))
+  return {
+    type: 'prosemirror-selection',
+    editorSchemaVersion: EDITOR_SCHEMA_VERSION,
+    from,
+    to: from + comment.selectedText.length,
+    selectedText: comment.selectedText,
+    prefix: comment.prefix,
+    suffix: comment.suffix,
+    contentHash
+  }
+}
+
 function findAiDraft(store: BrowserStore, draftId: string): AiCorrectionDraft {
   const draft = store.aiCorrectionDrafts.find((candidate) => candidate.id === draftId)
   if (!draft) throw new Error(`AI correction draft not found: ${draftId}`)
@@ -870,6 +913,21 @@ function hashJson(value: Record<string, unknown>): string {
     hash = (hash * 31 + text.charCodeAt(index)) | 0
   }
   return `browser-${text.length}-${Math.abs(hash)}`
+}
+
+function plainTextFromTipTapNode(node: unknown): string {
+  if (!node || typeof node !== 'object') return ''
+  const record = node as { type?: unknown; text?: unknown; content?: unknown }
+  if (record.type === 'text') return typeof record.text === 'string' ? record.text : ''
+  const children = Array.isArray(record.content) ? record.content.map(plainTextFromTipTapNode) : []
+  const joined = children.join('')
+  if (['paragraph', 'heading', 'blockquote', 'listItem'].includes(String(record.type))) {
+    return `${joined}\n`
+  }
+  if (['bulletList', 'orderedList'].includes(String(record.type))) {
+    return `${joined}\n`
+  }
+  return joined
 }
 
 function clone<T>(value: T): T {

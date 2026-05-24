@@ -746,6 +746,8 @@ export class AppServices {
     const updatedAt = nowIso()
 
     this.db.transaction(() => {
+      const submissionDetails = this.getSubmission(draft.submissionId)
+      const submissionText = tiptapToPlainText(submissionDetails.content)
       const correction = this.createCorrection(draft.submissionId)
       const updatedCorrection = this.updateCorrection({
         correctionId: correction.id,
@@ -753,6 +755,28 @@ export class AppServices {
         gradingComment: draft.gradingComment,
         tags: draft.tags
       })
+
+      for (const comment of draft.inlineComments) {
+        this.db
+          .prepare(
+            `
+            INSERT INTO inline_comments
+              (id, user_id, correction_id, submission_id, created_at, status, body, anchor_json, tags_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `
+          )
+          .run(
+            newId(),
+            draft.userId,
+            updatedCorrection.id,
+            draft.submissionId,
+            updatedAt,
+            'open',
+            comment.body,
+            stringifyJson(buildAiInlineCommentAnchor(comment, submissionDetails.contentHash, submissionText)),
+            stringifyJson(normalizeTags(comment.tags))
+          )
+      }
 
       for (const suggestion of draft.improvementSuggestions) {
         this.db
@@ -1521,6 +1545,29 @@ function inlineCommentFromRow(row: Row): InlineComment {
     anchor: parseJson(String(row.anchor_json), {}) as CommentAnchor,
     tags: parseJson(String(row.tags_json), [] as string[])
   }
+}
+
+function buildAiInlineCommentAnchor(
+  comment: AiCorrectionDraft['inlineComments'][number],
+  contentHash: string,
+  submissionText: string
+): CommentAnchor {
+  const anchoredText = `${comment.prefix}${comment.selectedText}${comment.suffix}`
+  const anchoredIndex = comment.prefix || comment.suffix ? submissionText.indexOf(anchoredText) : -1
+  const from = anchoredIndex >= 0
+    ? anchoredIndex + comment.prefix.length
+    : Math.max(0, submissionText.indexOf(comment.selectedText))
+  const to = from + comment.selectedText.length
+  return commentAnchorSchema.parse({
+    type: 'prosemirror-selection',
+    editorSchemaVersion: EDITOR_SCHEMA_VERSION,
+    from,
+    to,
+    selectedText: comment.selectedText,
+    prefix: comment.prefix,
+    suffix: comment.suffix,
+    contentHash
+  })
 }
 
 function attachmentFromRow(row: Row): Attachment {
