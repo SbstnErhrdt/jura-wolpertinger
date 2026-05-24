@@ -674,6 +674,67 @@ textarea {
   font-size: 14px;
 }
 
+.settings-view {
+  max-width: 1120px;
+}
+
+.settings-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.settings-panel {
+  background: #fff;
+  border: 1px solid #d4e6ef;
+  border-radius: 6px;
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.settings-copy {
+  color: #637883;
+  margin: 4px 0 0;
+}
+
+.settings-field {
+  color: #52656f;
+  display: grid;
+  font-size: 13px;
+  gap: 6px;
+}
+
+.settings-inline-control {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.settings-actions,
+.settings-mode-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.settings-status-pill {
+  align-self: start;
+  background: #f1f6f9;
+  border: 1px solid #d4e6ef;
+  border-radius: 999px;
+  color: #617783;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 9px;
+}
+
+.settings-status-pill.active,
+.settings-mode-row button.active {
+  background: #e2f3fb;
+  border-color: #9ed0e8;
+  color: #006ea8;
+}
+
 .about-view {
   max-width: 1120px;
 }
@@ -2210,6 +2271,7 @@ textarea {
 :root[data-theme='dark'] .analytics-filters,
 :root[data-theme='dark'] .analytics-panel,
 :root[data-theme='dark'] .panel,
+:root[data-theme='dark'] .settings-panel,
 :root[data-theme='dark'] .about-panel,
 :root[data-theme='dark'] .side-panel section,
 :root[data-theme='dark'] .exam-row,
@@ -2262,8 +2324,23 @@ textarea {
 :root[data-theme='dark'] .analytics-bar-meta span,
 :root[data-theme='dark'] .analytics-learning-task p,
 :root[data-theme='dark'] .analytics-learning-more,
+:root[data-theme='dark'] .settings-copy,
+:root[data-theme='dark'] .settings-field,
 :root[data-theme='dark'] .analytics-table-head {
   color: #9aadb6;
+}
+
+:root[data-theme='dark'] .settings-status-pill {
+  background: #111b20;
+  border-color: #31424a;
+  color: #9aadb6;
+}
+
+:root[data-theme='dark'] .settings-status-pill.active,
+:root[data-theme='dark'] .settings-mode-row button.active {
+  background: #12364a;
+  border-color: #2780aa;
+  color: #b8eaff;
 }
 
 :root[data-theme='dark'] .analytics-learning-error {

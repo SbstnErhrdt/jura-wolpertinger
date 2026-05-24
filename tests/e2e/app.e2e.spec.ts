@@ -44,6 +44,13 @@ test.describe('Jura Wolpertinger Electron app', () => {
       await expect(page.locator('.help-item', { hasText: 'Was passiert bei einer KI-Korrektur?' })).toContainText(
         'Korrekturentwurf'
       )
+      await page.click('.nav a:has-text("Einstellungen")')
+      await expect(page).toHaveURL(/#\/settings/)
+      await expect(page.locator('.settings-view')).toBeVisible()
+      await expect(page.locator('.settings-panel', { hasText: 'Nutzer' })).toContainText('Lokaler Nutzer')
+      await expect(page.locator('.settings-panel', { hasText: 'KI-Korrektur' })).toContainText('OpenAI API-Key')
+      await expect(page.locator('.settings-panel', { hasText: 'Oberfläche' })).toContainText('Dunkelmodus')
+      await page.click('.nav a:has-text("Hilfe")')
       await page.click('button:has-text("Tour starten")')
       await expect(page).toHaveURL(/#\/$/)
       await expect(page.locator('.driver-popover')).toBeVisible()

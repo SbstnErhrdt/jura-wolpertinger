@@ -19,6 +19,10 @@
           <ChartNoAxesCombined :size="18" aria-hidden="true" />
           <span>Auswertung</span>
         </RouterLink>
+        <RouterLink :to="{ name: 'settings' }">
+          <Settings :size="18" aria-hidden="true" />
+          <span>Einstellungen</span>
+        </RouterLink>
         <RouterLink :to="{ name: 'about' }">
           <Info :size="18" aria-hidden="true" />
           <span>About</span>
@@ -111,6 +115,7 @@ import {
   LibraryBig,
   Moon,
   Route,
+  Settings,
   Sun,
   UserPlus
 } from 'lucide-vue-next'

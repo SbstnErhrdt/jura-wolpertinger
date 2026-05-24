@@ -173,6 +173,17 @@ Akzeptanz:
 
 ## Nutzer und Onboarding
 
+### Einstellungen zentral verwalten
+
+Als Nutzer:in möchte ich Nutzer, KI-Korrektur und Oberfläche an einer Stelle einstellen, damit ich die App nicht in einzelnen Arbeitsansichten konfigurieren muss.
+
+Akzeptanz:
+
+- Die linke Navigation enthält eine Einstellungsseite.
+- Nutzerwechsel, neuer lokaler Nutzer und Tour-Aktionen sind dort erreichbar.
+- OpenAI-Key und Modell können dort für KI-Korrekturen gespeichert werden.
+- Die Seite erklärt, dass KI-Korrekturen Daten nur auf ausdrückliche Anfrage an den konfigurierten Anbieter übertragen.
+
 ### Arbeitsbereich wechseln
 
 Als Nutzer:in möchte ich zwischen meinem Arbeitsbereich und Demo-Daten wechseln, damit ich die App ausprobieren kann, ohne eigene Daten zu vermischen.
