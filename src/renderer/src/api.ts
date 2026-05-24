@@ -1,6 +1,7 @@
 import { EMPTY_TIPTAP_DOCUMENT } from '@shared/constants'
 import type {
   AddInlineCommentInput,
+  AiSettingsStatus,
   AnalyticsEntry,
   AppApi,
   CreateExamInput,
@@ -13,7 +14,16 @@ import type {
   UpdateFolderInput,
   UpdateExamInput
 } from '@shared/ipc'
-import type { Attachment, Correction, ExamRevision, InlineComment, Submission, User } from '@shared/schemas'
+import type {
+  AiCorrectionDraft,
+  Attachment,
+  Correction,
+  ExamRevision,
+  InlineComment,
+  LearningTask,
+  Submission,
+  User
+} from '@shared/schemas'
 
 const BROWSER_STORE_KEY = 'jura-wolpertinger-browser-dev-v1'
 
@@ -26,6 +36,14 @@ type BrowserStore = {
   submissions: Submission[]
   attachments: Attachment[]
   corrections: Correction[]
+  aiSettings: {
+    provider: 'openai'
+    apiKey: string
+    model: string
+    updatedAt: string
+  } | null
+  aiCorrectionDrafts: AiCorrectionDraft[]
+  learningTasks: LearningTask[]
 }
 
 let browserDevApi: AppApi | null = null
@@ -205,10 +223,10 @@ function createBrowserDevApi(): AppApi {
         lastSavedAt: now,
         currentRevisionId: revisionId,
         latestScore: null,
-        legalArea: null,
-        examType: null,
-        sourceName: null,
-        sourceUrl: null
+        legalArea: input.legalArea ?? null,
+        examType: input.examType ?? null,
+        sourceName: input.sourceName ?? null,
+        sourceUrl: input.sourceUrl ?? null
       }
       store.exams.unshift(exam)
       store.revisions.push(revision)
@@ -234,6 +252,10 @@ function createBrowserDevApi(): AppApi {
         status: input.status ?? current.status,
         tags: input.tags ? normalizeTags(input.tags) : current.tags,
         notes: input.notes ?? current.notes,
+        legalArea: input.legalArea === undefined ? current.legalArea : input.legalArea,
+        examType: input.examType === undefined ? current.examType : input.examType,
+        sourceName: input.sourceName === undefined ? current.sourceName : input.sourceName,
+        sourceUrl: input.sourceUrl === undefined ? current.sourceUrl : input.sourceUrl,
         updatedAt: nowIso()
       }
       store.exams[index] = next
@@ -326,6 +348,113 @@ function createBrowserDevApi(): AppApi {
           } satisfies AnalyticsEntry
         })
         .sort((left, right) => left.correctedAt.localeCompare(right.correctedAt))
+    },
+    async getAiSettingsStatus() {
+      const settings = readStore().aiSettings
+      return aiSettingsStatus(settings)
+    },
+    async saveAiSettings(input) {
+      const store = readStore()
+      const updatedAt = nowIso()
+      store.aiSettings = {
+        provider: input.provider,
+        apiKey: input.apiKey,
+        model: input.model,
+        updatedAt
+      }
+      writeStore(store)
+      return aiSettingsStatus(store.aiSettings)
+    },
+    async generateAiCorrectionDraft(input) {
+      const store = readStore()
+      const submission = store.submissions.find((candidate) => candidate.id === input.submissionId)
+      if (!submission) throw new Error(`Submission not found: ${input.submissionId}`)
+      const now = nowIso()
+      const draft: AiCorrectionDraft = {
+        schemaVersion: 1,
+        id: newId(),
+        userId: submission.userId,
+        submissionId: submission.id,
+        correctionId: null,
+        status: 'draft',
+        provider: 'openai',
+        model: store.aiSettings?.model ?? 'gpt-5',
+        promptVersion: 'ai-correction-v1',
+        createdAt: now,
+        updatedAt: now,
+        score: { system: 'bayern-0-18', points: null },
+        scoreReasoning: 'Browser-Entwicklungsmodus: keine KI-Anfrage ausgefuehrt.',
+        gradingComment: 'Browser-Entwicklungsmodus: Entwurf ohne Bewertung.',
+        strengths: [],
+        weaknesses: [],
+        tags: [],
+        confidence: 'low',
+        improvementSuggestions: [],
+        inlineComments: []
+      }
+      store.aiCorrectionDrafts.unshift(draft)
+      writeStore(store)
+      return draft
+    },
+    async listAiCorrectionDrafts(submissionId: string) {
+      return readStore().aiCorrectionDrafts.filter((draft) => draft.submissionId === submissionId)
+    },
+    async acceptAiCorrectionDraft(draftId: string) {
+      const store = readStore()
+      const draft = findAiDraft(store, draftId)
+      const correction = ensureCorrectionForDraft(store, draft)
+      correction.score = draft.score
+      correction.gradingComment = draft.gradingComment
+      correction.tags = [...draft.tags]
+      correction.updatedAt = nowIso()
+      draft.status = 'accepted'
+      draft.correctionId = correction.id
+      draft.updatedAt = correction.updatedAt
+      for (const otherDraft of store.aiCorrectionDrafts) {
+        if (otherDraft.submissionId === draft.submissionId && otherDraft.id !== draft.id && otherDraft.status === 'draft') {
+          otherDraft.status = 'superseded'
+          otherDraft.updatedAt = correction.updatedAt
+        }
+      }
+      for (const suggestion of draft.improvementSuggestions) {
+        store.learningTasks.push({
+          schemaVersion: 1,
+          id: newId(),
+          userId: draft.userId,
+          submissionId: draft.submissionId,
+          correctionId: correction.id,
+          aiDraftId: draft.id,
+          category: suggestion.category,
+          priority: suggestion.priority,
+          status: 'open',
+          title: suggestion.title,
+          detail: suggestion.detail,
+          createdAt: correction.updatedAt,
+          updatedAt: correction.updatedAt
+        })
+      }
+      writeStore(store)
+      return draft
+    },
+    async rejectAiCorrectionDraft(draftId: string) {
+      const store = readStore()
+      const draft = findAiDraft(store, draftId)
+      draft.status = 'rejected'
+      draft.updatedAt = nowIso()
+      writeStore(store)
+      return draft
+    },
+    async listLearningTasks() {
+      return readStore().learningTasks
+    },
+    async updateLearningTaskStatus(taskId, status) {
+      const store = readStore()
+      const task = store.learningTasks.find((candidate) => candidate.id === taskId)
+      if (!task) throw new Error(`Learning task not found: ${taskId}`)
+      task.status = status
+      task.updatedAt = nowIso()
+      writeStore(store)
+      return task
     },
     async addAttachment() {
       console.warn('Attachments are only available in the Electron app window.')
@@ -432,11 +561,19 @@ function readStore(): BrowserStore {
     parsed.exams = parsed.exams.map((exam) => ({
       ...exam,
       userId: exam.userId ?? user.id,
-      lastSavedAt: exam.lastSavedAt ?? exam.updatedAt ?? exam.createdAt
+      lastSavedAt: exam.lastSavedAt ?? exam.updatedAt ?? exam.createdAt,
+      legalArea: exam.legalArea ?? null,
+      examType: exam.examType ?? null,
+      sourceName: exam.sourceName ?? null,
+      sourceUrl: exam.sourceUrl ?? null
     }))
     parsed.revisions = parsed.revisions.map((revision) => ({ ...revision, userId: revision.userId ?? user.id }))
     parsed.submissions = parsed.submissions.map((submission) => ({ ...submission, userId: submission.userId ?? user.id }))
-    parsed.attachments = parsed.attachments.map((attachment) => ({ ...attachment, userId: attachment.userId ?? user.id }))
+    parsed.attachments = parsed.attachments.map((attachment) => ({
+      ...attachment,
+      userId: attachment.userId ?? user.id,
+      role: attachment.role ?? 'other'
+    }))
     parsed.corrections = parsed.corrections.map((correction) => ({
       ...correction,
       userId: correction.userId ?? user.id,
@@ -524,7 +661,10 @@ function emptyStore(): BrowserStore {
     revisions: [],
     submissions: [],
     attachments: [],
-    corrections: []
+    corrections: [],
+    aiSettings: null,
+    aiCorrectionDrafts: [],
+    learningTasks: []
   }
 }
 
@@ -612,6 +752,41 @@ function submissionDetails(store: BrowserStore, id: string): SubmissionDetails {
       (correction) => correction.targetSubmissionId === submission.id
     )
   }
+}
+
+function aiSettingsStatus(settings: BrowserStore['aiSettings']): AiSettingsStatus {
+  return {
+    provider: 'openai',
+    configured: Boolean(settings?.apiKey),
+    model: settings?.model ?? null,
+    updatedAt: settings?.updatedAt ?? null
+  }
+}
+
+function findAiDraft(store: BrowserStore, draftId: string): AiCorrectionDraft {
+  const draft = store.aiCorrectionDrafts.find((candidate) => candidate.id === draftId)
+  if (!draft) throw new Error(`AI correction draft not found: ${draftId}`)
+  return draft
+}
+
+function ensureCorrectionForDraft(store: BrowserStore, draft: AiCorrectionDraft): Correction {
+  const existing = store.corrections.find((correction) => correction.targetSubmissionId === draft.submissionId)
+  if (existing) return existing
+  const now = nowIso()
+  const correction: Correction = {
+    schemaVersion: 1,
+    id: newId(),
+    userId: draft.userId,
+    targetSubmissionId: draft.submissionId,
+    createdAt: now,
+    updatedAt: now,
+    score: { system: 'bayern-0-18', points: null },
+    gradingComment: '',
+    tags: [],
+    inlineComments: []
+  }
+  store.corrections.push(correction)
+  return correction
 }
 
 function getRevision(store: BrowserStore, id: string): ExamRevision {

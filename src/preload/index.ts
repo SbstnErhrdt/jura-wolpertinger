@@ -2,13 +2,16 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type {
   AddInlineCommentInput,
   AppApi,
+  GenerateAiCorrectionInput,
   CreateExamInput,
   SaveRevisionInput,
+  SaveAiSettingsInput,
   TrashFolderInput,
   UpdateCorrectionInput,
   UpdateFolderInput,
   UpdateExamInput
 } from '@shared/ipc'
+import type { AttachmentRole, LearningTask } from '@shared/schemas'
 
 const api: AppApi = {
   getCurrentUser: () => ipcRenderer.invoke('users:current'),
@@ -34,7 +37,21 @@ const api: AppApi = {
   submitExam: (examId: string) => ipcRenderer.invoke('exams:submit', examId),
   getSubmission: (id: string) => ipcRenderer.invoke('submissions:get', id),
   listAnalyticsEntries: () => ipcRenderer.invoke('analytics:list'),
-  addAttachment: (examId: string) => ipcRenderer.invoke('attachments:add', examId),
+  getAiSettingsStatus: () => ipcRenderer.invoke('ai:settingsStatus'),
+  saveAiSettings: (input: SaveAiSettingsInput) => ipcRenderer.invoke('ai:saveSettings', input),
+  generateAiCorrectionDraft: (input: GenerateAiCorrectionInput) =>
+    ipcRenderer.invoke('ai:generateCorrectionDraft', input),
+  listAiCorrectionDrafts: (submissionId: string) =>
+    ipcRenderer.invoke('ai:listCorrectionDrafts', submissionId),
+  acceptAiCorrectionDraft: (draftId: string) =>
+    ipcRenderer.invoke('ai:acceptCorrectionDraft', draftId),
+  rejectAiCorrectionDraft: (draftId: string) =>
+    ipcRenderer.invoke('ai:rejectCorrectionDraft', draftId),
+  listLearningTasks: () => ipcRenderer.invoke('learningTasks:list'),
+  updateLearningTaskStatus: (taskId: string, status: LearningTask['status']) =>
+    ipcRenderer.invoke('learningTasks:updateStatus', taskId, status),
+  addAttachment: (examId: string, role?: AttachmentRole) =>
+    ipcRenderer.invoke('attachments:add', examId, role),
   openAttachment: (id: string) => ipcRenderer.invoke('attachments:open', id),
   exportExamPackage: (examId: string) => ipcRenderer.invoke('package:export', examId),
   importExamPackage: () => ipcRenderer.invoke('package:import'),
