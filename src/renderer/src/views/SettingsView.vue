@@ -36,20 +36,31 @@
           </div>
         </label>
 
-        <label class="settings-field">
-          Neuer Nutzer
-          <div class="settings-inline-control">
-            <input v-model="newUserName" placeholder="z. B. Sebastian" @keyup.enter="createUser" />
-            <button type="button" :disabled="!newUserName.trim()" @click="createUser">Anlegen</button>
-          </div>
-        </label>
-
         <div class="settings-actions">
           <button type="button" class="secondary" @click="startTour">Tour starten</button>
           <button type="button" class="secondary" :disabled="!currentUser" @click="resetTour">
             Tour zurücksetzen
           </button>
         </div>
+      </section>
+
+      <section class="settings-panel">
+        <div class="panel-header">
+          <div>
+            <h2>Neuer Nutzer</h2>
+            <p class="settings-copy">
+              Lege einen getrennten lokalen Arbeitsbereich für eigene Klausuren oder Tests an.
+            </p>
+          </div>
+        </div>
+
+        <label class="settings-field">
+          Name
+          <div class="settings-inline-control">
+            <input v-model="newUserName" placeholder="z. B. Sebastian" @keyup.enter="createUser" />
+            <button type="button" :disabled="!newUserName.trim()" @click="createUser">Anlegen</button>
+          </div>
+        </label>
       </section>
 
       <section class="settings-panel">
