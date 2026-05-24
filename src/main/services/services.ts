@@ -40,12 +40,14 @@ import {
 } from '@shared/schemas'
 import type {
   AddInlineCommentInput,
+  AiSettingsStatus,
   AnalyticsEntry,
   CreateExamInput,
   ExamDetails,
   ExamListItem,
   FolderDto,
   SaveAiCorrectionDraftInput,
+  SaveAiSettingsInput,
   SubmissionDetails,
   TrashFolderInput,
   UpdateCorrectionInput,
@@ -474,6 +476,40 @@ export class AppServices {
       examTags: parseJson(String(row.exam_tags_json), [] as string[]),
       correctionTags: parseJson(String(row.correction_tags_json), [] as string[])
     }))
+  }
+
+  getAiSettingsStatus(): AiSettingsStatus {
+    const row = this.db
+      .prepare('SELECT provider, api_key, model, updated_at FROM ai_settings WHERE user_id = ?')
+      .get(this.getCurrentUserId()) as
+      | { provider: string; api_key: string; model: string; updated_at: string }
+      | undefined
+
+    return {
+      provider: 'openai',
+      configured: Boolean(row?.api_key),
+      model: row?.model ?? null,
+      updatedAt: row?.updated_at ?? null
+    }
+  }
+
+  saveAiSettings(input: SaveAiSettingsInput): AiSettingsStatus {
+    const userId = this.getCurrentUserId()
+    const updatedAt = nowIso()
+    this.db
+      .prepare(
+        `
+        INSERT INTO ai_settings (user_id, provider, api_key, model, updated_at)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET
+          provider = excluded.provider,
+          api_key = excluded.api_key,
+          model = excluded.model,
+          updated_at = excluded.updated_at
+      `
+      )
+      .run(userId, input.provider, input.apiKey, input.model, updatedAt)
+    return this.getAiSettingsStatus()
   }
 
   createCorrection(submissionId: string): Correction {

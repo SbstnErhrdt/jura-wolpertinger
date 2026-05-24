@@ -15,12 +15,15 @@ import electronUpdater from 'electron-updater'
 import type {
   AddInlineCommentInput,
   CreateExamInput,
+  GenerateAiCorrectionInput,
   SaveRevisionInput,
+  SaveAiSettingsInput,
   TrashFolderInput,
   UpdateCorrectionInput,
   UpdateFolderInput,
   UpdateExamInput
 } from '@shared/ipc'
+import type { AttachmentRole, LearningTask } from '@shared/schemas'
 import { AppServices } from './services/services'
 import { seedDemoDataIfEnabled } from './services/demoData'
 import { exportExamPdf } from './services/pdf'
@@ -206,7 +209,30 @@ function registerIpc(): void {
   )
   ipcMain.handle('analytics:list', () => services.listAnalyticsEntries())
 
-  ipcMain.handle('attachments:add', async (_event, examId: string) => {
+  ipcMain.handle('ai:settingsStatus', () => services.getAiSettingsStatus())
+  ipcMain.handle('ai:saveSettings', (_event, input: SaveAiSettingsInput) =>
+    services.saveAiSettings(input)
+  )
+  ipcMain.handle('ai:generateCorrectionDraft', (_event, _input: GenerateAiCorrectionInput) => {
+    throw new Error('KI-Korrektur ist noch nicht implementiert.')
+  })
+  ipcMain.handle('ai:listCorrectionDrafts', (_event, submissionId: string) =>
+    services.listAiCorrectionDrafts(submissionId)
+  )
+  ipcMain.handle('ai:acceptCorrectionDraft', (_event, draftId: string) =>
+    services.acceptAiCorrectionDraft(draftId)
+  )
+  ipcMain.handle('ai:rejectCorrectionDraft', (_event, draftId: string) =>
+    services.rejectAiCorrectionDraft(draftId)
+  )
+  ipcMain.handle('learningTasks:list', () => services.listLearningTasks())
+  ipcMain.handle(
+    'learningTasks:updateStatus',
+    (_event, taskId: string, status: LearningTask['status']) =>
+      services.updateLearningTaskStatus(taskId, status)
+  )
+
+  ipcMain.handle('attachments:add', async (_event, examId: string, role: AttachmentRole = 'other') => {
     const window = BrowserWindow.getFocusedWindow() ?? mainWindow
     const options: OpenDialogOptions = {
       title: 'Prüfungsdatei importieren',
@@ -214,7 +240,7 @@ function registerIpc(): void {
     }
     const result = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options)
     if (result.canceled || !result.filePaths[0]) return null
-    return services.addAttachmentFromPath(examId, result.filePaths[0])
+    return services.addAttachmentFromPath(examId, result.filePaths[0], role)
   })
 
   ipcMain.handle('attachments:open', async (_event, attachmentId: string) => {

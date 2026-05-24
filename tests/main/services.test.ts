@@ -379,6 +379,30 @@ describe('AppServices', () => {
     ])
   })
 
+  it('persists AI settings for the current user', () => {
+    expect(services.getAiSettingsStatus()).toEqual({
+      provider: 'openai',
+      configured: false,
+      model: null,
+      updatedAt: null
+    })
+
+    const saved = services.saveAiSettings({
+      provider: 'openai',
+      apiKey: 'sk-test',
+      model: 'gpt-5'
+    })
+
+    expect(saved.configured).toBe(true)
+    expect(saved.model).toBe('gpt-5')
+    expect(saved.updatedAt).not.toBeNull()
+
+    services.close()
+    services = new AppServices(dataDir)
+
+    expect(services.getAiSettingsStatus()).toEqual(saved)
+  })
+
   it('exports and imports .jura packages with content, attachments and corrections', async () => {
     const exam = services.createExam({ title: 'Exportklausur', tags: ['strafrecht'] })
     services.saveRevision(exam.id, {
