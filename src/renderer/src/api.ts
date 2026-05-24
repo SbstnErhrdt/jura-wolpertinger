@@ -29,6 +29,7 @@ import type {
 import { examTypeSchema, legalAreaSchema } from '@shared/schemas'
 
 const BROWSER_STORE_KEY = 'jura-wolpertinger-browser-dev-v1'
+const AI_CORRECTION_NOT_IMPLEMENTED_MESSAGE = 'KI-Korrektur ist noch nicht implementiert.'
 
 type BrowserStore = {
   users: User[]
@@ -363,12 +364,14 @@ function createBrowserDevApi(): AppApi {
     async saveAiSettings(input) {
       const store = readStore()
       const updatedAt = nowIso()
+      const provider = (input as { provider?: unknown }).provider
       const apiKey = input.apiKey.trim()
       const model = input.model.trim()
+      if (provider !== 'openai') throw new Error('AI provider wird noch nicht unterstuetzt.')
       if (!apiKey) throw new Error('OpenAI API key darf nicht leer sein')
       if (!model) throw new Error('OpenAI model darf nicht leer sein')
       store.aiSettings = {
-        provider: input.provider,
+        provider,
         apiKey,
         model,
         updatedAt
@@ -376,36 +379,8 @@ function createBrowserDevApi(): AppApi {
       writeStore(store)
       return aiSettingsStatus(store.aiSettings)
     },
-    async generateAiCorrectionDraft(input) {
-      const store = readStore()
-      const submission = store.submissions.find((candidate) => candidate.id === input.submissionId)
-      if (!submission) throw new Error(`Submission not found: ${input.submissionId}`)
-      const now = nowIso()
-      const draft: AiCorrectionDraft = {
-        schemaVersion: 1,
-        id: newId(),
-        userId: submission.userId,
-        submissionId: submission.id,
-        correctionId: null,
-        status: 'draft',
-        provider: 'openai',
-        model: store.aiSettings?.model ?? 'gpt-5',
-        promptVersion: 'ai-correction-v1',
-        createdAt: now,
-        updatedAt: now,
-        score: { system: 'bayern-0-18', points: null },
-        scoreReasoning: 'Browser-Entwicklungsmodus: keine KI-Anfrage ausgefuehrt.',
-        gradingComment: 'Browser-Entwicklungsmodus: Entwurf ohne Bewertung.',
-        strengths: [],
-        weaknesses: [],
-        tags: [],
-        confidence: 'low',
-        improvementSuggestions: [],
-        inlineComments: []
-      }
-      store.aiCorrectionDrafts.unshift(draft)
-      writeStore(store)
-      return draft
+    async generateAiCorrectionDraft() {
+      throw new Error(AI_CORRECTION_NOT_IMPLEMENTED_MESSAGE)
     },
     async listAiCorrectionDrafts(submissionId: string) {
       return readStore().aiCorrectionDrafts.filter((draft) => draft.submissionId === submissionId)

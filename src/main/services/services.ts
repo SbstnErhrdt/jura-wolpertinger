@@ -505,8 +505,10 @@ export class AppServices {
   saveAiSettings(input: SaveAiSettingsInput): AiSettingsStatus {
     const userId = this.getCurrentUserId()
     const updatedAt = nowIso()
+    const provider = (input as { provider?: unknown }).provider
     const apiKey = input.apiKey.trim()
     const model = input.model.trim()
+    if (provider !== 'openai') throw new Error('AI provider wird noch nicht unterstuetzt.')
     if (!apiKey) throw new Error('OpenAI API key darf nicht leer sein')
     if (!model) throw new Error('OpenAI model darf nicht leer sein')
     this.db
@@ -521,7 +523,7 @@ export class AppServices {
           updated_at = excluded.updated_at
       `
       )
-      .run(userId, input.provider, apiKey, model, updatedAt)
+      .run(userId, provider, apiKey, model, updatedAt)
     return this.getAiSettingsStatus()
   }
 
@@ -683,16 +685,17 @@ export class AppServices {
     if (draft.status !== 'draft') {
       throw new Error(`AI correction draft must have status draft to accept; current status is ${draft.status}`)
     }
-    const correction = this.createCorrection(draft.submissionId)
-    const updatedCorrection = this.updateCorrection({
-      correctionId: correction.id,
-      scorePoints: draft.score.points,
-      gradingComment: draft.gradingComment,
-      tags: draft.tags
-    })
     const updatedAt = nowIso()
 
     this.db.transaction(() => {
+      const correction = this.createCorrection(draft.submissionId)
+      const updatedCorrection = this.updateCorrection({
+        correctionId: correction.id,
+        scorePoints: draft.score.points,
+        gradingComment: draft.gradingComment,
+        tags: draft.tags
+      })
+
       for (const suggestion of draft.improvementSuggestions) {
         this.db
           .prepare(
@@ -719,17 +722,19 @@ export class AppServices {
       }
 
       this.db
-        .prepare('UPDATE ai_correction_drafts SET status = ?, correction_id = ?, updated_at = ? WHERE id = ?')
-        .run('accepted', updatedCorrection.id, updatedAt, draft.id)
+        .prepare(
+          'UPDATE ai_correction_drafts SET status = ?, correction_id = ?, updated_at = ? WHERE id = ? AND user_id = ?'
+        )
+        .run('accepted', updatedCorrection.id, updatedAt, draft.id, draft.userId)
       this.db
         .prepare(
           `
           UPDATE ai_correction_drafts
           SET status = ?, updated_at = ?
-          WHERE submission_id = ? AND id != ? AND status = ?
+          WHERE submission_id = ? AND id != ? AND status = ? AND user_id = ?
         `
         )
-        .run('superseded', updatedAt, draft.submissionId, draft.id, 'draft')
+        .run('superseded', updatedAt, draft.submissionId, draft.id, 'draft', draft.userId)
     })()
 
     return this.getAiCorrectionDraft(draft.id)

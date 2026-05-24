@@ -480,6 +480,69 @@ describe('AppServices', () => {
     expect(services.listLearningTasks()).toHaveLength(1)
   })
 
+  it('rolls back AI draft acceptance if learning task persistence fails', () => {
+    const exam = services.createExam({ title: 'KI Rollback' })
+    services.saveRevision(exam.id, {
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Anspruch entstanden.' }] }]
+    })
+    const submission = services.submitExam(exam.id)
+    const supersededCandidate = services.saveAiCorrectionDraft({
+      submissionId: submission.id,
+      provider: 'openai',
+      model: 'gpt-5',
+      scorePoints: 5,
+      scoreReasoning: 'Andere Bewertung.',
+      gradingComment: 'Anderer Entwurf.',
+      strengths: [],
+      weaknesses: [],
+      tags: ['alt'],
+      confidence: 'low',
+      improvementSuggestions: [],
+      inlineComments: []
+    })
+    const draft = services.saveAiCorrectionDraft({
+      submissionId: submission.id,
+      provider: 'openai',
+      model: 'gpt-5',
+      scorePoints: 8,
+      scoreReasoning: 'Basis erkannt.',
+      gradingComment: 'Solide Grundlage.',
+      strengths: [],
+      weaknesses: [],
+      tags: ['neu'],
+      confidence: 'medium',
+      improvementSuggestions: [
+        {
+          category: 'structure',
+          priority: 'high',
+          title: 'Schwerpunkt setzen',
+          detail: 'Beginne mit der zentralen Anspruchsgrundlage.'
+        }
+      ],
+      inlineComments: []
+    })
+
+    services.db.exec(`
+      CREATE TRIGGER fail_learning_task_insert
+      BEFORE INSERT ON learning_tasks
+      BEGIN
+        SELECT RAISE(ABORT, 'learning task insert failed');
+      END;
+    `)
+
+    expect(() => services.acceptAiCorrectionDraft(draft.id)).toThrow(/learning task insert failed/)
+
+    const details = services.getSubmission(submission.id)
+    const drafts = services.listAiCorrectionDrafts(submission.id)
+
+    expect(details.corrections).toEqual([])
+    expect(services.getExam(exam.id).status).toBe('submitted')
+    expect(services.listLearningTasks()).toEqual([])
+    expect(drafts.find((candidate) => candidate.id === draft.id)?.status).toBe('draft')
+    expect(drafts.find((candidate) => candidate.id === supersededCandidate.id)?.status).toBe('draft')
+  })
+
   it('persists AI settings for the current user', () => {
     expect(services.getAiSettingsStatus()).toEqual({
       provider: 'openai',
@@ -520,6 +583,18 @@ describe('AppServices', () => {
         model: ' '
       })
     ).toThrow(/model/i)
+
+    expect(services.getAiSettingsStatus().configured).toBe(false)
+  })
+
+  it('rejects unsupported AI settings providers at runtime', () => {
+    expect(() =>
+      services.saveAiSettings({
+        provider: 'anthropic',
+        apiKey: 'sk-test',
+        model: 'claude-sonnet'
+      } as unknown as Parameters<AppServices['saveAiSettings']>[0])
+    ).toThrow(/provider/i)
 
     expect(services.getAiSettingsStatus().configured).toBe(false)
   })
