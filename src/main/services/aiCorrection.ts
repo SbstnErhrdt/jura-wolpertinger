@@ -9,9 +9,10 @@ import {
 } from '@shared/schemas'
 import type { SaveAiCorrectionDraftInput } from '@shared/ipc'
 
-export const AI_CORRECTION_PROMPT_VERSION = 'ai-correction-v1'
+export const AI_CORRECTION_PROMPT_VERSION = 'ai-correction-v2'
 const MAX_OPENAI_FILE_BYTES = 50 * 1024 * 1024
 const MAX_OPENAI_FILE_COUNT = 10
+const OPENAI_CORRECTION_REASONING_EFFORT = 'high'
 
 const correctionResponseJsonSchema = {
   type: 'object',
@@ -157,8 +158,12 @@ export function buildAiCorrectionPrompt(context: AiCorrectionPromptContext): str
     attachmentList,
     '',
     'Bewertungsauftrag:',
+    '- Erstelle gedanklich zuerst ein Rohpunkteschema: Pflichtprobleme, Aufbaupunkte, Subsumtion, Methodik und Zusatzpunkte.',
     '- Identifiziere die Hauptprobleme der Aufgabe und der Bearbeitung.',
     '- Bewerte, ob Loesungswege vertretbar sind, auch wenn sie vom Erwartungshorizont abweichen.',
+    '- Unterscheide Silber- und Goldelemente: Grundlagen muessen sicher sitzen, Zusatzprobleme duerfen gute Leistungen nach oben tragen.',
+    '- Bewerte Gutachtenstil, Aufbau, Schwerpunktsetzung, Normbezug, Subsumtion und sprachliche Praezision.',
+    '- Honorier vertretbare Argumentation; bestrafe bloss abweichende Ergebnisse nicht, wenn Methode und Begruendung tragen.',
     '- Begruende die Punktzahl knapp, aber nachvollziehbar.',
     '- Formuliere konkrete Verbesserungsvorschlaege fuer die naechste Bearbeitung.',
     '- Setze Inline-Kommentare nur auf Textstellen, die im Abgabetext wirklich vorkommen.',
@@ -210,6 +215,63 @@ export async function requestOpenAiCorrection(
     ...(await Promise.all(input.attachments.map(inputFileFromAttachment)))
   ]
 
+  const firstDraft = await requestStructuredCorrection({
+    apiKey: input.apiKey,
+    model: input.model,
+    content
+  })
+  const reviewPrompt = buildAiCorrectionReviewPrompt(input.prompt, firstDraft)
+  const reviewContent = [
+    { type: 'input_text', text: reviewPrompt },
+    ...content.filter((item) => item.type === 'input_file')
+  ]
+
+  return requestStructuredCorrection({
+    apiKey: input.apiKey,
+    model: input.model,
+    content: reviewContent
+  })
+}
+
+function buildAiCorrectionReviewPrompt(
+  originalPrompt: string,
+  firstDraft: ParsedAiCorrectionResponse
+): string {
+  return [
+    'Zweitkorrektur und Finalisierung der KI-Korrektur.',
+    '',
+    'Rolle:',
+    '- Du bist ein strenger zweiter juristischer Korrektor fuer eine bayerische Uebungspruefung.',
+    '- Pruefe die Erstkorrektur kritisch, korrigiere sie bei Bedarf und gib die finale Korrektur aus.',
+    '',
+    'Pruefschritte:',
+    '- Ist die Punktzahl auf der Bayern-Skala 0-18 inklusive halber Punkte plausibel?',
+    '- Wurde das gedankliche Rohpunkteschema zur Aufgabe, Musterloesung und Bearbeitung passend angewendet?',
+    '- Sind Hauptprobleme, vertretbare Loesungswege, Gutachtenstil, Aufbau und Subsumtion angemessen gewichtet?',
+    '- Sind Inline-Kommentare nur auf Woerter oder Passagen gesetzt, die im Abgabetext tatsaechlich vorkommen?',
+    '- Sind Verbesserungsvorschlaege konkret genug, um fuer die naechste Klausur nutzbar zu sein?',
+    '- Entferne Halluzinationen, nicht belegbare Aussagen und zu generische Kritik.',
+    '',
+    'Antwortformat:',
+    'Gib ausschliesslich die finale JSON-Korrektur entsprechend dem vorgegebenen Schema zurueck.',
+    '',
+    'Urspruenglicher Bewertungsauftrag:',
+    '<<<ORIGINAL_PROMPT_BEGIN>>>',
+    originalPrompt,
+    '<<<ORIGINAL_PROMPT_END>>>',
+    '',
+    'Erstkorrektur:',
+    '<<<FIRST_DRAFT_JSON_BEGIN>>>',
+    JSON.stringify(firstDraft),
+    '<<<FIRST_DRAFT_JSON_END>>>'
+  ].join('\n')
+}
+
+async function requestStructuredCorrection(input: {
+  apiKey: string
+  model: string
+  content: Array<{ type: string; text?: string; filename?: string; file_data?: string }>
+}): Promise<ParsedAiCorrectionResponse> {
   const response = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST',
     headers: {
@@ -219,10 +281,13 @@ export async function requestOpenAiCorrection(
     body: JSON.stringify({
       model: input.model,
       store: false,
+      reasoning: {
+        effort: OPENAI_CORRECTION_REASONING_EFFORT
+      },
       input: [
         {
           role: 'user',
-          content
+          content: input.content
         }
       ],
       text: {

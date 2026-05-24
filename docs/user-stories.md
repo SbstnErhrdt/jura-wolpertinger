@@ -120,6 +120,9 @@ Als Examenskandidat:in möchte ich für eine abgegebene Prüfung einen KI-Korrek
 Akzeptanz:
 
 - Die Anfrage wird nur bewusst gestartet und nutzt den lokal hinterlegten eigenen OpenAI-Schlüssel.
+- `gpt-5.5` ist das empfohlene Standardmodell für die komplexe Korrektur.
+- Die KI-Korrektur nutzt Aufgabenstellung, Musterlösung und Bearbeitung, sofern diese als Anhänge vorliegen.
+- Der Vorschlag wird durch eine zweite KI-Prüfer-Runde auf Punktplausibilität, Halluzinationen, Textanker und konkrete Verbesserungshinweise geprüft.
 - Der Vorschlag zeigt Punkte, Gesamthinweis, Tags, Inline-Kommentare und Lernhinweise als Entwurf.
 - Annehmen überführt den Entwurf in normale Korrektur, Inline-Kommentare und Lernaufgaben.
 - Ablehnen verwirft den Vorschlag für den Arbeitsfluss, ohne Abgabe oder bestehende Korrektur zu verändern.

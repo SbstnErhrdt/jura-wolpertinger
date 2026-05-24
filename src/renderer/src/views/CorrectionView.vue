@@ -70,7 +70,7 @@
               </label>
               <label>
                 Modell
-                <input v-model="aiModelInput" placeholder="gpt-5" />
+                <input v-model="aiModelInput" :placeholder="DEFAULT_AI_MODEL" />
               </label>
               <div class="dialog-actions">
                 <button type="button" :disabled="aiBusy" @click="saveAiSettings">
@@ -278,7 +278,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { CheckCircle2, Clock3 } from 'lucide-vue-next'
-import { EDITOR_SCHEMA_VERSION } from '@shared/constants'
+import { DEFAULT_AI_MODEL, EDITOR_SCHEMA_VERSION } from '@shared/constants'
 import type { SubmissionDetails } from '@shared/ipc'
 import type { AiCorrectionDraft, Correction, InlineComment } from '@shared/schemas'
 import { api } from '../api'
@@ -312,7 +312,7 @@ const aiSettings = ref<{ configured: boolean; model: string | null }>({ configur
 const aiDrafts = ref<AiCorrectionDraft[]>([])
 const showAiSettings = ref(false)
 const aiApiKeyInput = ref('')
-const aiModelInput = ref('gpt-5')
+const aiModelInput = ref(DEFAULT_AI_MODEL)
 const aiBusy = ref(false)
 const aiNotice = ref('')
 
@@ -427,9 +427,9 @@ async function saveAiSettings(): Promise<void> {
     aiSettings.value = await api.saveAiSettings({
       provider: 'openai',
       apiKey: aiApiKeyInput.value,
-      model: aiModelInput.value.trim() || 'gpt-5'
+      model: aiModelInput.value.trim() || DEFAULT_AI_MODEL
     })
-    aiModelInput.value = aiSettings.value.model ?? 'gpt-5'
+    aiModelInput.value = aiSettings.value.model ?? DEFAULT_AI_MODEL
     aiApiKeyInput.value = ''
     aiNotice.value = 'KI-Einstellungen gespeichert.'
   } catch (error) {

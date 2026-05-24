@@ -81,6 +81,7 @@ Im Projekt steht der Wolpertinger für einen freundlichen lokalen Begleiter, nic
 - PDF-Export
 - Korrekturansicht mit Gesamtbewertung nach Bayern `0-18`, inklusive halber Punkte
 - Bewertungskommentar und Inline-Kommentare auf Textauswahlen
+- KI-Korrekturvorschläge mit eigenem OpenAI-Schlüssel, Musterlösungs-Kontext, `gpt-5.5` und zweiter Prüfer-Runde
 - Tag-System mit Chip-Eingabe und Vorschlägen
 - Auswertungsseite mit Zeitraumfilter, Tag-Filter, Presets und Charts
 - Onboarding-Tour mit Driver.js und Hilfeseite mit FAQ

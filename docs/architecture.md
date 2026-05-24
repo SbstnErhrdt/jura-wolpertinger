@@ -377,7 +377,9 @@ Inline-Kommentare referenzieren eine Submission, nicht den aktuellen Arbeitsstan
 
 ## KI-Korrektur
 
-Die KI-Korrektur ist eine ausdrückliche Nutzeraktion und die einzige Stelle, an der normale Prüfungsdaten die lokale App verlassen. Der Renderer sieht weiterhin nur `window.juraApi`; API-Schlüssel, Dateizugriff, Promptbau und der Cloud-Aufruf laufen im Main Process über Services. Im MVP wird nur ein eigener OpenAI-Schlüssel unterstützt, den Nutzer:innen lokal hinterlegen.
+Die KI-Korrektur ist eine ausdrückliche Nutzeraktion und die einzige Stelle, an der normale Prüfungsdaten die lokale App verlassen. Der Renderer sieht weiterhin nur `window.juraApi`; API-Schlüssel, Dateizugriff, Promptbau und der Cloud-Aufruf laufen im Main Process über Services. Im MVP wird nur ein eigener OpenAI-Schlüssel unterstützt, den Nutzer:innen lokal hinterlegen. Das empfohlene Standardmodell ist `gpt-5.5`.
+
+Der Main Process behandelt die Korrektur als zweistufigen Prüferprozess. Der erste Responses-API-Aufruf erstellt mit `reasoning: high` einen strukturierten Korrekturentwurf anhand von Abgabetext, Prüfungsmetadaten und relevanten PDF-Anhängen wie Aufgabenstellung oder Musterlösung. Der Prompt verlangt ein gedankliches Rohpunkteschema, Gewichtung von Hauptproblemen, Vertretbarkeitsprüfung, Gutachtenstil, Aufbau, Subsumtion, Silber-/Goldelemente und konkrete Verbesserungsvorschläge. Ein zweiter Responses-API-Aufruf nutzt denselben Modell- und Attachment-Kontext als Zweitkorrektur: Er prüft Punktzahl, Halluzinationen, Ankerstellen, generische Kritik und die Anwendung von Musterlösung oder Erwartungshorizont. Beide Aufrufe setzen `store: false`; gespeichert wird nur der finale strukturierte Entwurf.
 
 Eine KI-Antwort wird zuerst als `ai_correction_drafts` gespeichert. Erst wenn der Entwurf angenommen wird, entstehen normale Korrekturen, Inline-Kommentare und Lernaufgaben in den bestehenden Tabellen. Ablehnen oder Überschreiben verändert die Abgabe nicht. `.jura` Pakete exportieren angenommene Korrekturen als normale Korrekturdaten, schließen aber Secrets, AI Settings, rohe oder nicht angenommene KI-Entwürfe und lokale Lernaufgaben bewusst aus.
 

@@ -33,8 +33,11 @@ describe('AI correction service', () => {
 
     expect(prompt).toContain('Probeexamen Zivilrecht I')
     expect(prompt).toContain('Bayern 0-18')
+    expect(prompt).toContain('Rohpunkteschema')
     expect(prompt).toContain('Hauptprobleme')
     expect(prompt).toContain('vertretbar')
+    expect(prompt).toContain('Gutachtenstil')
+    expect(prompt).toContain('Silber- und Goldelemente')
     expect(prompt).toContain('Verbesserungsvorschlaege')
     expect(prompt).toContain('A koennte gegen B einen Anspruch haben.')
   })
@@ -141,34 +144,46 @@ describe('AI correction service', () => {
   })
 
   it('requests a non-stored structured JSON schema correction from OpenAI', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(openAiJsonResponse())
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(openAiJsonResponse({ scorePoints: 8, scoreReasoning: 'Erstkorrektur.' }))
+      .mockResolvedValueOnce(openAiJsonResponse({ scorePoints: 9, scoreReasoning: 'Zweitkorrektur.' }))
     vi.stubGlobal('fetch', fetchMock)
 
-    await requestOpenAiCorrection({
+    const result = await requestOpenAiCorrection({
       apiKey: 'test-key',
       model: 'gpt-test',
       prompt: 'Korrigiere diese Abgabe.',
       attachments: []
     })
 
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    const [, requestInit] = fetchMock.mock.calls[0]
-    const body = JSON.parse(requestInit.body)
+    expect(result.scorePoints).toBe(9)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const [, firstRequestInit] = fetchMock.mock.calls[0]
+    const firstBody = JSON.parse(firstRequestInit.body)
+    const [, secondRequestInit] = fetchMock.mock.calls[1]
+    const secondBody = JSON.parse(secondRequestInit.body)
 
-    expect(body.store).toBe(false)
-    expect(body.text.format).toMatchObject({
+    expect(firstBody.store).toBe(false)
+    expect(firstBody.reasoning).toEqual({ effort: 'high' })
+    expect(firstBody.text.format).toMatchObject({
       type: 'json_schema',
       name: 'ai_correction_draft',
       strict: true
     })
-    expect(body.text.format.schema).toMatchObject({
+    expect(firstBody.text.format.schema).toMatchObject({
       type: 'object',
       additionalProperties: false
     })
-    expect(body.input[0]).toMatchObject({
+    expect(firstBody.input[0]).toMatchObject({
       role: 'user',
       content: [{ type: 'input_text', text: 'Korrigiere diese Abgabe.' }]
     })
+    expect(secondBody.store).toBe(false)
+    expect(secondBody.reasoning).toEqual({ effort: 'high' })
+    expect(secondBody.text.format.name).toBe('ai_correction_draft')
+    expect(secondBody.input[0].content[0].text).toContain('Zweitkorrektur')
+    expect(secondBody.input[0].content[0].text).toContain('"scorePoints":8')
   })
 
   it('includes under-limit PDF attachments as input_file data URLs', async () => {
@@ -196,6 +211,13 @@ describe('AI correction service', () => {
     const body = JSON.parse(requestInit.body)
 
     expect(body.input[0].content).toContainEqual({
+      type: 'input_file',
+      filename: 'sachverhalt.pdf',
+      file_data: `data:application/pdf;base64,${Buffer.from('PDF bytes').toString('base64')}`
+    })
+    const [, reviewRequestInit] = fetchMock.mock.calls[1]
+    const reviewBody = JSON.parse(reviewRequestInit.body)
+    expect(reviewBody.input[0].content).toContainEqual({
       type: 'input_file',
       filename: 'sachverhalt.pdf',
       file_data: `data:application/pdf;base64,${Buffer.from('PDF bytes').toString('base64')}`
@@ -248,13 +270,13 @@ describe('AI correction service', () => {
   })
 })
 
-function openAiJsonResponse(): Response {
+function openAiJsonResponse(overrides: Partial<{ scorePoints: number; scoreReasoning: string }> = {}): Response {
   return {
     ok: true,
     json: vi.fn().mockResolvedValue({
       output_text: JSON.stringify({
-        scorePoints: 10,
-        scoreReasoning: 'Ordentliche Schwerpunktsetzung.',
+        scorePoints: overrides.scorePoints ?? 10,
+        scoreReasoning: overrides.scoreReasoning ?? 'Ordentliche Schwerpunktsetzung.',
         gradingComment: 'Brauchbare Bearbeitung mit Ausbaupotential.',
         strengths: ['Struktur'],
         weaknesses: ['Subsumtion'],

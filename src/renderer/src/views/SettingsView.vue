@@ -83,7 +83,7 @@
         </label>
         <label class="settings-field">
           Modell
-          <input v-model="aiModelInput" placeholder="gpt-5" />
+          <input v-model="aiModelInput" :placeholder="DEFAULT_AI_MODEL" />
         </label>
 
         <div class="settings-actions">
@@ -117,6 +117,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import type { AppUser } from '@shared/ipc'
+import { DEFAULT_AI_MODEL } from '@shared/constants'
 import { api } from '../api'
 import { useTheme } from '../theme'
 
@@ -127,7 +128,7 @@ const currentUserName = ref('')
 const newUserName = ref('')
 const aiSettings = ref<{ configured: boolean; model: string | null }>({ configured: false, model: null })
 const aiApiKeyInput = ref('')
-const aiModelInput = ref('gpt-5')
+const aiModelInput = ref(DEFAULT_AI_MODEL)
 const aiBusy = ref(false)
 const actionError = ref('')
 const actionNotice = ref('')
@@ -140,7 +141,7 @@ async function load(): Promise<void> {
   users.value = await api.listUsers()
   currentUserName.value = currentUser.value.displayName
   aiSettings.value = await api.getAiSettingsStatus()
-  aiModelInput.value = aiSettings.value.model ?? 'gpt-5'
+  aiModelInput.value = aiSettings.value.model ?? DEFAULT_AI_MODEL
 }
 
 async function switchUser(event: Event): Promise<void> {
@@ -192,9 +193,9 @@ async function saveAiSettings(): Promise<void> {
     aiSettings.value = await api.saveAiSettings({
       provider: 'openai',
       apiKey: aiApiKeyInput.value,
-      model: aiModelInput.value.trim() || 'gpt-5'
+      model: aiModelInput.value.trim() || DEFAULT_AI_MODEL
     })
-    aiModelInput.value = aiSettings.value.model ?? 'gpt-5'
+    aiModelInput.value = aiSettings.value.model ?? DEFAULT_AI_MODEL
     aiApiKeyInput.value = ''
     actionNotice.value = 'KI-Einstellungen gespeichert.'
   } catch (error) {
