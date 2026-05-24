@@ -553,7 +553,8 @@ export class AppServices {
           role: attachment.role,
           name: attachment.originalName,
           absolutePath: join(this.filesDir, attachment.relativePath),
-          mimeType: attachment.mimeType ?? 'application/pdf'
+          mimeType: attachment.mimeType ?? 'application/pdf',
+          size: attachment.size
         })
       )
     const prompt = buildAiCorrectionPrompt({

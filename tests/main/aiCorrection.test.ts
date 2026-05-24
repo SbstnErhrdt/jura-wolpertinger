@@ -1,11 +1,23 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildAiCorrectionPrompt,
   extractOpenAiResponseText,
-  parseAiCorrectionResponse
+  parseAiCorrectionResponse,
+  requestOpenAiCorrection
 } from '@main/services/aiCorrection'
 
+const readFileMock = vi.hoisted(() => vi.fn())
+
+vi.mock('node:fs/promises', () => ({
+  readFile: readFileMock
+}))
+
 describe('AI correction service', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    readFileMock.mockReset()
+  })
+
   it('builds a Bayern correction prompt with exam context', () => {
     const prompt = buildAiCorrectionPrompt({
       examTitle: 'Probeexamen Zivilrecht I',
@@ -127,4 +139,130 @@ describe('AI correction service', () => {
       })
     ).toThrow(/0.5/)
   })
+
+  it('requests a non-stored structured JSON schema correction from OpenAI', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(openAiJsonResponse())
+    vi.stubGlobal('fetch', fetchMock)
+
+    await requestOpenAiCorrection({
+      apiKey: 'test-key',
+      model: 'gpt-test',
+      prompt: 'Korrigiere diese Abgabe.',
+      attachments: []
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [, requestInit] = fetchMock.mock.calls[0]
+    const body = JSON.parse(requestInit.body)
+
+    expect(body.store).toBe(false)
+    expect(body.text.format).toMatchObject({
+      type: 'json_schema',
+      name: 'ai_correction_draft',
+      strict: true
+    })
+    expect(body.text.format.schema).toMatchObject({
+      type: 'object',
+      additionalProperties: false
+    })
+    expect(body.input[0]).toMatchObject({
+      role: 'user',
+      content: [{ type: 'input_text', text: 'Korrigiere diese Abgabe.' }]
+    })
+  })
+
+  it('includes under-limit PDF attachments as input_file data URLs', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(openAiJsonResponse())
+    vi.stubGlobal('fetch', fetchMock)
+    readFileMock.mockResolvedValue(Buffer.from('PDF bytes'))
+
+    await requestOpenAiCorrection({
+      apiKey: 'test-key',
+      model: 'gpt-test',
+      prompt: 'Korrigiere.',
+      attachments: [
+        {
+          role: 'assignment',
+          name: 'sachverhalt.pdf',
+          absolutePath: '/tmp/sachverhalt.pdf',
+          mimeType: 'application/pdf',
+          size: 9
+        }
+      ]
+    })
+
+    expect(readFileMock).toHaveBeenCalledWith('/tmp/sachverhalt.pdf')
+    const [, requestInit] = fetchMock.mock.calls[0]
+    const body = JSON.parse(requestInit.body)
+
+    expect(body.input[0].content).toContainEqual({
+      type: 'input_file',
+      filename: 'sachverhalt.pdf',
+      file_data: `data:application/pdf;base64,${Buffer.from('PDF bytes').toString('base64')}`
+    })
+  })
+
+  it('rejects over-limit attachment size before fetching or reading files', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      requestOpenAiCorrection({
+        apiKey: 'test-key',
+        model: 'gpt-test',
+        prompt: 'Korrigiere.',
+        attachments: [
+          {
+            role: 'assignment',
+            name: 'zu-gross.pdf',
+            absolutePath: '/tmp/zu-gross.pdf',
+            mimeType: 'application/pdf',
+            size: 50 * 1024 * 1024 + 1
+          }
+        ]
+      })
+    ).rejects.toThrow(/KI-Unterlagen sind zu groß/)
+
+    expect(readFileMock).not.toHaveBeenCalled()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('throws a useful error on non-OK OpenAI responses', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 429,
+        text: vi.fn().mockResolvedValue('rate limit')
+      })
+    )
+
+    await expect(
+      requestOpenAiCorrection({
+        apiKey: 'test-key',
+        model: 'gpt-test',
+        prompt: 'Korrigiere.',
+        attachments: []
+      })
+    ).rejects.toThrow('OpenAI correction request failed (429): rate limit')
+  })
 })
+
+function openAiJsonResponse(): Response {
+  return {
+    ok: true,
+    json: vi.fn().mockResolvedValue({
+      output_text: JSON.stringify({
+        scorePoints: 10,
+        scoreReasoning: 'Ordentliche Schwerpunktsetzung.',
+        gradingComment: 'Brauchbare Bearbeitung mit Ausbaupotential.',
+        strengths: ['Struktur'],
+        weaknesses: ['Subsumtion'],
+        tags: ['zivilrecht'],
+        confidence: 'medium',
+        improvementSuggestions: [],
+        inlineComments: []
+      })
+    })
+  } as unknown as Response
+}

@@ -10,6 +10,8 @@ import {
 import type { SaveAiCorrectionDraftInput } from '@shared/ipc'
 
 export const AI_CORRECTION_PROMPT_VERSION = 'ai-correction-v1'
+const MAX_OPENAI_FILE_BYTES = 50 * 1024 * 1024
+const MAX_OPENAI_FILE_COUNT = 10
 
 const correctionResponseJsonSchema = {
   type: 'object',
@@ -119,6 +121,7 @@ export type AiCorrectionPromptContext = {
 export type AiCorrectionRequestAttachment = AiCorrectionPromptAttachment & {
   absolutePath: string
   mimeType?: string | null
+  size: number
 }
 
 export type RequestOpenAiCorrectionInput = {
@@ -164,8 +167,10 @@ export function buildAiCorrectionPrompt(context: AiCorrectionPromptContext): str
     'Gib ausschliesslich JSON entsprechend dem vorgegebenen Schema zurueck.',
     'Nutze die Felder scorePoints, scoreReasoning, gradingComment, strengths, weaknesses, tags, confidence, improvementSuggestions und inlineComments.',
     '',
-    'Abgabetext:',
-    context.submissionText.trim() || '[leer]'
+    'Abgabetext (wortgetreuer Inhalt zwischen den Markierungen):',
+    '<<<ABGABETEXT_BEGIN>>>',
+    context.submissionText.trim() || '[leer]',
+    '<<<ABGABETEXT_END>>>'
   ].join('\n')
 }
 
@@ -198,6 +203,8 @@ export function extractOpenAiResponseText(value: unknown): string {
 export async function requestOpenAiCorrection(
   input: RequestOpenAiCorrectionInput
 ): Promise<ParsedAiCorrectionResponse> {
+  validateOpenAiAttachments(input.attachments)
+
   const content = [
     { type: 'input_text', text: input.prompt },
     ...(await Promise.all(input.attachments.map(inputFileFromAttachment)))
@@ -211,6 +218,7 @@ export async function requestOpenAiCorrection(
     },
     body: JSON.stringify({
       model: input.model,
+      store: false,
       input: [
         {
           role: 'user',
@@ -298,6 +306,21 @@ async function inputFileFromAttachment(attachment: AiCorrectionRequestAttachment
     type: 'input_file',
     filename: attachment.name,
     file_data: `data:${mimeType};base64,${data.toString('base64')}`
+  }
+}
+
+function validateOpenAiAttachments(attachments: AiCorrectionRequestAttachment[]): void {
+  if (attachments.length > MAX_OPENAI_FILE_COUNT) {
+    throw new Error(
+      `Die ausgewählten KI-Unterlagen sind zu groß. Bitte reduziere die Dateien auf höchstens ${MAX_OPENAI_FILE_COUNT} PDF-Dateien.`
+    )
+  }
+
+  const totalBytes = attachments.reduce((total, attachment) => total + attachment.size, 0)
+  if (totalBytes > MAX_OPENAI_FILE_BYTES) {
+    throw new Error(
+      'Die ausgewählten KI-Unterlagen sind zu groß. Bitte reduziere die Dateien auf höchstens 50 MB insgesamt.'
+    )
   }
 }
 
