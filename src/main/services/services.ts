@@ -540,7 +540,10 @@ export class AppServices {
     const userId = this.getCurrentUserId()
     const updatedAt = nowIso()
     const provider = (input as { provider?: unknown }).provider
-    const apiKey = input.apiKey.trim()
+    const existing = this.db
+      .prepare('SELECT api_key FROM ai_settings WHERE user_id = ?')
+      .get(userId) as { api_key: string } | undefined
+    const apiKey = input.apiKey.trim() || existing?.api_key?.trim() || ''
     const model = input.model.trim()
     if (provider !== 'openai') throw new Error('AI provider wird noch nicht unterstuetzt.')
     if (!apiKey) throw new Error('OpenAI API key darf nicht leer sein')

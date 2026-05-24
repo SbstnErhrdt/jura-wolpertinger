@@ -79,7 +79,7 @@
 
         <label class="settings-field">
           OpenAI API-Key
-          <input v-model="aiApiKeyInput" type="password" placeholder="sk-..." />
+          <input v-model="aiApiKeyInput" type="password" :placeholder="aiKeyPlaceholder" />
         </label>
         <label class="settings-field">
           Modell
@@ -115,7 +115,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import type { AppUser } from '@shared/ipc'
 import { DEFAULT_AI_MODEL } from '@shared/constants'
 import { api } from '../api'
@@ -132,6 +132,9 @@ const aiModelInput = ref(DEFAULT_AI_MODEL)
 const aiBusy = ref(false)
 const actionError = ref('')
 const actionNotice = ref('')
+const aiKeyPlaceholder = computed(() =>
+  aiSettings.value.configured ? 'gespeichert - leer lassen zum Behalten' : 'sk-...'
+)
 
 onMounted(load)
 

@@ -66,7 +66,7 @@
               </p>
               <label>
                 OpenAI API-Key
-                <input v-model="aiApiKeyInput" type="password" placeholder="sk-..." />
+                <input v-model="aiApiKeyInput" type="password" :placeholder="aiKeyPlaceholder" />
               </label>
               <label>
                 Modell
@@ -331,6 +331,9 @@ const nextOpenSubmission = computed(
 )
 const selectedAiDraft = computed(
   () => aiDrafts.value.find((draft) => draft.status === 'draft') ?? null
+)
+const aiKeyPlaceholder = computed(() =>
+  aiSettings.value.configured ? 'gespeichert - leer lassen zum Behalten' : 'sk-...'
 )
 
 onMounted(() => {

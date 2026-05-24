@@ -378,7 +378,7 @@ function createBrowserDevApi(): AppApi {
       const apiKey = input.apiKey.trim()
       const model = input.model.trim()
       if (provider !== 'openai') throw new Error('AI provider wird noch nicht unterstuetzt.')
-      if (!apiKey) throw new Error('OpenAI API key darf nicht leer sein')
+      if (!apiKey && !store.aiSettings?.configured) throw new Error('OpenAI API key darf nicht leer sein')
       if (!model) throw new Error('OpenAI model darf nicht leer sein')
       store.aiSettings = {
         provider,

@@ -695,6 +695,24 @@ describe('AppServices', () => {
     expect(services.getAiSettingsStatus()).toEqual(saved)
   })
 
+  it('keeps the stored OpenAI key when saving AI settings with an empty key field', () => {
+    services.saveAiSettings({
+      provider: 'openai',
+      apiKey: 'sk-test',
+      model: 'gpt-5.5'
+    })
+
+    const updated = services.saveAiSettings({
+      provider: 'openai',
+      apiKey: ' ',
+      model: 'gpt-5.5'
+    })
+
+    expect(updated.configured).toBe(true)
+    expect(updated.model).toBe('gpt-5.5')
+    expect(updated.updatedAt).not.toBeNull()
+  })
+
   it('uses a development OpenAI key from the environment without persisting it', () => {
     const previousOpenApiKey = process.env.OPEN_API_KEY
     const previousOpenAiApiKey = process.env.OPENAI_API_KEY

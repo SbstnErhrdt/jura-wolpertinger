@@ -44,6 +44,28 @@ describe('browser development API', () => {
     expect(localStorageMock.getItem(browserStoreKey)).not.toContain('apiKey')
   })
 
+  it('keeps browser dev AI settings configured when the saved key field is left empty', async () => {
+    const apiModulePath = '../../src/renderer/src/api'
+    const { getApi } = (await import(/* @vite-ignore */ apiModulePath)) as {
+      getApi: () => AppApi
+    }
+    const api = getApi()
+
+    await api.saveAiSettings({
+      provider: 'openai',
+      apiKey: 'sk-test-secret',
+      model: 'gpt-5.5'
+    })
+    const status = await api.saveAiSettings({
+      provider: 'openai',
+      apiKey: ' ',
+      model: 'gpt-5.5'
+    })
+
+    expect(status.configured).toBe(true)
+    expect(localStorageMock.getItem(browserStoreKey)).not.toContain('sk-test-secret')
+  })
+
   it('keeps accepted AI inline comments in the normal correction', async () => {
     const apiModulePath = '../../src/renderer/src/api'
     const { getApi } = (await import(/* @vite-ignore */ apiModulePath)) as {
