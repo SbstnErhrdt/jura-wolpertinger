@@ -59,6 +59,12 @@ import type {
   UpdateExamInput
 } from '@shared/ipc'
 import { openDatabase, type SqliteDatabase } from './database'
+import {
+  buildAiCorrectionPrompt,
+  requestOpenAiCorrection,
+  tiptapToPlainText,
+  type AiCorrectionRequestAttachment
+} from './aiCorrection'
 import { ensureParentDir, hashJson, newId, nowIso, parseJson, stringifyJson } from './utils'
 
 type Row = Record<string, unknown>
@@ -527,6 +533,55 @@ export class AppServices {
       )
       .run(userId, provider, apiKey, model, updatedAt)
     return this.getAiSettingsStatus()
+  }
+
+  async generateAiCorrectionDraft(submissionId: string): Promise<AiCorrectionDraft> {
+    const settings = this.getAiSettingsCredentials()
+    if (!settings) {
+      throw new Error('KI-Korrektur ist nicht konfiguriert. Bitte OpenAI API key und Modell hinterlegen.')
+    }
+
+    const submission = this.getSubmission(submissionId)
+    const exam = this.getExam(submission.examId)
+    const attachments = exam.attachments
+      .filter((attachment) =>
+        ['assignment', 'model_solution', 'candidate_note'].includes(attachment.role)
+      )
+      .filter((attachment) => isPdfAttachment(attachment))
+      .map(
+        (attachment): AiCorrectionRequestAttachment => ({
+          role: attachment.role,
+          name: attachment.originalName,
+          absolutePath: join(this.filesDir, attachment.relativePath),
+          mimeType: attachment.mimeType ?? 'application/pdf'
+        })
+      )
+    const prompt = buildAiCorrectionPrompt({
+      examTitle: exam.title,
+      examTags: exam.tags,
+      examNotes: exam.notes,
+      legalArea: exam.legalArea,
+      examType: exam.examType,
+      submittedAt: submission.submittedAt,
+      submissionText: tiptapToPlainText(submission.content),
+      attachments: attachments.map((attachment) => ({
+        role: attachment.role,
+        name: attachment.name
+      }))
+    })
+    const result = await requestOpenAiCorrection({
+      apiKey: settings.apiKey,
+      model: settings.model,
+      prompt,
+      attachments
+    })
+
+    return this.saveAiCorrectionDraft({
+      submissionId,
+      provider: 'openai',
+      model: settings.model,
+      ...result
+    })
   }
 
   createCorrection(submissionId: string): Correction {
@@ -1228,6 +1283,24 @@ export class AppServices {
     return aiCorrectionDraftFromRow(row)
   }
 
+  private getAiSettingsCredentials(): { provider: 'openai'; apiKey: string; model: string } | null {
+    const row = this.db
+      .prepare('SELECT provider, api_key, model FROM ai_settings WHERE user_id = ?')
+      .get(this.getCurrentUserId()) as
+      | { provider: string; api_key: string; model: string }
+      | undefined
+
+    const apiKey = row?.api_key?.trim()
+    const model = row?.model?.trim()
+    if (!row || !apiKey || !model) return null
+    if (row.provider !== 'openai') throw new Error('AI provider wird noch nicht unterstuetzt.')
+    return {
+      provider: 'openai',
+      apiKey,
+      model
+    }
+  }
+
   private getLearningTask(id: string): LearningTask {
     const row = this.db
       .prepare('SELECT * FROM learning_tasks WHERE id = ? AND user_id = ?')
@@ -1463,6 +1536,13 @@ function attachmentFromRow(row: Row): Attachment {
     role: row.role ? String(row.role) : 'other',
     createdAt: String(row.created_at)
   })
+}
+
+function isPdfAttachment(attachment: Attachment): boolean {
+  return (
+    attachment.mimeType === 'application/pdf' ||
+    extname(attachment.originalName).toLowerCase() === '.pdf'
+  )
 }
 
 function aiCorrectionDraftFromRow(row: Row): AiCorrectionDraft {

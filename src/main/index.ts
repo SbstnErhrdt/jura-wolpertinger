@@ -213,9 +213,9 @@ function registerIpc(): void {
   ipcMain.handle('ai:saveSettings', (_event, input: SaveAiSettingsInput) =>
     services.saveAiSettings(input)
   )
-  ipcMain.handle('ai:generateCorrectionDraft', (_event, _input: GenerateAiCorrectionInput) => {
-    throw new Error('KI-Korrektur ist noch nicht implementiert.')
-  })
+  ipcMain.handle('ai:generateCorrectionDraft', (_event, input: GenerateAiCorrectionInput) =>
+    services.generateAiCorrectionDraft(input.submissionId)
+  )
   ipcMain.handle('ai:listCorrectionDrafts', (_event, submissionId: string) =>
     services.listAiCorrectionDrafts(submissionId)
   )
