@@ -340,6 +340,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { CheckCircle2, Clock3 } from 'lucide-vue-next'
 import { DEFAULT_AI_MODEL, EDITOR_SCHEMA_VERSION } from '@shared/constants'
+import { aiConnectionFallbackMessage, type AiConnectionTestSource } from '@shared/aiConnectionFeedback'
 import type { AiSettingsStatus, SubmissionDetails } from '@shared/ipc'
 import type { AiCorrectionDraft, Correction, InlineComment } from '@shared/schemas'
 import { api } from '../api'
@@ -593,7 +594,7 @@ async function removeAiSettings(): Promise<void> {
   }
 }
 
-async function runAiConnectionTest(source: 'active' | 'environment'): Promise<void> {
+async function runAiConnectionTest(source: AiConnectionTestSource): Promise<void> {
   actionError.value = ''
   aiNotice.value = ''
   aiConnectionOk.value = false
@@ -613,7 +614,7 @@ async function runAiConnectionTest(source: 'active' | 'environment'): Promise<vo
     if (!result.ok) actionError.value = result.message
   } catch (error) {
     aiConnectionOk.value = false
-    aiConnectionMessage.value = 'Verbindung fehlgeschlagen. Bitte Key und Modell prüfen.'
+    aiConnectionMessage.value = aiConnectionFallbackMessage(source)
     actionError.value = error instanceof Error ? error.message : String(error)
   } finally {
     aiBusy.value = false

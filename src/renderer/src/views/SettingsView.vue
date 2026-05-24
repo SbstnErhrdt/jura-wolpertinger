@@ -180,6 +180,7 @@
 import { computed, onMounted, ref } from 'vue'
 import type { AiSettingsStatus, AppUser } from '@shared/ipc'
 import { DEFAULT_AI_MODEL } from '@shared/constants'
+import { aiConnectionFallbackMessage, type AiConnectionTestSource } from '@shared/aiConnectionFeedback'
 import { api } from '../api'
 import { useTheme } from '../theme'
 
@@ -367,7 +368,7 @@ async function removeAiSettings(): Promise<void> {
   }
 }
 
-async function runAiConnectionTest(source: 'active' | 'environment'): Promise<void> {
+async function runAiConnectionTest(source: AiConnectionTestSource): Promise<void> {
   actionError.value = ''
   actionNotice.value = ''
   aiConnectionOk.value = false
@@ -387,7 +388,7 @@ async function runAiConnectionTest(source: 'active' | 'environment'): Promise<vo
     if (!result.ok) actionError.value = result.message
   } catch (error) {
     aiConnectionOk.value = false
-    aiConnectionMessage.value = 'Verbindung fehlgeschlagen. Bitte Key und Modell prüfen.'
+    aiConnectionMessage.value = aiConnectionFallbackMessage(source)
     actionError.value = error instanceof Error ? error.message : String(error)
   } finally {
     aiBusy.value = false
