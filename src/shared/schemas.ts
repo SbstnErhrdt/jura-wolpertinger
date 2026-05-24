@@ -45,7 +45,7 @@ export const learningTaskStatusSchema = z.enum(['open', 'in_progress', 'done'])
 export const learningTaskPrioritySchema = z.enum(['low', 'medium', 'high'])
 
 const nullableDefaultSchema = <Schema extends z.ZodTypeAny>(schema: Schema) =>
-  z.preprocess((value) => value ?? null, schema.nullable().optional())
+  z.preprocess((value) => value ?? null, schema.nullable())
 
 export const userSchema = z.object({
   id: uuidSchema,

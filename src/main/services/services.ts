@@ -620,7 +620,11 @@ export class AppServices {
       currentRevisionId: exam.currentRevisionId,
       submissions: submissions.map((submission) => submission.id),
       corrections: corrections.map((correction) => correction.id),
-      attachments: exam.attachments.map((attachment) => attachment.id)
+      attachments: exam.attachments.map((attachment) => attachment.id),
+      legalArea: exam.legalArea,
+      examType: exam.examType,
+      sourceName: exam.sourceName,
+      sourceUrl: exam.sourceUrl
     }
 
     zip.file('manifest.json', JSON.stringify(juraManifestSchema.parse(manifest), null, 2))

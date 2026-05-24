@@ -28,19 +28,20 @@ export function initializeDatabase(db: SqliteDatabase): void {
     | { value: string }
     | undefined
   const version = Number(row?.value ?? 0)
+  const targetSchemaVersion: number = DATABASE_SCHEMA_VERSION
 
-  if (version === 1 && DATABASE_SCHEMA_VERSION === 2) {
+  if (version === 1 && targetSchemaVersion === 2) {
     migrateV1ToV2(db)
     return
   }
 
-  if (version === DATABASE_SCHEMA_VERSION) {
+  if (version === targetSchemaVersion) {
     repairMissingUserScope(db)
     updateAppVersion(db)
     return
   }
 
-  if (version !== DATABASE_SCHEMA_VERSION) {
+  if (version !== targetSchemaVersion) {
     throw new Error(
       `Unsupported database schema ${version}. Expected schema ${DATABASE_SCHEMA_VERSION}.`
     )

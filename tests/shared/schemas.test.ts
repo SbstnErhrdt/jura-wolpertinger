@@ -103,6 +103,26 @@ describe('shared schemas', () => {
   })
 
   it('validates exam metadata and attachment roles', () => {
+    const examWithoutMetadata = examListItemSchema.parse({
+      id: crypto.randomUUID(),
+      userId: crypto.randomUUID(),
+      title: 'ZR Urteil',
+      folderId: null,
+      folderName: null,
+      status: 'draft',
+      tags: ['zivilrecht'],
+      notes: '',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      lastSavedAt: new Date().toISOString(),
+      currentRevisionId: null,
+      latestScore: null
+    })
+    expect(examWithoutMetadata.legalArea).toBeNull()
+    expect(examWithoutMetadata.examType).toBeNull()
+    expect(examWithoutMetadata.sourceName).toBeNull()
+    expect(examWithoutMetadata.sourceUrl).toBeNull()
+
     expect(
       examListItemSchema.parse({
         id: crypto.randomUUID(),
@@ -140,6 +160,21 @@ describe('shared schemas', () => {
         createdAt: new Date().toISOString()
       }).role
     ).toBe('model_solution')
+
+    expect(
+      attachmentSchema.parse({
+        schemaVersion: 1,
+        id: crypto.randomUUID(),
+        userId: crypto.randomUUID(),
+        examId: crypto.randomUUID(),
+        originalName: 'sachverhalt.pdf',
+        storedName: 'stored.pdf',
+        mimeType: 'application/pdf',
+        size: 12,
+        relativePath: 'exams/x/attachments/y/stored.pdf',
+        createdAt: new Date().toISOString()
+      }).role
+    ).toBe('other')
   })
 
   it('validates AI correction drafts and learning tasks', () => {

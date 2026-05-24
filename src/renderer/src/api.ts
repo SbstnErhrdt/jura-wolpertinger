@@ -204,7 +204,11 @@ function createBrowserDevApi(): AppApi {
         updatedAt: now,
         lastSavedAt: now,
         currentRevisionId: revisionId,
-        latestScore: null
+        latestScore: null,
+        legalArea: null,
+        examType: null,
+        sourceName: null,
+        sourceUrl: null
       }
       store.exams.unshift(exam)
       store.revisions.push(revision)
