@@ -89,6 +89,17 @@ test.describe('Jura Wolpertinger Electron app', () => {
 
       await page.click('.brand')
       await expect(page.locator('.dashboard')).toBeVisible()
+      await page.click('button:has-text("Neue Klausur")')
+      await page.fill('.dialog-card input[placeholder="Titel"]', 'Tag-Test')
+      await page.click('.dialog-card .tag-input-suggestion:has-text("bayern")')
+      await page.click('.dialog-card .tag-input-suggestion:has-text("probe")')
+      expect(
+        await page.locator('.dialog-card .tag-input-chip > span').evaluateAll((nodes) =>
+          nodes.map((node) => node.textContent?.trim()).sort()
+        )
+      ).toEqual(['bayern', 'probe'])
+      await page.click('.dialog-actions button:has-text("Abbrechen")')
+
       await page.click('.folder-row:has-text("Zivilrecht II")', { button: 'right' })
       await page.click('.context-menu button:has-text("In Papierkorb")')
       await page.selectOption('.dialog-field select', { label: 'Strafrecht' })

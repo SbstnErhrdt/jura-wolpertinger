@@ -1263,7 +1263,8 @@ textarea {
   padding: 14px;
 }
 
-.side-panel label {
+.side-panel label,
+.side-field {
   color: #52656f;
   display: grid;
   gap: 6px;
@@ -2432,7 +2433,8 @@ textarea {
   color: #e8f2f5 !important;
 }
 
-:root[data-theme='dark'] .side-panel label {
+:root[data-theme='dark'] .side-panel label,
+:root[data-theme='dark'] .side-field {
   color: #b1c0c6;
 }
 

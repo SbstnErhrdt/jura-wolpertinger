@@ -133,15 +133,15 @@
               </option>
             </select>
           </label>
-          <label>
-            Tags
+          <div class="side-field">
+            <span>Tags</span>
             <TagInput
               v-model="tags"
               :suggestions="tagSuggestions"
               placeholder="Tags hinzufügen"
               @update:modelValue="saveMeta"
             />
-          </label>
+          </div>
           <label>
             Notizen
             <textarea v-model="notes" rows="4" @blur="saveMeta" />

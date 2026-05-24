@@ -17,15 +17,15 @@
           Zeitraum bis
           <input :value="filters.endDate" type="date" @input="setEndDate(($event.target as HTMLInputElement).value)" />
         </label>
-        <label class="analytics-field analytics-tag-field">
-          Tags
+        <div class="analytics-field analytics-tag-field">
+          <span>Tags</span>
           <TagInput
             :model-value="filters.tags"
             :suggestions="availableTags"
             placeholder="Nach Tags filtern"
             @update:modelValue="setTags"
           />
-        </label>
+        </div>
       </div>
 
       <div class="analytics-filter-actions">
