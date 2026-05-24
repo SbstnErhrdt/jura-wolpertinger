@@ -695,6 +695,41 @@ describe('AppServices', () => {
     expect(services.getAiSettingsStatus()).toEqual(saved)
   })
 
+  it('uses a development OpenAI key from the environment without persisting it', () => {
+    const previousOpenApiKey = process.env.OPEN_API_KEY
+    const previousOpenAiApiKey = process.env.OPENAI_API_KEY
+    const previousOpenAiModel = process.env.OPENAI_MODEL
+    delete process.env.OPENAI_API_KEY
+    delete process.env.OPENAI_MODEL
+    process.env.OPEN_API_KEY = 'sk-env-test'
+
+    try {
+      expect(services.getAiSettingsStatus()).toEqual({
+        provider: 'openai',
+        configured: true,
+        model: 'gpt-5.5',
+        updatedAt: null
+      })
+
+      services.close()
+      services = new AppServices(dataDir)
+
+      expect(services.getAiSettingsStatus()).toEqual({
+        provider: 'openai',
+        configured: true,
+        model: 'gpt-5.5',
+        updatedAt: null
+      })
+    } finally {
+      if (previousOpenApiKey === undefined) delete process.env.OPEN_API_KEY
+      else process.env.OPEN_API_KEY = previousOpenApiKey
+      if (previousOpenAiApiKey === undefined) delete process.env.OPENAI_API_KEY
+      else process.env.OPENAI_API_KEY = previousOpenAiApiKey
+      if (previousOpenAiModel === undefined) delete process.env.OPENAI_MODEL
+      else process.env.OPENAI_MODEL = previousOpenAiModel
+    }
+  })
+
   it('rejects empty AI settings credentials', () => {
     expect(() =>
       services.saveAiSettings({

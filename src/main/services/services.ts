@@ -1,9 +1,10 @@
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { copyFile, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, extname, join, relative } from 'node:path'
 import JSZip from 'jszip'
 import {
   APP_VERSION,
+  DEFAULT_AI_MODEL,
   DOCUMENT_SCHEMA_VERSION,
   EDITOR_SCHEMA_VERSION,
   EMPTY_TIPTAP_DOCUMENT,
@@ -72,6 +73,8 @@ type ImportedAttachment = {
   attachment: Attachment
   payload: Buffer
 }
+
+let localEnvCache: Record<string, string> | null = null
 
 export class AppServices {
   readonly db: SqliteDatabase
@@ -514,11 +517,22 @@ export class AppServices {
       | { provider: string; api_key: string; model: string; updated_at: string }
       | undefined
 
+    const storedApiKey = row?.api_key?.trim()
+    if (row && storedApiKey) {
+      return {
+        provider: 'openai',
+        configured: true,
+        model: row.model,
+        updatedAt: row.updated_at
+      }
+    }
+
+    const envCredentials = getOpenAiEnvironmentCredentials()
     return {
       provider: 'openai',
-      configured: Boolean(row?.api_key),
-      model: row?.model ?? null,
-      updatedAt: row?.updated_at ?? null
+      configured: Boolean(envCredentials),
+      model: envCredentials?.model ?? null,
+      updatedAt: null
     }
   }
 
@@ -1331,7 +1345,7 @@ export class AppServices {
 
     const apiKey = row?.api_key?.trim()
     const model = row?.model?.trim()
-    if (!row || !apiKey || !model) return null
+    if (!row || !apiKey || !model) return getOpenAiEnvironmentCredentials()
     if (row.provider !== 'openai') throw new Error('AI provider wird noch nicht unterstuetzt.')
     return {
       provider: 'openai',
@@ -1450,6 +1464,39 @@ export class AppServices {
     this.db.prepare(`UPDATE users SET ${column} = ?, updated_at = ? WHERE id = ?`).run(now, now, userId)
     return this.switchUser(userId)
   }
+}
+
+function getOpenAiEnvironmentCredentials(): { provider: 'openai'; apiKey: string; model: string } | null {
+  const apiKey = (readEnvValue('OPENAI_API_KEY') ?? readEnvValue('OPEN_API_KEY') ?? '').trim()
+  if (!apiKey) return null
+  const model = (readEnvValue('OPENAI_MODEL') ?? DEFAULT_AI_MODEL).trim() || DEFAULT_AI_MODEL
+  return {
+    provider: 'openai',
+    apiKey,
+    model
+  }
+}
+
+function readEnvValue(name: string): string | undefined {
+  return process.env[name] ?? readLocalEnvFile()[name]
+}
+
+function readLocalEnvFile(): Record<string, string> {
+  if (process.env.NODE_ENV === 'test') return {}
+  if (localEnvCache) return localEnvCache
+
+  localEnvCache = {}
+  for (const path of ['.env.local', '.env']) {
+    if (!existsSync(path)) continue
+    const content = readFileSync(path, 'utf8')
+    for (const line of content.split(/\r?\n/)) {
+      const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/)
+      if (!match) continue
+      const [, key, rawValue] = match
+      localEnvCache[key] = rawValue.replace(/^['"]|['"]$/g, '')
+    }
+  }
+  return localEnvCache
 }
 
 function userFromRow(row: Row): User {

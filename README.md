@@ -205,6 +205,17 @@ pnpm dev
 
 Wenn der Standard-Port belegt ist, wählt Vite automatisch einen freien Port.
 
+Für lokale KI-Korrekturtests kann ein eigener OpenAI-Key in `.env` oder `.env.local` hinterlegt
+werden. Die Dateien sind ignoriert und dürfen nicht committed werden.
+
+```bash
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-5.5
+```
+
+Für bestehende lokale Setups wird auch `OPEN_API_KEY` gelesen. Gespeicherte Einstellungen in der
+App haben Vorrang vor dem Entwicklungs-Key.
+
 ## Checks
 
 ```bash

@@ -17,3 +17,5 @@ build/icon.iconset
 *.sqlite-wal
 *.tsbuildinfo
 certs
+*.env
+.env.local
