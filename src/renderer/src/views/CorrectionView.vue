@@ -43,13 +43,43 @@
             <RouterLink class="secondary" :to="{ name: 'exam', params: { id: submission.examId } }">
               Zur Prüfung
             </RouterLink>
+            <button type="button" class="secondary" @click="showAiSettings = !showAiSettings">
+              KI einrichten
+            </button>
+            <button type="button" :disabled="aiBusy || !aiSettings.configured" @click="generateAiDraft">
+              {{ aiBusy ? 'KI arbeitet...' : 'KI-Korrektur vorschlagen' }}
+            </button>
             <button @click="saveCorrection">Speichern</button>
           </div>
         </header>
 
         <p v-if="actionError" class="action-error">{{ actionError }}</p>
+        <p v-if="aiNotice" class="action-notice">{{ aiNotice }}</p>
 
         <div class="correction-workspace">
+          <section v-if="showAiSettings" class="correction-assessment-panel ai-settings-panel">
+            <div>
+              <h2>KI-Korrektur</h2>
+              <p class="field-hint">
+                Aufgabenstellung, Musterlösung und Abgabe werden für die Korrektur an den
+                konfigurierten KI-Anbieter übertragen.
+              </p>
+              <label>
+                OpenAI API-Key
+                <input v-model="aiApiKeyInput" type="password" placeholder="sk-..." />
+              </label>
+              <label>
+                Modell
+                <input v-model="aiModelInput" placeholder="gpt-5" />
+              </label>
+              <div class="dialog-actions">
+                <button type="button" :disabled="aiBusy" @click="saveAiSettings">
+                  Speichern
+                </button>
+              </div>
+            </div>
+          </section>
+
           <section class="correction-assessment-panel">
             <div>
               <h2>Bewertung</h2>
@@ -69,6 +99,69 @@
                 Bewertungskommentar
                 <textarea v-model="gradingComment" rows="4" />
               </label>
+            </div>
+          </section>
+
+          <section v-if="selectedAiDraft" class="correction-assessment-panel ai-draft-panel">
+            <div>
+              <h2>KI-Vorschlag</h2>
+              <div class="ai-draft-score">
+                <strong>{{ formatScoreInput(selectedAiDraft.score.points) || 'ohne Punkte' }}</strong>
+                <span v-if="selectedAiDraft.score.points !== null">Punkte</span>
+              </div>
+              <p class="field-hint">{{ selectedAiDraft.scoreReasoning }}</p>
+
+              <div class="ai-draft-section">
+                <h3>Bewertungskommentar</h3>
+                <p>{{ selectedAiDraft.gradingComment }}</p>
+              </div>
+
+              <div
+                v-if="selectedAiDraft.strengths.length || selectedAiDraft.weaknesses.length"
+                class="ai-draft-two-column"
+              >
+                <div v-if="selectedAiDraft.strengths.length">
+                  <h3>Stärken</h3>
+                  <ul>
+                    <li v-for="strength in selectedAiDraft.strengths" :key="strength">
+                      {{ strength }}
+                    </li>
+                  </ul>
+                </div>
+                <div v-if="selectedAiDraft.weaknesses.length">
+                  <h3>Schwächen</h3>
+                  <ul>
+                    <li v-for="weakness in selectedAiDraft.weaknesses" :key="weakness">
+                      {{ weakness }}
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              <div v-if="selectedAiDraft.improvementSuggestions.length" class="ai-draft-section">
+                <h3>Verbesserungsvorschläge</h3>
+                <ul class="ai-suggestion-list">
+                  <li
+                    v-for="suggestion in selectedAiDraft.improvementSuggestions"
+                    :key="`${suggestion.category}-${suggestion.priority}-${suggestion.title}`"
+                  >
+                    <div>
+                      <strong>{{ suggestion.title }}</strong>
+                      <span>{{ suggestion.category }} · {{ suggestion.priority }}</span>
+                    </div>
+                    <p>{{ suggestion.detail }}</p>
+                  </li>
+                </ul>
+              </div>
+
+              <div class="dialog-actions">
+                <button type="button" class="secondary" :disabled="aiBusy" @click="rejectAiDraft(selectedAiDraft.id)">
+                  Verwerfen
+                </button>
+                <button type="button" :disabled="aiBusy" @click="acceptAiDraft(selectedAiDraft.id)">
+                  Übernehmen
+                </button>
+              </div>
             </div>
           </section>
 
@@ -175,7 +268,7 @@ import { useRoute } from 'vue-router'
 import { CheckCircle2, Clock3 } from 'lucide-vue-next'
 import { EDITOR_SCHEMA_VERSION } from '@shared/constants'
 import type { SubmissionDetails } from '@shared/ipc'
-import type { Correction, InlineComment } from '@shared/schemas'
+import type { AiCorrectionDraft, Correction, InlineComment } from '@shared/schemas'
 import { api } from '../api'
 import { renderTiptapHtml } from '../utils/renderTiptap'
 
@@ -203,6 +296,13 @@ const activeCommentId = ref<string | null>(null)
 const commentPositions = ref<Record<string, number>>({})
 const commentRailHeight = ref(760)
 const selectionPopover = ref({ x: 0, y: 0 })
+const aiSettings = ref<{ configured: boolean; model: string | null }>({ configured: false, model: null })
+const aiDrafts = ref<AiCorrectionDraft[]>([])
+const showAiSettings = ref(false)
+const aiApiKeyInput = ref('')
+const aiModelInput = ref('gpt-5')
+const aiBusy = ref(false)
+const aiNotice = ref('')
 
 const renderedHtml = computed(() =>
   submission.value ? renderTiptapHtml(submission.value.content) : ''
@@ -216,6 +316,9 @@ const gradedSubmissionCount = computed(
 )
 const nextOpenSubmission = computed(
   () => submittedItems.value.find((item) => item.scorePoints === null) ?? submittedItems.value[0] ?? null
+)
+const selectedAiDraft = computed(
+  () => aiDrafts.value.find((draft) => draft.status === 'draft') ?? null
 )
 
 onMounted(() => {
@@ -233,16 +336,21 @@ watch(
 
 async function load(): Promise<void> {
   await loadSubmittedItems()
+  aiSettings.value = await api.getAiSettingsStatus()
   const submissionId = typeof route.params.id === 'string' ? route.params.id : null
   if (!submissionId) {
     submission.value = null
     correction.value = null
+    aiDrafts.value = []
+    scoreInput.value = ''
+    gradingComment.value = ''
     return
   }
 
   submission.value = await api.getSubmission(submissionId)
   correction.value =
     submission.value.corrections[0] ?? (await api.createCorrection(submission.value.id))
+  aiDrafts.value = await api.listAiCorrectionDrafts(submission.value.id)
   scoreInput.value = formatScoreInput(correction.value.score.points)
   gradingComment.value = correction.value.gradingComment
   await nextTick()
@@ -284,6 +392,7 @@ async function loadSubmittedItems(): Promise<void> {
 async function saveCorrection(): Promise<void> {
   if (!correction.value) return
   actionError.value = ''
+  aiNotice.value = ''
   try {
     correction.value = await api.updateCorrection({
       correctionId: correction.value.id,
@@ -295,6 +404,72 @@ async function saveCorrection(): Promise<void> {
     await loadSubmittedItems()
   } catch (error) {
     actionError.value = error instanceof Error ? error.message : String(error)
+  }
+}
+
+async function saveAiSettings(): Promise<void> {
+  actionError.value = ''
+  aiNotice.value = ''
+  aiBusy.value = true
+  try {
+    aiSettings.value = await api.saveAiSettings({
+      provider: 'openai',
+      apiKey: aiApiKeyInput.value,
+      model: aiModelInput.value.trim() || 'gpt-5'
+    })
+    aiModelInput.value = aiSettings.value.model ?? 'gpt-5'
+    aiApiKeyInput.value = ''
+    aiNotice.value = 'KI-Einstellungen gespeichert.'
+  } catch (error) {
+    actionError.value = error instanceof Error ? error.message : String(error)
+  } finally {
+    aiBusy.value = false
+  }
+}
+
+async function generateAiDraft(): Promise<void> {
+  if (!submission.value) return
+  actionError.value = ''
+  aiNotice.value = ''
+  aiBusy.value = true
+  try {
+    await api.generateAiCorrectionDraft({ submissionId: submission.value.id })
+    aiNotice.value = 'KI-Vorschlag erstellt.'
+    await load()
+  } catch (error) {
+    actionError.value = error instanceof Error ? error.message : String(error)
+  } finally {
+    aiBusy.value = false
+  }
+}
+
+async function acceptAiDraft(id: string): Promise<void> {
+  actionError.value = ''
+  aiNotice.value = ''
+  aiBusy.value = true
+  try {
+    await api.acceptAiCorrectionDraft(id)
+    aiNotice.value = 'KI-Vorschlag übernommen.'
+    await load()
+  } catch (error) {
+    actionError.value = error instanceof Error ? error.message : String(error)
+  } finally {
+    aiBusy.value = false
+  }
+}
+
+async function rejectAiDraft(id: string): Promise<void> {
+  actionError.value = ''
+  aiNotice.value = ''
+  aiBusy.value = true
+  try {
+    await api.rejectAiCorrectionDraft(id)
+    aiNotice.value = 'KI-Vorschlag verworfen.'
+    await load()
+  } catch (error) {
+    actionError.value = error instanceof Error ? error.message : String(error)
+  } finally {
+    aiBusy.value = false
   }
 }
 

@@ -1130,6 +1130,15 @@ textarea {
   padding: 10px 12px;
 }
 
+.action-notice {
+  background: #f0fbf5;
+  border: 1px solid #b9e5cb;
+  border-radius: 6px;
+  color: #23663b;
+  margin: 0 0 16px;
+  padding: 10px 12px;
+}
+
 .title-input {
   background: transparent;
   border: 0;
@@ -1685,6 +1694,12 @@ textarea {
   margin: 0 0 12px;
 }
 
+.correction-assessment-panel h3 {
+  color: #253c48;
+  font-size: 14px;
+  margin: 0 0 8px;
+}
+
 .correction-assessment-panel label {
   color: #52656f;
   display: grid;
@@ -1706,6 +1721,79 @@ textarea {
 .correction-score-grid .field-hint {
   align-self: end;
   margin-bottom: 8px;
+}
+
+.ai-settings-panel,
+.ai-draft-panel {
+  grid-column: 1 / -1;
+}
+
+.ai-draft-score {
+  align-items: baseline;
+  display: flex;
+  gap: 6px;
+}
+
+.ai-draft-score strong {
+  color: #12394c;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.ai-draft-score span {
+  color: #52656f;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ai-draft-section {
+  margin-top: 14px;
+}
+
+.ai-draft-section p,
+.ai-draft-two-column p {
+  color: #52656f;
+  margin: 0;
+}
+
+.ai-draft-two-column {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 14px;
+}
+
+.ai-draft-two-column ul,
+.ai-suggestion-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.ai-draft-two-column li,
+.ai-suggestion-list li {
+  color: #52656f;
+}
+
+.ai-suggestion-list div {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ai-suggestion-list strong {
+  color: #253c48;
+}
+
+.ai-suggestion-list span {
+  color: #6d828d;
+  font-size: 12px;
+}
+
+.ai-suggestion-list p {
+  margin-top: 3px;
 }
 
 .correction-document-grid {
@@ -2255,6 +2343,12 @@ textarea {
   color: #ffc6c6;
 }
 
+:root[data-theme='dark'] .action-notice {
+  background: #10291b;
+  border-color: #2c6b42;
+  color: #b9efc9;
+}
+
 :root[data-theme='dark'] .title-input {
   color: #e8f2f5;
 }
@@ -2412,6 +2506,24 @@ textarea {
 
 :root[data-theme='dark'] .correction-assessment-panel label {
   color: #b1c0c6;
+}
+
+:root[data-theme='dark'] .correction-assessment-panel h3,
+:root[data-theme='dark'] .ai-draft-score strong,
+:root[data-theme='dark'] .ai-suggestion-list strong {
+  color: #e8f2f5;
+}
+
+:root[data-theme='dark'] .ai-draft-score span,
+:root[data-theme='dark'] .ai-draft-section p,
+:root[data-theme='dark'] .ai-draft-two-column p,
+:root[data-theme='dark'] .ai-draft-two-column li,
+:root[data-theme='dark'] .ai-suggestion-list li {
+  color: #b1c0c6;
+}
+
+:root[data-theme='dark'] .ai-suggestion-list span {
+  color: #93a6ae;
 }
 
 :root[data-theme='dark'] .exam-editor-surface mark,
@@ -3012,6 +3124,7 @@ textarea {
   .correction-workspace,
   .correction-assessment-panel,
   .correction-document-grid,
+  .ai-draft-two-column,
   .correction-layout {
     grid-template-columns: 1fr;
   }

@@ -57,6 +57,11 @@ const faq = [
       'Deine lokalen Daten sollen erhalten bleiben. Eine spätere Anmeldung soll vorhandene Klausuren übernehmen, statt sie ungefragt zu ersetzen.'
   },
   {
+    question: 'Was passiert bei einer KI-Korrektur?',
+    answer:
+      'Die App sendet die ausgewählte Abgabe und passende Unterlagen wie Aufgabenstellung oder Musterlösung an den konfigurierten KI-Anbieter. Das Ergebnis ist ein Korrekturentwurf, den du prüfen, bearbeiten, übernehmen oder verwerfen kannst.'
+  },
+  {
     question: 'Wie sollte ich Tags nutzen?',
     answer:
       'Nutze Tags für Rechtsgebiet, Prüfungsgebiet, Klausurtyp, Thema und typische Fehler. Beispiele: zivilrecht, relationstechnik, strafurteil, verwaltungsrecht, fristen.'
