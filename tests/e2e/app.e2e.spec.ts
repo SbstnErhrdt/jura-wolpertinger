@@ -40,7 +40,10 @@ test.describe('Jura Wolpertinger Electron app', () => {
       await expect(page.locator('.sidebar-user select')).toContainText('Lokaler Nutzer')
       await page.click('.nav a:has-text("Hilfe")')
       await expect(page).toHaveURL(/#\/help/)
-      await expect(page.locator('.help-item')).toHaveCount(8)
+      await expect(page.locator('.help-item', { hasText: 'Gehen meine Klausuren verloren' })).toBeVisible()
+      await expect(page.locator('.help-item', { hasText: 'Was passiert bei einer KI-Korrektur?' })).toContainText(
+        'Korrekturentwurf'
+      )
       await page.click('button:has-text("Tour starten")')
       await expect(page).toHaveURL(/#\/$/)
       await expect(page.locator('.driver-popover')).toBeVisible()
