@@ -18,6 +18,7 @@ import {
   correctionSchema,
   documentSchema,
   examListItemSchema,
+  examStatusSchema,
   examTypeSchema,
   folderSchema,
   juraManifestSchema,
@@ -320,10 +321,11 @@ export class AppServices {
       input.legalArea === undefined ? current.legalArea : legalAreaSchema.nullable().parse(input.legalArea)
     const examType =
       input.examType === undefined ? current.examType : examTypeSchema.nullable().parse(input.examType)
+    const status = input.status === undefined ? current.status : examStatusSchema.parse(input.status)
     const next = {
       title: input.title ?? current.title,
       folderId: input.folderId === undefined ? current.folderId : input.folderId,
-      status: input.status ?? current.status,
+      status,
       tags: input.tags ? normalizeTags(input.tags) : current.tags,
       notes: input.notes ?? current.notes,
       legalArea,

@@ -26,7 +26,7 @@ import type {
   Submission,
   User
 } from '@shared/schemas'
-import { examTypeSchema, legalAreaSchema } from '@shared/schemas'
+import { examStatusSchema, examTypeSchema, learningTaskStatusSchema, legalAreaSchema } from '@shared/schemas'
 
 const BROWSER_STORE_KEY = 'jura-wolpertinger-browser-dev-v1'
 const AI_CORRECTION_NOT_IMPLEMENTED_MESSAGE = 'KI-Korrektur ist noch nicht implementiert.'
@@ -249,6 +249,7 @@ function createBrowserDevApi(): AppApi {
       const current = store.exams[index]
       const legalArea = input.legalArea === undefined ? current.legalArea : parseLegalArea(input.legalArea)
       const examType = input.examType === undefined ? current.examType : parseExamType(input.examType)
+      const status = input.status === undefined ? current.status : examStatusSchema.parse(input.status)
       const next: ExamListItem = {
         ...current,
         title: input.title ?? current.title,
@@ -257,7 +258,7 @@ function createBrowserDevApi(): AppApi {
           store,
           input.folderId === undefined ? current.folderId : input.folderId
         ),
-        status: input.status ?? current.status,
+        status,
         tags: input.tags ? normalizeTags(input.tags) : current.tags,
         notes: input.notes ?? current.notes,
         legalArea,
@@ -437,9 +438,10 @@ function createBrowserDevApi(): AppApi {
     },
     async updateLearningTaskStatus(taskId, status) {
       const store = readStore()
+      const nextStatus = learningTaskStatusSchema.parse(status)
       const task = store.learningTasks.find((candidate) => candidate.id === taskId)
       if (!task) throw new Error(`Learning task not found: ${taskId}`)
-      task.status = status
+      task.status = nextStatus
       task.updatedAt = nowIso()
       writeStore(store)
       return task

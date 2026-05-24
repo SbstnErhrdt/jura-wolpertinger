@@ -383,6 +383,21 @@ describe('AppServices', () => {
     expect(row.count).toBe(0)
   })
 
+  it('rejects invalid exam status updates without changing the existing row', () => {
+    const exam = services.createExam({ title: 'Status Klausur' })
+
+    expect(() => services.updateExam({ id: exam.id, status: 'invalid' } as never)).toThrow()
+
+    const row = services.db.prepare('SELECT title, status FROM exams WHERE id = ?').get(exam.id) as {
+      title: string
+      status: string
+    }
+    expect(row).toEqual({
+      title: 'Status Klausur',
+      status: 'draft'
+    })
+  })
+
   it('rejects invalid attachment roles before copying or inserting', async () => {
     const exam = services.createExam({ title: 'Anlagenrolle' })
     const sourcePath = join(dataDir, 'anlage.pdf')
