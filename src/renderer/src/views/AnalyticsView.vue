@@ -17,15 +17,15 @@
           Zeitraum bis
           <input :value="filters.endDate" type="date" @input="setEndDate(($event.target as HTMLInputElement).value)" />
         </label>
-        <label class="analytics-field analytics-tag-field">
-          Tags
+        <div class="analytics-field analytics-tag-field">
+          <span>Tags</span>
           <TagInput
             :model-value="filters.tags"
             :suggestions="availableTags"
             placeholder="Nach Tags filtern"
             @update:modelValue="setTags"
           />
-        </label>
+        </div>
       </div>
 
       <div class="analytics-filter-actions">
@@ -135,6 +135,43 @@
       </section>
     </section>
 
+    <section class="analytics-panel analytics-learning-panel">
+      <div class="panel-header">
+        <div>
+          <h2>Lernaufgaben</h2>
+          <p class="analytics-panel-copy">
+            Offene Aufgaben aus akzeptierten KI-Korrekturen, abgeleitet aus Verbesserungsvorschlägen.
+          </p>
+        </div>
+      </div>
+
+      <div v-if="topLearningCategories.length" class="analytics-learning-summary" aria-label="Häufige Kategorien">
+        <span v-for="[category, count] in topLearningCategories" :key="category" class="analytics-learning-category">
+          {{ formatLearningCategory(category) }} · {{ count }}
+        </span>
+      </div>
+
+      <p v-if="learningTasksError" class="analytics-learning-error">{{ learningTasksError }}</p>
+
+      <div v-if="visibleLearningTasks.length" class="analytics-learning-list">
+        <article v-for="task in visibleLearningTasks" :key="task.id" class="analytics-learning-task">
+          <div class="analytics-learning-task-body">
+            <div class="analytics-learning-task-meta">
+              <span class="tag">{{ formatLearningCategory(task.category) }}</span>
+              <span class="tag">{{ formatLearningPriority(task.priority) }}</span>
+            </div>
+            <h3>{{ task.title }}</h3>
+            <p v-if="task.detail">{{ task.detail }}</p>
+          </div>
+          <button class="secondary" type="button" @click="() => void markTaskDone(task.id)">Erledigt</button>
+        </article>
+      </div>
+      <p v-if="hiddenLearningTaskCount > 0" class="analytics-learning-more">
+        {{ hiddenLearningTaskLabel }}
+      </p>
+      <p v-if="!visibleLearningTasks.length && !learningTasksError" class="empty-state">Keine offenen Lernaufgaben.</p>
+    </section>
+
     <section class="analytics-panel analytics-table-panel">
       <div class="panel-header">
         <div>
@@ -167,6 +204,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import type { AnalyticsEntry } from '@shared/ipc'
+import type { LearningTask } from '@shared/schemas'
 import { api } from '../api'
 import TagInput from '../components/TagInput.vue'
 
@@ -196,6 +234,8 @@ const rangePresets: Array<{ id: RangePresetId; label: string; months: number }> 
 ]
 
 const entries = ref<AnalyticsEntry[]>([])
+const learningTasks = ref<LearningTask[]>([])
+const learningTasksError = ref('')
 const filters = ref<AnalyticsFilters>(loadFilters())
 
 onMounted(load)
@@ -252,6 +292,26 @@ const latestEntry = computed(() =>
 const recentEntries = computed(() =>
   [...filteredEntries.value].sort((left, right) => right.correctedAt.localeCompare(left.correctedAt)).slice(0, 8)
 )
+
+const openLearningTasks = computed(() => learningTasks.value.filter((task) => task.status !== 'done'))
+
+const visibleLearningTasks = computed(() => openLearningTasks.value.slice(0, 8))
+
+const hiddenLearningTaskCount = computed(() =>
+  Math.max(0, openLearningTasks.value.length - visibleLearningTasks.value.length)
+)
+
+const hiddenLearningTaskLabel = computed(() =>
+  hiddenLearningTaskCount.value === 1
+    ? 'Eine weitere offene Lernaufgabe wird nicht angezeigt.'
+    : `Weitere ${hiddenLearningTaskCount.value} offene Lernaufgaben werden nicht angezeigt.`
+)
+
+const topLearningCategories = computed(() => {
+  const counts = new Map<LearningTask['category'], number>()
+  for (const task of openLearningTasks.value) counts.set(task.category, (counts.get(task.category) ?? 0) + 1)
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5)
+})
 
 const averageScoreLabel = computed(() => formatScore(averageScore.value))
 const bestScoreLabel = computed(() => formatScore(bestScore.value))
@@ -355,7 +415,33 @@ const monthlyBars = computed(() => {
 })
 
 async function load(): Promise<void> {
-  entries.value = await api.listAnalyticsEntries()
+  const [entriesResult, tasksResult] = await Promise.allSettled([
+    api.listAnalyticsEntries(),
+    api.listLearningTasks()
+  ])
+  if (entriesResult.status === 'fulfilled') {
+    entries.value = entriesResult.value
+  } else {
+    throw entriesResult.reason
+  }
+
+  if (tasksResult.status === 'fulfilled') {
+    learningTasks.value = tasksResult.value
+    learningTasksError.value = ''
+  } else {
+    learningTasks.value = []
+    learningTasksError.value = 'Lernaufgaben konnten nicht geladen werden.'
+  }
+}
+
+async function markTaskDone(taskId: string): Promise<void> {
+  try {
+    await api.updateLearningTaskStatus(taskId, 'done')
+    learningTasks.value = await api.listLearningTasks()
+    learningTasksError.value = ''
+  } catch {
+    learningTasksError.value = 'Lernaufgabe konnte nicht aktualisiert werden.'
+  }
 }
 
 function setStartDate(value: string): void {
@@ -460,5 +546,28 @@ function formatMonthLabel(value: string): string {
     month: 'short',
     year: 'numeric'
   }).format(new Date(`${value}-01T12:00:00`))
+}
+
+function formatLearningCategory(category: LearningTask['category']): string {
+  const labels: Record<LearningTask['category'], string> = {
+    issue_spotting: 'Problemerkennung',
+    law: 'Rechtliche Grundlagen',
+    procedure: 'Verfahren',
+    structure: 'Aufbau',
+    argumentation: 'Argumentation',
+    style: 'Stil',
+    time_management: 'Zeitmanagement',
+    other: 'Sonstiges'
+  }
+  return labels[category]
+}
+
+function formatLearningPriority(priority: LearningTask['priority']): string {
+  const labels: Record<LearningTask['priority'], string> = {
+    low: 'niedrige Priorität',
+    medium: 'mittlere Priorität',
+    high: 'hohe Priorität'
+  }
+  return labels[priority]
 }
 </script>

@@ -1,9 +1,10 @@
 export const APP_VERSION = '0.1.4'
-export const DATABASE_SCHEMA_VERSION = 2
+export const DATABASE_SCHEMA_VERSION = 3
 export const JURA_FORMAT = 'jura-klausur'
 export const JURA_FORMAT_VERSION = 1
 export const DOCUMENT_SCHEMA_VERSION = 1
 export const EDITOR_SCHEMA_VERSION = 1
+export const DEFAULT_AI_MODEL = 'gpt-5.5'
 
 export const EMPTY_TIPTAP_DOCUMENT = {
   type: 'doc',

@@ -19,6 +19,10 @@
           <ChartNoAxesCombined :size="18" aria-hidden="true" />
           <span>Auswertung</span>
         </RouterLink>
+        <RouterLink :to="{ name: 'settings' }">
+          <Settings :size="18" aria-hidden="true" />
+          <span>Einstellungen</span>
+        </RouterLink>
         <RouterLink :to="{ name: 'about' }">
           <Info :size="18" aria-hidden="true" />
           <span>About</span>
@@ -111,6 +115,7 @@ import {
   LibraryBig,
   Moon,
   Route,
+  Settings,
   Sun,
   UserPlus
 } from 'lucide-vue-next'
@@ -133,15 +138,20 @@ const showTourPrompt = ref(false)
 const showCreateUser = ref(false)
 const newUserName = ref('')
 const startTourListener = () => startTour()
+const usersUpdatedListener = () => {
+  void loadUsers()
+}
 
 onMounted(async () => {
   applyTheme()
   await loadUsers()
   window.addEventListener('jura:start-tour', startTourListener)
+  window.addEventListener('jura:users-updated', usersUpdatedListener)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('jura:start-tour', startTourListener)
+  window.removeEventListener('jura:users-updated', usersUpdatedListener)
 })
 
 async function loadUsers(): Promise<void> {

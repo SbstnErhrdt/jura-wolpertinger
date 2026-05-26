@@ -2,7 +2,7 @@
 
 Diese Dokumentation beschreibt die aktuelle Architektur von Jura Wolpertinger. Sie ist als Arbeitsgrundlage für Weiterentwicklung, Reviews und spätere Migrationen gedacht.
 
-Stand: App `0.1.4`, Datenbank-Schema `2`, `.jura` Format `1`.
+Stand: App `0.1.4`, Datenbank-Schema `3`, `.jura` Format `1`.
 
 ## Zielbild
 
@@ -20,7 +20,7 @@ flowchart LR
   end
 
   subgraph Preload["Preload Bridge"]
-    Api["window.jura API"]
+    Api["window.juraApi API"]
   end
 
   subgraph Main["Electron Main Process"]
@@ -104,6 +104,10 @@ erDiagram
     string status
     string tags_json
     string notes
+    string legal_area
+    string exam_type
+    string source_name
+    string source_url
     string current_revision_id FK
     string created_at
     string updated_at
@@ -162,7 +166,53 @@ erDiagram
     string mime_type
     number size
     string relative_path
+    string role
     string created_at
+  }
+
+  AI_CORRECTION_DRAFTS {
+    string id PK
+    string user_id FK
+    string submission_id FK
+    string correction_id FK
+    string status
+    string provider
+    string model
+    string prompt_version
+    number score_points
+    string score_reasoning
+    string grading_comment
+    string strengths_json
+    string weaknesses_json
+    string tags_json
+    string confidence
+    string improvement_suggestions_json
+    string inline_comments_json
+    string created_at
+    string updated_at
+  }
+
+  LEARNING_TASKS {
+    string id PK
+    string user_id FK
+    string submission_id FK
+    string correction_id FK
+    string ai_draft_id FK
+    string category
+    string priority
+    string status
+    string title
+    string detail
+    string created_at
+    string updated_at
+  }
+
+  AI_SETTINGS {
+    string user_id PK
+    string provider
+    string api_key
+    string model
+    string updated_at
   }
 
   TAGS {
@@ -185,6 +235,9 @@ erDiagram
   USERS ||--o{ CORRECTIONS : owns
   USERS ||--o{ INLINE_COMMENTS : owns
   USERS ||--o{ ATTACHMENTS : owns
+  USERS ||--o{ AI_CORRECTION_DRAFTS : owns
+  USERS ||--o{ LEARNING_TASKS : owns
+  USERS ||--o| AI_SETTINGS : configures
   USERS ||--o{ TAGS : owns
   FOLDERS ||--o{ FOLDERS : contains
   FOLDERS ||--o{ EXAMS : stores
@@ -194,6 +247,11 @@ erDiagram
   SUBMISSIONS ||--o{ CORRECTIONS : has
   CORRECTIONS ||--o{ INLINE_COMMENTS : contains
   SUBMISSIONS ||--o{ INLINE_COMMENTS : anchors
+  SUBMISSIONS ||--o{ AI_CORRECTION_DRAFTS : proposes
+  SUBMISSIONS ||--o{ LEARNING_TASKS : trains
+  CORRECTIONS ||--o{ AI_CORRECTION_DRAFTS : accepts
+  CORRECTIONS ||--o{ LEARNING_TASKS : creates
+  AI_CORRECTION_DRAFTS ||--o{ LEARNING_TASKS : derives
   EXAMS ||--o{ ATTACHMENTS : owns
   EXAMS ||--o{ EXAM_TAGS : can_link
   TAGS ||--o{ EXAM_TAGS : can_link
@@ -206,12 +264,15 @@ erDiagram
 | Versionierung | `meta` | Schema-, App- und Migrationsstand | `schema_version` wird beim Start geprüft |
 | Nutzer | `users` | lokale, Demo- und später Remote-verknüpfte Nutzer | `current_user_id` liegt in `meta`; Onboarding-Status ist pro Nutzer |
 | Organisation | `folders` | Ordnerbaum und Papierkorb für Ordner | `trashed_at` ist Soft-Delete |
-| Prüfung | `exams` | Hauptobjekt mit Titel, Status, Tags und Notizen | `status = archived` ist Papierkorb für Prüfungen |
+| Prüfung | `exams` | Hauptobjekt mit Titel, Status, Tags, Notizen und Metadaten | `legal_area`, `exam_type`, `source_name`, `source_url` beschreiben die Prüfung; `status = archived` ist Papierkorb |
 | Inhalt | `exam_revisions` | unveränderliche Editor-Versionen | Autosave und manuelles Speichern erzeugen neue Zeilen |
 | Abgabe | `submissions` | Snapshot einer Revision | referenziert eine Revision und bleibt unverändert |
 | Bewertung | `corrections` | Gesamtbewertung und Bewertungskommentar | Punkte werden per Zod auf `0-18` in `0.5` Schritten validiert |
 | Inline-Kommentare | `inline_comments` | Kommentare auf Textauswahl | Anker speichern ProseMirror-Positionen plus Kontext |
-| Dateien | `attachments` | Dateimetadaten | Datei liegt im App-Speicher unter `relative_path` |
+| Dateien | `attachments` | Dateimetadaten | Datei liegt im App-Speicher unter `relative_path`; `role` unterscheidet Aufgabenstellung, Bearbeitervermerk, Musterlösung und Sonstiges |
+| KI-Korrektur | `ai_correction_drafts` | Rohentwürfe aus einer KI-Korrekturanfrage | bleiben lokale Vorschläge bis Annahme oder Ablehnung |
+| Lernaufgaben | `learning_tasks` | aus angenommenen KI-Entwürfen abgeleitete Aufgaben | lokale Auswertungsartefakte, nicht Teil des `.jura` Pakets |
+| KI-Einstellungen | `ai_settings` | OpenAI-Schlüssel und Modell pro Nutzer | bleibt lokal und wird nie exportiert |
 | Tags | `tags`, `exam_tags` | vorbereitetes normalisiertes Tag-Modell | aktuelle UI nutzt primär `tags_json` |
 
 Hinweis zu `score_points`: Die Spalte stammt aus Schema v1 mit SQLite-Integer-Affinität. SQLite speichert halbe Punkte trotzdem korrekt als Zahl. Wenn später ein strikteres Datenbanksystem oder eine striktere Migration kommt, sollte die Spalte explizit auf `REAL` oder `NUMERIC` migriert werden.
@@ -250,7 +311,7 @@ Die Abgabe ist kein Endzustand für die Bearbeitung. Nutzer können nach der Abg
 ```mermaid
 sequenceDiagram
   participant R as Renderer Editor
-  participant A as window.jura
+  participant A as window.juraApi
   participant M as Main IPC
   participant S as AppServices
   participant D as SQLite
@@ -286,7 +347,7 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
   participant C as Korrekturansicht
-  participant A as window.jura
+  participant A as window.juraApi
   participant S as AppServices
   participant D as SQLite
 
@@ -313,6 +374,16 @@ sequenceDiagram
 ```
 
 Inline-Kommentare referenzieren eine Submission, nicht den aktuellen Arbeitsstand der Prüfung. Dadurch bleiben Kommentare stabil, auch wenn danach weitergeschrieben wird.
+
+## KI-Korrektur
+
+Die KI-Korrektur ist eine ausdrückliche Nutzeraktion und die einzige Stelle, an der normale Prüfungsdaten die lokale App verlassen. Der Renderer sieht weiterhin nur `window.juraApi`; API-Schlüssel, Dateizugriff, Promptbau und der Cloud-Aufruf laufen im Main Process über Services. Im MVP wird nur ein eigener OpenAI-Schlüssel unterstützt, den Nutzer:innen lokal hinterlegen. Das empfohlene Standardmodell ist `gpt-5.5`.
+
+Der Main Process behandelt die Korrektur als zweistufigen Prüferprozess. Der erste Responses-API-Aufruf erstellt mit `reasoning: high` einen strukturierten Korrekturentwurf anhand von Abgabetext, Prüfungsmetadaten und relevanten PDF-Anhängen wie Aufgabenstellung oder Musterlösung. Der Prompt verlangt ein gedankliches Rohpunkteschema, Gewichtung von Hauptproblemen, Vertretbarkeitsprüfung, Gutachtenstil, Aufbau, Subsumtion, Silber-/Goldelemente und konkrete Verbesserungsvorschläge. Ein zweiter Responses-API-Aufruf nutzt denselben Modell- und Attachment-Kontext als Zweitkorrektur: Er prüft Punktzahl, Halluzinationen, Ankerstellen, generische Kritik und die Anwendung von Musterlösung oder Erwartungshorizont. Beide Aufrufe setzen `store: false`; gespeichert wird nur der finale strukturierte Entwurf.
+
+Die Einstellungsoberfläche unterscheidet gespeicherte App-Keys von lokalen Entwicklungs-Keys aus `.env`. Der Renderer bekommt nur Status, Modell, Quelle (`stored`, `environment` oder `null`) und eine kurze Key-Endung als Vorschau, aber nie den Secret-Wert. Key-Änderung, Key-Entfernung und Verbindungstest laufen über IPC im Main Process. Der Verbindungstest nutzt einen kleinen nicht gespeicherten Responses-API-Aufruf mit dem konfigurierten Modell und liefert ein nutzerverständliches Ergebnis zurück.
+
+Eine KI-Antwort wird zuerst als `ai_correction_drafts` gespeichert. Erst wenn der Entwurf angenommen wird, entstehen normale Korrekturen, Inline-Kommentare und Lernaufgaben in den bestehenden Tabellen. Ablehnen oder Überschreiben verändert die Abgabe nicht. `.jura` Pakete exportieren angenommene Korrekturen als normale Korrekturdaten, schließen aber Secrets, AI Settings, rohe oder nicht angenommene KI-Entwürfe und lokale Lernaufgaben bewusst aus.
 
 ## `.jura` Paketformat
 
@@ -365,6 +436,9 @@ flowchart TD
 
 - Bei ID-Konflikten werden neue UUIDs vergeben.
 - Wenn eine Prüfung mit derselben ID existiert, bekommt der Importtitel den Zusatz `(importiert)`.
+- `document.json` enthält die Prüfungsmetadaten `legalArea`, `examType`, `sourceName` und `sourceUrl`.
+- `attachments/<id>/attachment.json` enthält die Attachment-Rolle; alte Pakete ohne Rolle werden als `other` importiert.
+- AI Settings, API Keys, rohe KI-Entwürfe und Lernaufgaben sind keine Paketbestandteile.
 - Anhänge werden vor der Datenbanktransaktion geschrieben und bei Fehlern wieder entfernt.
 - Unbekannte neuere `.jura` Versionen werden abgelehnt.
 
@@ -424,7 +498,7 @@ flowchart TB
 
 ## IPC Oberflaeche
 
-Der Renderer nutzt ausschliesslich `window.jura`. Die API ist in `src/shared/ipc.ts` typisiert und wird im Main Process auf sichere Handler gemappt.
+Der Renderer nutzt ausschliesslich `window.juraApi`. Die API ist in `src/shared/ipc.ts` typisiert und wird im Main Process auf sichere Handler gemappt.
 
 | Bereich | API |
 | --- | --- |
@@ -433,6 +507,9 @@ Der Renderer nutzt ausschliesslich `window.jura`. Die API ist in `src/shared/ipc
 | Schreiben | `saveRevision`, `submitExam` |
 | Abgaben | `getSubmission` |
 | Auswertung | `listAnalyticsEntries` |
+| KI-Einstellungen | `getAiSettingsStatus`, `saveAiSettings`, `removeAiSettings`, `testAiConnection` |
+| KI-Korrektur | `generateAiCorrectionDraft`, `listAiCorrectionDrafts`, `acceptAiCorrectionDraft`, `rejectAiCorrectionDraft` |
+| Lernaufgaben | `listLearningTasks`, `updateLearningTaskStatus` |
 | Dateien | `addAttachment`, `openAttachment` |
 | Austausch | `exportExamPackage`, `importExamPackage` |
 | PDF | `exportExamPdf` |
@@ -440,14 +517,13 @@ Der Renderer nutzt ausschliesslich `window.jura`. Die API ist in `src/shared/ipc
 
 ## Migrationen
 
-Beim Datenbankstart wird `meta.schema_version` gelesen. Neue Installationen erzeugen Schema v1 und wenden danach Migrationen bis zur aktuellen Version an.
+Beim Datenbankstart wird `meta.schema_version` gelesen. Neue Installationen erzeugen direkt das aktuelle Schema; bestehende Datenbanken werden über die passenden Versionsschritte migriert.
 
 ```mermaid
 flowchart TD
   Start["openDatabase()"] --> HasMeta{"meta Tabelle vorhanden?"}
-  HasMeta -->|nein| CreateV1["createSchemaV1()"]
-  CreateV1 --> MigrateV2["migrateV1ToV2()"]
-  MigrateV2 --> Ready["Schema v2 bereit"]
+  HasMeta -->|nein| CreateCurrent["createSchema()"]
+  CreateCurrent --> Ready["Schema v3 bereit"]
 
   HasMeta -->|ja| ReadVersion["schema_version lesen"]
   ReadVersion --> Newer{"Version > supported?"}
@@ -455,9 +531,14 @@ flowchart TD
   Newer -->|nein| TooOld{"Version < 1?"}
   TooOld -->|ja| StopOld["Start abbrechen"]
   TooOld -->|nein| IsV1{"Version == 1?"}
-  IsV1 -->|ja| MigrateV2
-  IsV1 -->|nein| IsCurrent{"Version == 2?"}
-  IsCurrent -->|ja| Ready
+  IsV1 -->|ja| MigrateV2["migrateV1ToV2()"]
+  MigrateV2 --> MigrateV3["migrateV2ToV3()"]
+  IsV1 -->|nein| IsV2{"Version == 2?"}
+  IsV2 -->|ja| MigrateV3
+  MigrateV3 --> Ready
+  IsV2 -->|nein| IsCurrent{"Version == 3?"}
+  IsCurrent -->|ja| Repair["fehlende Spalten/Tabellen reparieren"]
+  Repair --> Ready
   IsCurrent -->|nein| Missing["fehlende Migration melden"]
 ```
 
@@ -467,6 +548,7 @@ Aktuelle Migrationen:
 | --- | --- | --- |
 | leer | 1 | Basis-Schema mit Prüfungen, Revisionen, Abgaben, Korrekturen, Kommentaren, Anhängen und Tags |
 | 1 | 2 | `folders.trashed_at` für Soft-Delete von Ordnern |
+| 2 | 3 | Prüfungsmetadaten, Attachment-Rollen, `ai_correction_drafts`, `learning_tasks`, `ai_settings` |
 
 ## Datenlebenszyklus
 
@@ -497,7 +579,7 @@ flowchart LR
 
 ## Technische Leitplanken
 
-- Keine Cloud, keine Accounts, kein Hintergrundserver im MVP.
+- Kein Account und kein Hintergrundserver im MVP; Cloud-Aufrufe passieren nur bei ausdrücklicher KI-Korrekturanfrage mit lokal hinterlegtem eigenem OpenAI-Schlüssel.
 - Keine harte Loeschung über die normale UI: Ordner nutzen `trashed_at`, Prüfungen den Status `archived`.
 - Korrekturen dürfen den abgegebenen Text nicht verändern.
 - `.jura` Daten werden immer über Zod-Schemas validiert.

@@ -1,9 +1,10 @@
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { copyFile, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, extname, join, relative } from 'node:path'
 import JSZip from 'jszip'
 import {
   APP_VERSION,
+  DEFAULT_AI_MODEL,
   DOCUMENT_SCHEMA_VERSION,
   EDITOR_SCHEMA_VERSION,
   EMPTY_TIPTAP_DOCUMENT,
@@ -11,23 +12,32 @@ import {
   JURA_FORMAT_VERSION
 } from '@shared/constants'
 import {
+  aiCorrectionDraftSchema,
+  attachmentRoleSchema,
   attachmentSchema,
   commentAnchorSchema,
   correctionSchema,
   documentSchema,
   examListItemSchema,
+  examStatusSchema,
+  examTypeSchema,
   folderSchema,
   juraManifestSchema,
+  learningTaskSchema,
+  legalAreaSchema,
   revisionSchema,
   scoreSchema,
   submissionSchema,
   userSchema,
   type Attachment,
+  type AttachmentRole,
+  type AiCorrectionDraft,
   type CommentAnchor,
   type Correction,
   type ExamRevision,
   type ExamStatus,
   type InlineComment,
+  type LearningTask,
   type JuraDocument,
   type JuraManifest,
   type Submission,
@@ -35,25 +45,45 @@ import {
 } from '@shared/schemas'
 import type {
   AddInlineCommentInput,
+  AiSettingsStatus,
   AnalyticsEntry,
   CreateExamInput,
   ExamDetails,
   ExamListItem,
   FolderDto,
+  SaveAiCorrectionDraftInput,
+  SaveAiSettingsInput,
   SubmissionDetails,
+  TestAiConnectionInput,
   TrashFolderInput,
   UpdateCorrectionInput,
   UpdateFolderInput,
   UpdateExamInput
 } from '@shared/ipc'
 import { openDatabase, type SqliteDatabase } from './database'
+import {
+  buildAiCorrectionPrompt,
+  requestOpenAiConnectionTest,
+  requestOpenAiCorrection,
+  tiptapToPlainText,
+  type AiCorrectionRequestAttachment
+} from './aiCorrection'
 import { ensureParentDir, hashJson, newId, nowIso, parseJson, stringifyJson } from './utils'
 
 type Row = Record<string, unknown>
+type AiCredentialSource = 'stored' | 'environment'
+type OpenAiCredentials = {
+  provider: 'openai'
+  apiKey: string
+  model: string
+  source: AiCredentialSource
+}
 type ImportedAttachment = {
   attachment: Attachment
   payload: Buffer
 }
+
+let localEnvCache: Record<string, string> | null = null
 
 export class AppServices {
   readonly db: SqliteDatabase
@@ -97,6 +127,18 @@ export class AppServices {
       )
       .run(id, displayName.trim() || 'Lokaler Nutzer', kind, null, null, null, now, now)
     this.setCurrentUserId(id)
+    return this.getCurrentUser()
+  }
+
+  updateUser(input: { id: string; displayName: string }): User {
+    const currentUserId = this.getCurrentUserId()
+    if (input.id !== currentUserId) {
+      throw new Error(`Cannot update inactive user: ${input.id}`)
+    }
+    const now = nowIso()
+    this.db
+      .prepare('UPDATE users SET display_name = ?, updated_at = ? WHERE id = ?')
+      .run(input.displayName.trim() || 'Lokaler Nutzer', now, input.id)
     return this.getCurrentUser()
   }
 
@@ -224,6 +266,8 @@ export class AppServices {
 
   createExam(input: CreateExamInput): ExamDetails {
     if (input.folderId) this.requireActiveFolder(input.folderId)
+    const legalArea = input.legalArea === undefined ? null : legalAreaSchema.nullable().parse(input.legalArea)
+    const examType = input.examType === undefined ? null : examTypeSchema.nullable().parse(input.examType)
     const id = newId()
     const userId = this.getCurrentUserId()
     const revisionId = newId()
@@ -238,8 +282,8 @@ export class AppServices {
           .prepare(
             `
             INSERT INTO exams
-              (id, user_id, title, folder_id, status, tags_json, notes, current_revision_id, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              (id, user_id, title, folder_id, status, tags_json, notes, legal_area, exam_type, source_name, source_url, current_revision_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `
           )
           .run(
@@ -250,6 +294,10 @@ export class AppServices {
             'draft',
             stringifyJson(tags),
             '',
+            legalArea,
+            examType,
+            input.sourceName ?? null,
+            input.sourceUrl ?? null,
             revisionId,
             createdAt,
             createdAt
@@ -299,19 +347,28 @@ export class AppServices {
     const current = this.getExam(input.id)
     const updatedAt = nowIso()
     if (input.folderId) this.requireActiveFolder(input.folderId)
+    const legalArea =
+      input.legalArea === undefined ? current.legalArea : legalAreaSchema.nullable().parse(input.legalArea)
+    const examType =
+      input.examType === undefined ? current.examType : examTypeSchema.nullable().parse(input.examType)
+    const status = input.status === undefined ? current.status : examStatusSchema.parse(input.status)
     const next = {
       title: input.title ?? current.title,
       folderId: input.folderId === undefined ? current.folderId : input.folderId,
-      status: input.status ?? current.status,
+      status,
       tags: input.tags ? normalizeTags(input.tags) : current.tags,
-      notes: input.notes ?? current.notes
+      notes: input.notes ?? current.notes,
+      legalArea,
+      examType,
+      sourceName: input.sourceName === undefined ? current.sourceName : input.sourceName,
+      sourceUrl: input.sourceUrl === undefined ? current.sourceUrl : input.sourceUrl
     }
 
     this.db
       .prepare(
         `
         UPDATE exams
-        SET title = ?, folder_id = ?, status = ?, tags_json = ?, notes = ?, updated_at = ?
+        SET title = ?, folder_id = ?, status = ?, tags_json = ?, notes = ?, legal_area = ?, exam_type = ?, source_name = ?, source_url = ?, updated_at = ?
         WHERE id = ?
       `
       )
@@ -321,6 +378,10 @@ export class AppServices {
         next.status,
         stringifyJson(next.tags),
         next.notes,
+        next.legalArea ?? null,
+        next.examType ?? null,
+        next.sourceName ?? null,
+        next.sourceUrl ?? null,
         updatedAt,
         input.id
       )
@@ -458,6 +519,162 @@ export class AppServices {
     }))
   }
 
+  getAiSettingsStatus(): AiSettingsStatus {
+    const row = this.db
+      .prepare('SELECT provider, api_key, model, updated_at FROM ai_settings WHERE user_id = ?')
+      .get(this.getCurrentUserId()) as
+      | { provider: string; api_key: string; model: string; updated_at: string }
+      | undefined
+
+    const storedApiKey = row?.api_key?.trim()
+    const envCredentials = getOpenAiEnvironmentCredentials()
+    if (row && storedApiKey) {
+      return {
+        provider: 'openai',
+        configured: true,
+        model: row.model,
+        source: 'stored',
+        keyPreview: previewSecret(storedApiKey),
+        environmentAvailable: Boolean(envCredentials),
+        updatedAt: row.updated_at
+      }
+    }
+
+    return {
+      provider: 'openai',
+      configured: Boolean(envCredentials),
+      model: envCredentials?.model ?? null,
+      source: envCredentials ? 'environment' : null,
+      keyPreview: envCredentials ? previewSecret(envCredentials.apiKey) : null,
+      environmentAvailable: Boolean(envCredentials),
+      updatedAt: null
+    }
+  }
+
+  saveAiSettings(input: SaveAiSettingsInput): AiSettingsStatus {
+    const userId = this.getCurrentUserId()
+    const updatedAt = nowIso()
+    const provider = (input as { provider?: unknown }).provider
+    const existing = this.db
+      .prepare('SELECT api_key FROM ai_settings WHERE user_id = ?')
+      .get(userId) as { api_key: string } | undefined
+    const apiKey = input.apiKey.trim() || existing?.api_key?.trim() || ''
+    const model = input.model.trim()
+    if (provider !== 'openai') throw new Error('AI provider wird noch nicht unterstuetzt.')
+    if (!apiKey) throw new Error('OpenAI API key darf nicht leer sein')
+    if (!model) throw new Error('OpenAI model darf nicht leer sein')
+    this.db
+      .prepare(
+        `
+        INSERT INTO ai_settings (user_id, provider, api_key, model, updated_at)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET
+          provider = excluded.provider,
+          api_key = excluded.api_key,
+          model = excluded.model,
+          updated_at = excluded.updated_at
+      `
+      )
+      .run(userId, provider, apiKey, model, updatedAt)
+    return this.getAiSettingsStatus()
+  }
+
+  removeAiSettings(): AiSettingsStatus {
+    this.db.prepare('DELETE FROM ai_settings WHERE user_id = ?').run(this.getCurrentUserId())
+    return this.getAiSettingsStatus()
+  }
+
+  async testAiConnection(input: TestAiConnectionInput = {}): Promise<{
+    ok: boolean
+    model: string | null
+    source: 'stored' | 'environment' | null
+    message: string
+  }> {
+    const settings =
+      input.source === 'environment' ? getOpenAiEnvironmentCredentials() : this.getAiSettingsCredentials()
+    if (!settings) {
+      return {
+        ok: false,
+        model: null,
+        source: input.source === 'environment' ? 'environment' : null,
+        message:
+          input.source === 'environment'
+            ? '.env-Key fehlt. Setze OPENAI_API_KEY oder OPEN_API_KEY.'
+            : 'OpenAI-Key fehlt.'
+      }
+    }
+    try {
+      const result = await requestOpenAiConnectionTest({
+        apiKey: settings.apiKey,
+        model: settings.model
+      })
+      return {
+        ...result,
+        source: settings.source
+      }
+    } catch {
+      return {
+        ok: false,
+        model: settings.model,
+        source: settings.source,
+        message:
+          settings.source === 'stored'
+            ? 'Verbindung mit gespeichertem App-Key fehlgeschlagen. Der .env-Key wird nicht verwendet, solange ein App-Key gespeichert ist.'
+            : 'Verbindung mit .env-Key fehlgeschlagen. Bitte .env-Key und Modell prüfen.'
+      }
+    }
+  }
+
+  async generateAiCorrectionDraft(submissionId: string): Promise<AiCorrectionDraft> {
+    const settings = this.getAiSettingsCredentials()
+    if (!settings) {
+      throw new Error('KI-Korrektur ist nicht konfiguriert. Bitte OpenAI API key und Modell hinterlegen.')
+    }
+
+    const submission = this.getSubmission(submissionId)
+    const exam = this.getExam(submission.examId)
+    const attachments = exam.attachments
+      .filter((attachment) =>
+        ['assignment', 'model_solution', 'candidate_note'].includes(attachment.role)
+      )
+      .filter((attachment) => isPdfAttachment(attachment))
+      .map(
+        (attachment): AiCorrectionRequestAttachment => ({
+          role: attachment.role,
+          name: attachment.originalName,
+          absolutePath: join(this.filesDir, attachment.relativePath),
+          mimeType: attachment.mimeType ?? 'application/pdf',
+          size: attachment.size
+        })
+      )
+    const prompt = buildAiCorrectionPrompt({
+      examTitle: exam.title,
+      examTags: exam.tags,
+      examNotes: exam.notes,
+      legalArea: exam.legalArea,
+      examType: exam.examType,
+      submittedAt: submission.submittedAt,
+      submissionText: tiptapToPlainText(submission.content),
+      attachments: attachments.map((attachment) => ({
+        role: attachment.role,
+        name: attachment.name
+      }))
+    })
+    const result = await requestOpenAiCorrection({
+      apiKey: settings.apiKey,
+      model: settings.model,
+      prompt,
+      attachments
+    })
+
+    return this.saveAiCorrectionDraft({
+      submissionId,
+      provider: 'openai',
+      model: settings.model,
+      ...result
+    })
+  }
+
   createCorrection(submissionId: string): Correction {
     this.getSubmissionRecord(submissionId)
     const existing = this.listCorrectionsForSubmission(submissionId)[0]
@@ -542,7 +759,194 @@ export class AppServices {
     return this.getInlineComment(id)
   }
 
-  async addAttachmentFromPath(examId: string, sourcePath: string): Promise<Attachment> {
+  saveAiCorrectionDraft(input: SaveAiCorrectionDraftInput): AiCorrectionDraft {
+    scoreSchema.parse({ system: 'bayern-0-18', points: input.scorePoints })
+    const parsed = aiCorrectionDraftSchema.parse({
+      schemaVersion: 1,
+      id: newId(),
+      userId: this.getCurrentUserId(),
+      submissionId: input.submissionId,
+      correctionId: null,
+      status: 'draft',
+      provider: input.provider,
+      model: input.model,
+      promptVersion: 'ai-correction-v1',
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+      score: { system: 'bayern-0-18', points: input.scorePoints },
+      scoreReasoning: input.scoreReasoning,
+      gradingComment: input.gradingComment,
+      strengths: input.strengths,
+      weaknesses: input.weaknesses,
+      tags: normalizeTags(input.tags),
+      confidence: input.confidence,
+      improvementSuggestions: input.improvementSuggestions,
+      inlineComments: input.inlineComments
+    })
+    this.getSubmissionRecord(parsed.submissionId)
+
+    this.db
+      .prepare(
+        `
+        INSERT INTO ai_correction_drafts
+          (id, user_id, submission_id, correction_id, status, provider, model, prompt_version, created_at, updated_at, score_points, score_reasoning, grading_comment, strengths_json, weaknesses_json, tags_json, confidence, improvement_suggestions_json, inline_comments_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `
+      )
+      .run(
+        parsed.id,
+        parsed.userId,
+        parsed.submissionId,
+        null,
+        parsed.status,
+        parsed.provider,
+        parsed.model,
+        parsed.promptVersion,
+        parsed.createdAt,
+        parsed.updatedAt,
+        parsed.score.points,
+        parsed.scoreReasoning,
+        parsed.gradingComment,
+        stringifyJson(parsed.strengths),
+        stringifyJson(parsed.weaknesses),
+        stringifyJson(parsed.tags),
+        parsed.confidence,
+        stringifyJson(parsed.improvementSuggestions),
+        stringifyJson(parsed.inlineComments)
+      )
+
+    return this.getAiCorrectionDraft(parsed.id)
+  }
+
+  listAiCorrectionDrafts(submissionId: string): AiCorrectionDraft[] {
+    this.getSubmissionRecord(submissionId)
+    const rows = this.db
+      .prepare(
+        'SELECT * FROM ai_correction_drafts WHERE submission_id = ? AND user_id = ? ORDER BY updated_at DESC'
+      )
+      .all(submissionId, this.getCurrentUserId()) as Row[]
+    return rows.map(aiCorrectionDraftFromRow)
+  }
+
+  acceptAiCorrectionDraft(draftId: string): AiCorrectionDraft {
+    const draft = this.getAiCorrectionDraft(draftId)
+    if (draft.status !== 'draft') {
+      throw new Error(`AI correction draft must have status draft to accept; current status is ${draft.status}`)
+    }
+    const updatedAt = nowIso()
+
+    this.db.transaction(() => {
+      const submissionDetails = this.getSubmission(draft.submissionId)
+      const submissionText = tiptapToPlainText(submissionDetails.content)
+      const correction = this.createCorrection(draft.submissionId)
+      const updatedCorrection = this.updateCorrection({
+        correctionId: correction.id,
+        scorePoints: draft.score.points,
+        gradingComment: draft.gradingComment,
+        tags: draft.tags
+      })
+
+      for (const comment of draft.inlineComments) {
+        const anchor = buildAiInlineCommentAnchor(comment, submissionDetails.contentHash, submissionText)
+        if (!anchor) continue
+        this.db
+          .prepare(
+            `
+            INSERT INTO inline_comments
+              (id, user_id, correction_id, submission_id, created_at, status, body, anchor_json, tags_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `
+          )
+          .run(
+            newId(),
+            draft.userId,
+            updatedCorrection.id,
+            draft.submissionId,
+            updatedAt,
+            'open',
+            comment.body,
+            stringifyJson(anchor),
+            stringifyJson(normalizeTags(comment.tags))
+          )
+      }
+
+      for (const suggestion of draft.improvementSuggestions) {
+        this.db
+          .prepare(
+            `
+            INSERT INTO learning_tasks
+              (id, user_id, submission_id, correction_id, ai_draft_id, category, priority, status, title, detail, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `
+          )
+          .run(
+            newId(),
+            draft.userId,
+            draft.submissionId,
+            updatedCorrection.id,
+            draft.id,
+            suggestion.category,
+            suggestion.priority,
+            'open',
+            suggestion.title,
+            suggestion.detail,
+            updatedAt,
+            updatedAt
+          )
+      }
+
+      this.db
+        .prepare(
+          'UPDATE ai_correction_drafts SET status = ?, correction_id = ?, updated_at = ? WHERE id = ? AND user_id = ?'
+        )
+        .run('accepted', updatedCorrection.id, updatedAt, draft.id, draft.userId)
+      this.db
+        .prepare(
+          `
+          UPDATE ai_correction_drafts
+          SET status = ?, updated_at = ?
+          WHERE submission_id = ? AND id != ? AND status = ? AND user_id = ?
+        `
+        )
+        .run('superseded', updatedAt, draft.submissionId, draft.id, 'draft', draft.userId)
+    })()
+
+    return this.getAiCorrectionDraft(draft.id)
+  }
+
+  rejectAiCorrectionDraft(draftId: string): AiCorrectionDraft {
+    const draft = this.getAiCorrectionDraft(draftId)
+    if (draft.status !== 'draft') {
+      throw new Error(`AI correction draft must have status draft to reject; current status is ${draft.status}`)
+    }
+    this.db
+      .prepare('UPDATE ai_correction_drafts SET status = ?, updated_at = ? WHERE id = ? AND user_id = ?')
+      .run('rejected', nowIso(), draftId, this.getCurrentUserId())
+    return this.getAiCorrectionDraft(draftId)
+  }
+
+  listLearningTasks(): LearningTask[] {
+    const rows = this.db
+      .prepare('SELECT * FROM learning_tasks WHERE user_id = ? ORDER BY created_at ASC, id ASC')
+      .all(this.getCurrentUserId()) as Row[]
+    return rows.map(learningTaskFromRow)
+  }
+
+  updateLearningTaskStatus(taskId: string, status: LearningTask['status']): LearningTask {
+    learningTaskSchema.shape.status.parse(status)
+    this.getLearningTask(taskId)
+    this.db
+      .prepare('UPDATE learning_tasks SET status = ?, updated_at = ? WHERE id = ? AND user_id = ?')
+      .run(status, nowIso(), taskId, this.getCurrentUserId())
+    return this.getLearningTask(taskId)
+  }
+
+  async addAttachmentFromPath(
+    examId: string,
+    sourcePath: string,
+    role: AttachmentRole = 'other'
+  ): Promise<Attachment> {
+    const parsedRole = attachmentRoleSchema.parse(role)
     this.getExam(examId)
     const sourceStats = await stat(sourcePath)
     const id = newId()
@@ -560,11 +964,11 @@ export class AppServices {
       .prepare(
         `
         INSERT INTO attachments
-          (id, user_id, exam_id, original_name, stored_name, mime_type, size, relative_path, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (id, user_id, exam_id, original_name, stored_name, mime_type, size, relative_path, role, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `
       )
-      .run(id, userId, examId, originalName, storedName, null, sourceStats.size, relativePath, createdAt)
+      .run(id, userId, examId, originalName, storedName, null, sourceStats.size, relativePath, parsedRole, createdAt)
 
     return attachmentSchema.parse({
       schemaVersion: 1,
@@ -576,6 +980,7 @@ export class AppServices {
       mimeType: null,
       size: sourceStats.size,
       relativePath,
+      role: parsedRole,
       createdAt
     })
   }
@@ -620,7 +1025,11 @@ export class AppServices {
       currentRevisionId: exam.currentRevisionId,
       submissions: submissions.map((submission) => submission.id),
       corrections: corrections.map((correction) => correction.id),
-      attachments: exam.attachments.map((attachment) => attachment.id)
+      attachments: exam.attachments.map((attachment) => attachment.id),
+      legalArea: exam.legalArea,
+      examType: exam.examType,
+      sourceName: exam.sourceName,
+      sourceUrl: exam.sourceUrl
     }
 
     zip.file('manifest.json', JSON.stringify(juraManifestSchema.parse(manifest), null, 2))
@@ -777,8 +1186,8 @@ export class AppServices {
           .prepare(
             `
             INSERT INTO exams
-              (id, user_id, title, folder_id, status, tags_json, notes, current_revision_id, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              (id, user_id, title, folder_id, status, tags_json, notes, legal_area, exam_type, source_name, source_url, current_revision_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `
           )
           .run(
@@ -789,6 +1198,10 @@ export class AppServices {
             document.status,
             stringifyJson(document.tags),
             document.notes,
+            document.legalArea,
+            document.examType,
+            document.sourceName,
+            document.sourceUrl,
             currentRevisionId,
             document.createdAt || createdAt,
             createdAt
@@ -889,8 +1302,8 @@ export class AppServices {
             .prepare(
               `
               INSERT INTO attachments
-                (id, user_id, exam_id, original_name, stored_name, mime_type, size, relative_path, created_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (id, user_id, exam_id, original_name, stored_name, mime_type, size, relative_path, role, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `
             )
             .run(
@@ -902,6 +1315,7 @@ export class AppServices {
               imported.attachment.mimeType,
               imported.payload.byteLength,
               relativePath,
+              imported.attachment.role,
               imported.attachment.createdAt
             )
         }
@@ -976,6 +1390,41 @@ export class AppServices {
       .prepare('SELECT * FROM inline_comments WHERE correction_id = ? AND user_id = ? ORDER BY created_at ASC')
       .all(correctionId, this.getCurrentUserId()) as Row[]
     return rows.map(inlineCommentFromRow)
+  }
+
+  private getAiCorrectionDraft(id: string): AiCorrectionDraft {
+    const row = this.db
+      .prepare('SELECT * FROM ai_correction_drafts WHERE id = ? AND user_id = ?')
+      .get(id, this.getCurrentUserId()) as Row | undefined
+    if (!row) throw new Error(`AI correction draft not found: ${id}`)
+    return aiCorrectionDraftFromRow(row)
+  }
+
+  private getAiSettingsCredentials(): OpenAiCredentials | null {
+    const row = this.db
+      .prepare('SELECT provider, api_key, model FROM ai_settings WHERE user_id = ?')
+      .get(this.getCurrentUserId()) as
+      | { provider: string; api_key: string; model: string }
+      | undefined
+
+    const apiKey = row?.api_key?.trim()
+    const model = row?.model?.trim()
+    if (!row || !apiKey || !model) return getOpenAiEnvironmentCredentials()
+    if (row.provider !== 'openai') throw new Error('AI provider wird noch nicht unterstuetzt.')
+    return {
+      provider: 'openai',
+      apiKey,
+      model,
+      source: 'stored'
+    }
+  }
+
+  private getLearningTask(id: string): LearningTask {
+    const row = this.db
+      .prepare('SELECT * FROM learning_tasks WHERE id = ? AND user_id = ?')
+      .get(id, this.getCurrentUserId()) as Row | undefined
+    if (!row) throw new Error(`Learning task not found: ${id}`)
+    return learningTaskFromRow(row)
   }
 
   private listAttachmentsForExam(examId: string): Attachment[] {
@@ -1082,6 +1531,44 @@ export class AppServices {
   }
 }
 
+function getOpenAiEnvironmentCredentials(): OpenAiCredentials | null {
+  const apiKey = (readEnvValue('OPENAI_API_KEY') ?? readEnvValue('OPEN_API_KEY') ?? '').trim()
+  if (!apiKey) return null
+  const model = (readEnvValue('OPENAI_MODEL') ?? DEFAULT_AI_MODEL).trim() || DEFAULT_AI_MODEL
+  return {
+    provider: 'openai',
+    apiKey,
+    model,
+    source: 'environment'
+  }
+}
+
+function previewSecret(value: string): string {
+  return `...${value.slice(-4)}`
+}
+
+function readEnvValue(name: string): string | undefined {
+  return process.env[name] ?? readLocalEnvFile()[name]
+}
+
+function readLocalEnvFile(): Record<string, string> {
+  if (process.env.NODE_ENV === 'test') return {}
+  if (localEnvCache) return localEnvCache
+
+  localEnvCache = {}
+  for (const path of ['.env.local', '.env']) {
+    if (!existsSync(path)) continue
+    const content = readFileSync(path, 'utf8')
+    for (const line of content.split(/\r?\n/)) {
+      const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/)
+      if (!match) continue
+      const [, key, rawValue] = match
+      localEnvCache[key] = rawValue.replace(/^['"]|['"]$/g, '')
+    }
+  }
+  return localEnvCache
+}
+
 function userFromRow(row: Row): User {
   return userSchema.parse({
     id: String(row.id),
@@ -1121,7 +1608,11 @@ function examListItemFromRow(row: Row): ExamListItem {
     updatedAt: String(row.updated_at),
     lastSavedAt: row.last_saved_at ? String(row.last_saved_at) : String(row.created_at),
     currentRevisionId: row.current_revision_id ? String(row.current_revision_id) : null,
-    latestScore: row.latest_score === null || row.latest_score === undefined ? null : Number(row.latest_score)
+    latestScore: row.latest_score === null || row.latest_score === undefined ? null : Number(row.latest_score),
+    legalArea: row.legal_area ? String(row.legal_area) : null,
+    examType: row.exam_type ? String(row.exam_type) : null,
+    sourceName: row.source_name ? String(row.source_name) : null,
+    sourceUrl: row.source_url ? String(row.source_url) : null
   })
 }
 
@@ -1187,6 +1678,29 @@ function inlineCommentFromRow(row: Row): InlineComment {
   }
 }
 
+function buildAiInlineCommentAnchor(
+  comment: AiCorrectionDraft['inlineComments'][number],
+  contentHash: string,
+  submissionText: string
+): CommentAnchor | null {
+  const anchoredText = `${comment.prefix}${comment.selectedText}${comment.suffix}`
+  const anchoredIndex = comment.prefix || comment.suffix ? submissionText.indexOf(anchoredText) : -1
+  const selectedTextIndex = submissionText.indexOf(comment.selectedText)
+  const from = anchoredIndex >= 0 ? anchoredIndex + comment.prefix.length : selectedTextIndex
+  if (from < 0) return null
+  const to = from + comment.selectedText.length
+  return commentAnchorSchema.parse({
+    type: 'prosemirror-selection',
+    editorSchemaVersion: EDITOR_SCHEMA_VERSION,
+    from,
+    to,
+    selectedText: comment.selectedText,
+    prefix: comment.prefix,
+    suffix: comment.suffix,
+    contentHash
+  })
+}
+
 function attachmentFromRow(row: Row): Attachment {
   return attachmentSchema.parse({
     schemaVersion: 1,
@@ -1198,7 +1712,61 @@ function attachmentFromRow(row: Row): Attachment {
     mimeType: row.mime_type ? String(row.mime_type) : null,
     size: Number(row.size),
     relativePath: String(row.relative_path),
+    role: row.role ? String(row.role) : 'other',
     createdAt: String(row.created_at)
+  })
+}
+
+function isPdfAttachment(attachment: Attachment): boolean {
+  return (
+    attachment.mimeType === 'application/pdf' ||
+    extname(attachment.originalName).toLowerCase() === '.pdf'
+  )
+}
+
+function aiCorrectionDraftFromRow(row: Row): AiCorrectionDraft {
+  return aiCorrectionDraftSchema.parse({
+    schemaVersion: 1,
+    id: String(row.id),
+    userId: String(row.user_id),
+    submissionId: String(row.submission_id),
+    correctionId: row.correction_id ? String(row.correction_id) : null,
+    status: String(row.status),
+    provider: String(row.provider),
+    model: String(row.model),
+    promptVersion: String(row.prompt_version),
+    createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at),
+    score: {
+      system: 'bayern-0-18',
+      points: row.score_points === null || row.score_points === undefined ? null : Number(row.score_points)
+    },
+    scoreReasoning: String(row.score_reasoning),
+    gradingComment: String(row.grading_comment),
+    strengths: parseJson(String(row.strengths_json), [] as string[]),
+    weaknesses: parseJson(String(row.weaknesses_json), [] as string[]),
+    tags: parseJson(String(row.tags_json), [] as string[]),
+    confidence: String(row.confidence),
+    improvementSuggestions: parseJson(String(row.improvement_suggestions_json), []),
+    inlineComments: parseJson(String(row.inline_comments_json), [])
+  })
+}
+
+function learningTaskFromRow(row: Row): LearningTask {
+  return learningTaskSchema.parse({
+    schemaVersion: 1,
+    id: String(row.id),
+    userId: String(row.user_id),
+    submissionId: String(row.submission_id),
+    correctionId: row.correction_id ? String(row.correction_id) : null,
+    aiDraftId: row.ai_draft_id ? String(row.ai_draft_id) : null,
+    category: String(row.category),
+    priority: String(row.priority),
+    status: String(row.status),
+    title: String(row.title),
+    detail: String(row.detail),
+    createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at)
   })
 }
 

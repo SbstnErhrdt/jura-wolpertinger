@@ -28,19 +28,32 @@ export function initializeDatabase(db: SqliteDatabase): void {
     | { value: string }
     | undefined
   const version = Number(row?.value ?? 0)
+  const targetSchemaVersion: number = DATABASE_SCHEMA_VERSION
 
-  if (version === 1 && DATABASE_SCHEMA_VERSION === 2) {
+  if (version === 1 && DATABASE_SCHEMA_VERSION === 3) {
+    migrateV1ToV2(db)
+    migrateV2ToV3(db)
+    return
+  }
+
+  if (version === 2 && DATABASE_SCHEMA_VERSION === 3) {
+    migrateV2ToV3(db)
+    return
+  }
+
+  if (version === 1 && targetSchemaVersion === 2) {
     migrateV1ToV2(db)
     return
   }
 
-  if (version === DATABASE_SCHEMA_VERSION) {
+  if (version === targetSchemaVersion) {
     repairMissingUserScope(db)
+    if (DATABASE_SCHEMA_VERSION === 3) repairMissingV3Schema(db)
     updateAppVersion(db)
     return
   }
 
-  if (version !== DATABASE_SCHEMA_VERSION) {
+  if (version !== targetSchemaVersion) {
     throw new Error(
       `Unsupported database schema ${version}. Expected schema ${DATABASE_SCHEMA_VERSION}.`
     )
@@ -90,6 +103,10 @@ function createSchema(db: SqliteDatabase): void {
         status TEXT NOT NULL,
         tags_json TEXT NOT NULL,
         notes TEXT NOT NULL DEFAULT '',
+        legal_area TEXT,
+        exam_type TEXT,
+        source_name TEXT,
+        source_url TEXT,
         current_revision_id TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
@@ -148,7 +165,53 @@ function createSchema(db: SqliteDatabase): void {
         mime_type TEXT,
         size INTEGER NOT NULL,
         relative_path TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'other',
         created_at TEXT NOT NULL
+      );
+
+      CREATE TABLE ai_correction_drafts (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        submission_id TEXT NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
+        correction_id TEXT REFERENCES corrections(id) ON DELETE SET NULL,
+        status TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        model TEXT NOT NULL,
+        prompt_version TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        score_points REAL,
+        score_reasoning TEXT NOT NULL,
+        grading_comment TEXT NOT NULL,
+        strengths_json TEXT NOT NULL,
+        weaknesses_json TEXT NOT NULL,
+        tags_json TEXT NOT NULL,
+        confidence TEXT NOT NULL,
+        improvement_suggestions_json TEXT NOT NULL,
+        inline_comments_json TEXT NOT NULL
+      );
+
+      CREATE TABLE learning_tasks (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        submission_id TEXT NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
+        correction_id TEXT REFERENCES corrections(id) ON DELETE SET NULL,
+        ai_draft_id TEXT REFERENCES ai_correction_drafts(id) ON DELETE SET NULL,
+        category TEXT NOT NULL,
+        priority TEXT NOT NULL,
+        status TEXT NOT NULL,
+        title TEXT NOT NULL,
+        detail TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE ai_settings (
+        user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        provider TEXT NOT NULL,
+        api_key TEXT NOT NULL,
+        model TEXT NOT NULL,
+        updated_at TEXT NOT NULL
       );
 
       CREATE TABLE tags (
@@ -172,6 +235,8 @@ function createSchema(db: SqliteDatabase): void {
       CREATE INDEX idx_corrections_submission_id ON corrections(submission_id);
       CREATE INDEX idx_inline_comments_correction_id ON inline_comments(correction_id);
       CREATE INDEX idx_attachments_exam_id ON attachments(exam_id);
+      CREATE INDEX idx_ai_correction_drafts_submission_id ON ai_correction_drafts(submission_id);
+      CREATE INDEX idx_learning_tasks_user_id ON learning_tasks(user_id);
     `)
 
     db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)').run(
@@ -184,7 +249,70 @@ function createSchema(db: SqliteDatabase): void {
 }
 
 function migrateV1ToV2(db: SqliteDatabase): void {
-  addUserScopeToLegacySchema(db)
+  addUserScopeToLegacySchema(db, 2)
+}
+
+function migrateV2ToV3(db: SqliteDatabase): void {
+  const migratedAt = nowIso()
+  db.transaction(() => {
+    addColumnIfMissing(db, 'exams', 'legal_area TEXT')
+    addColumnIfMissing(db, 'exams', 'exam_type TEXT')
+    addColumnIfMissing(db, 'exams', 'source_name TEXT')
+    addColumnIfMissing(db, 'exams', 'source_url TEXT')
+    addColumnIfMissing(db, 'attachments', "role TEXT NOT NULL DEFAULT 'other'")
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS ai_correction_drafts (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        submission_id TEXT NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
+        correction_id TEXT REFERENCES corrections(id) ON DELETE SET NULL,
+        status TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        model TEXT NOT NULL,
+        prompt_version TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        score_points REAL,
+        score_reasoning TEXT NOT NULL,
+        grading_comment TEXT NOT NULL,
+        strengths_json TEXT NOT NULL,
+        weaknesses_json TEXT NOT NULL,
+        tags_json TEXT NOT NULL,
+        confidence TEXT NOT NULL,
+        improvement_suggestions_json TEXT NOT NULL,
+        inline_comments_json TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS learning_tasks (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        submission_id TEXT NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
+        correction_id TEXT REFERENCES corrections(id) ON DELETE SET NULL,
+        ai_draft_id TEXT REFERENCES ai_correction_drafts(id) ON DELETE SET NULL,
+        category TEXT NOT NULL,
+        priority TEXT NOT NULL,
+        status TEXT NOT NULL,
+        title TEXT NOT NULL,
+        detail TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS ai_settings (
+        user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        provider TEXT NOT NULL,
+        api_key TEXT NOT NULL,
+        model TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_ai_correction_drafts_submission_id ON ai_correction_drafts(submission_id);
+      CREATE INDEX IF NOT EXISTS idx_learning_tasks_user_id ON learning_tasks(user_id);
+    `)
+    db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run('schema_version', '3')
+    db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run('last_migrated_at', migratedAt)
+    updateAppVersion(db)
+  })()
 }
 
 function repairMissingUserScope(db: SqliteDatabase): void {
@@ -196,10 +324,24 @@ function repairMissingUserScope(db: SqliteDatabase): void {
     return
   }
 
-  addUserScopeToLegacySchema(db)
+  addUserScopeToLegacySchema(db, DATABASE_SCHEMA_VERSION)
 }
 
-function addUserScopeToLegacySchema(db: SqliteDatabase): void {
+function repairMissingV3Schema(db: SqliteDatabase): void {
+  const hasV3Schema =
+    columnExists(db, 'exams', 'legal_area') &&
+    columnExists(db, 'exams', 'exam_type') &&
+    columnExists(db, 'exams', 'source_name') &&
+    columnExists(db, 'exams', 'source_url') &&
+    columnExists(db, 'attachments', 'role') &&
+    tableExists(db, 'ai_correction_drafts') &&
+    tableExists(db, 'learning_tasks') &&
+    tableExists(db, 'ai_settings')
+
+  if (!hasV3Schema) migrateV2ToV3(db)
+}
+
+function addUserScopeToLegacySchema(db: SqliteDatabase, targetSchemaVersion: number): void {
   const migratedAt = nowIso()
   const userId = crypto.randomUUID()
 
@@ -234,7 +376,7 @@ function addUserScopeToLegacySchema(db: SqliteDatabase): void {
     db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run('current_user_id', userId)
     db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run(
       'schema_version',
-      String(DATABASE_SCHEMA_VERSION)
+      String(targetSchemaVersion)
     )
     db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run('app_version', APP_VERSION)
     db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run('last_migrated_at', migratedAt)
@@ -249,6 +391,9 @@ const USER_SCOPED_TABLES = [
   'corrections',
   'inline_comments',
   'attachments',
+  'ai_correction_drafts',
+  'learning_tasks',
+  'ai_settings',
   'tags',
   'exam_tags'
 ]
@@ -260,4 +405,9 @@ function tableExists(db: SqliteDatabase, table: string): boolean {
 function columnExists(db: SqliteDatabase, table: string, column: string): boolean {
   const rows = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
   return rows.some((row) => row.name === column)
+}
+
+function addColumnIfMissing(db: SqliteDatabase, table: string, definition: string): void {
+  const column = definition.split(/\s+/)[0]
+  if (!columnExists(db, table, column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${definition}`)
 }

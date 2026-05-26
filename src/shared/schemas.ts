@@ -18,6 +18,35 @@ export const examStatusSchema = z.enum([
   'archived'
 ])
 
+export const legalAreaSchema = z.enum(['civil', 'criminal', 'public', 'mixed', 'other'])
+export const examTypeSchema = z.enum([
+  'judgment',
+  'order',
+  'relation',
+  'indictment',
+  'expert_opinion',
+  'pleading',
+  'other'
+])
+export const attachmentRoleSchema = z.enum(['assignment', 'candidate_note', 'model_solution', 'other'])
+export const aiDraftStatusSchema = z.enum(['draft', 'accepted', 'rejected', 'superseded'])
+export const aiConfidenceSchema = z.enum(['low', 'medium', 'high'])
+export const improvementCategorySchema = z.enum([
+  'issue_spotting',
+  'law',
+  'procedure',
+  'structure',
+  'argumentation',
+  'style',
+  'time_management',
+  'other'
+])
+export const learningTaskStatusSchema = z.enum(['open', 'in_progress', 'done'])
+export const learningTaskPrioritySchema = z.enum(['low', 'medium', 'high'])
+
+const nullableDefaultSchema = <Schema extends z.ZodTypeAny>(schema: Schema) =>
+  z.preprocess((value) => value ?? null, schema.nullable())
+
 export const userSchema = z.object({
   id: uuidSchema,
   displayName: z.string().min(1),
@@ -52,7 +81,11 @@ export const examListItemSchema = z.object({
   updatedAt: isoDateSchema,
   lastSavedAt: isoDateSchema,
   currentRevisionId: uuidSchema.nullable(),
-  latestScore: z.number().nullable()
+  latestScore: z.number().nullable(),
+  legalArea: nullableDefaultSchema(legalAreaSchema),
+  examType: nullableDefaultSchema(examTypeSchema),
+  sourceName: nullableDefaultSchema(z.string()),
+  sourceUrl: nullableDefaultSchema(z.string())
 })
 
 export const tiptapContentSchema = z
@@ -86,7 +119,11 @@ export const documentSchema = z.object({
   currentRevisionId: uuidSchema.nullable(),
   submissions: z.array(uuidSchema),
   corrections: z.array(uuidSchema),
-  attachments: z.array(uuidSchema)
+  attachments: z.array(uuidSchema),
+  legalArea: nullableDefaultSchema(legalAreaSchema),
+  examType: nullableDefaultSchema(examTypeSchema),
+  sourceName: nullableDefaultSchema(z.string()),
+  sourceUrl: nullableDefaultSchema(z.string())
 })
 
 export const revisionSchema = z.object({
@@ -161,6 +198,60 @@ export const correctionSchema = z.object({
   inlineComments: z.array(inlineCommentSchema)
 })
 
+export const improvementSuggestionSchema = z.object({
+  category: improvementCategorySchema,
+  priority: learningTaskPrioritySchema,
+  title: z.string().min(1),
+  detail: z.string().min(1)
+})
+
+export const aiInlineCommentSuggestionSchema = z.object({
+  selectedText: z.string().min(1),
+  prefix: z.string().default(''),
+  suffix: z.string().default(''),
+  body: z.string().min(1),
+  tags: z.array(z.string()).default([])
+})
+
+export const aiCorrectionDraftSchema = z.object({
+  schemaVersion: z.literal(1),
+  id: uuidSchema,
+  userId: uuidSchema,
+  submissionId: uuidSchema,
+  correctionId: uuidSchema.nullable(),
+  status: aiDraftStatusSchema,
+  provider: z.literal('openai'),
+  model: z.string().min(1),
+  promptVersion: z.literal('ai-correction-v1'),
+  createdAt: isoDateSchema,
+  updatedAt: isoDateSchema,
+  score: scoreSchema,
+  scoreReasoning: z.string().min(1),
+  gradingComment: z.string().min(1),
+  strengths: z.array(z.string()),
+  weaknesses: z.array(z.string()),
+  tags: z.array(z.string()),
+  confidence: aiConfidenceSchema,
+  improvementSuggestions: z.array(improvementSuggestionSchema),
+  inlineComments: z.array(aiInlineCommentSuggestionSchema)
+})
+
+export const learningTaskSchema = z.object({
+  schemaVersion: z.literal(1),
+  id: uuidSchema,
+  userId: uuidSchema,
+  submissionId: uuidSchema,
+  correctionId: uuidSchema.nullable(),
+  aiDraftId: uuidSchema.nullable(),
+  category: improvementCategorySchema,
+  priority: learningTaskPrioritySchema,
+  status: learningTaskStatusSchema,
+  title: z.string().min(1),
+  detail: z.string().min(1),
+  createdAt: isoDateSchema,
+  updatedAt: isoDateSchema
+})
+
 export const attachmentSchema = z.object({
   schemaVersion: z.literal(1),
   id: uuidSchema,
@@ -171,10 +262,19 @@ export const attachmentSchema = z.object({
   mimeType: z.string().nullable(),
   size: z.number().int().nonnegative(),
   relativePath: z.string(),
+  role: attachmentRoleSchema.default('other'),
   createdAt: isoDateSchema
 })
 
 export type ExamStatus = z.infer<typeof examStatusSchema>
+export type LegalArea = z.infer<typeof legalAreaSchema>
+export type ExamType = z.infer<typeof examTypeSchema>
+export type AttachmentRole = z.infer<typeof attachmentRoleSchema>
+export type AiDraftStatus = z.infer<typeof aiDraftStatusSchema>
+export type AiConfidence = z.infer<typeof aiConfidenceSchema>
+export type ImprovementCategory = z.infer<typeof improvementCategorySchema>
+export type LearningTaskStatus = z.infer<typeof learningTaskStatusSchema>
+export type LearningTaskPriority = z.infer<typeof learningTaskPrioritySchema>
 export type User = z.infer<typeof userSchema>
 export type Folder = z.infer<typeof folderSchema>
 export type ExamListItem = z.infer<typeof examListItemSchema>
@@ -186,4 +286,8 @@ export type Score = z.infer<typeof scoreSchema>
 export type CommentAnchor = z.infer<typeof commentAnchorSchema>
 export type InlineComment = z.infer<typeof inlineCommentSchema>
 export type Correction = z.infer<typeof correctionSchema>
+export type AiCorrectionDraft = z.infer<typeof aiCorrectionDraftSchema>
+export type LearningTask = z.infer<typeof learningTaskSchema>
+export type ImprovementSuggestion = z.infer<typeof improvementSuggestionSchema>
+export type AiInlineCommentSuggestion = z.infer<typeof aiInlineCommentSuggestionSchema>
 export type Attachment = z.infer<typeof attachmentSchema>

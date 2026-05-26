@@ -93,6 +93,38 @@
         <section>
           <h2>Metadaten</h2>
           <label>
+            Rechtsgebiet
+            <select v-model="legalArea" @change="saveMeta">
+              <option :value="null">Nicht gesetzt</option>
+              <option value="civil">Zivilrecht</option>
+              <option value="criminal">Strafrecht</option>
+              <option value="public">Öffentliches Recht</option>
+              <option value="mixed">Gemischt</option>
+              <option value="other">Sonstiges</option>
+            </select>
+          </label>
+          <label>
+            Klausurtyp
+            <select v-model="examType" @change="saveMeta">
+              <option :value="null">Nicht gesetzt</option>
+              <option value="judgment">Urteil</option>
+              <option value="order">Beschluss</option>
+              <option value="relation">Relation</option>
+              <option value="indictment">Anklage</option>
+              <option value="expert_opinion">Gutachten</option>
+              <option value="pleading">Schriftsatz</option>
+              <option value="other">Sonstiges</option>
+            </select>
+          </label>
+          <label>
+            Quelle oder Anbieter
+            <input v-model="sourceName" placeholder="z. B. Hemmer, AG, freie Quelle" @blur="saveMeta" />
+          </label>
+          <label>
+            Quellen-URL
+            <input v-model="sourceUrl" placeholder="https://..." @blur="saveMeta" />
+          </label>
+          <label>
             Ordner
             <select v-model="folderId" @change="saveMeta">
               <option :value="null">Ohne Ordner</option>
@@ -101,15 +133,15 @@
               </option>
             </select>
           </label>
-          <label>
-            Tags
+          <div class="side-field">
+            <span>Tags</span>
             <TagInput
               v-model="tags"
               :suggestions="tagSuggestions"
               placeholder="Tags hinzufügen"
               @update:modelValue="saveMeta"
             />
-          </label>
+          </div>
           <label>
             Notizen
             <textarea v-model="notes" rows="4" @blur="saveMeta" />
@@ -119,7 +151,20 @@
         <section>
           <div class="panel-header">
             <h2>Dateien</h2>
-            <button title="Datei hinzufügen" @click="addAttachment"><Plus :size="16" /></button>
+            <div class="panel-header-actions">
+              <select
+                v-model="nextAttachmentRole"
+                class="compact-select"
+                title="Dateirolle"
+                aria-label="Dateirolle"
+              >
+                <option value="assignment">Aufgabenstellung</option>
+                <option value="candidate_note">Bearbeitervermerk</option>
+                <option value="model_solution">Musterlösung</option>
+                <option value="other">Sonstiges</option>
+              </select>
+              <button title="Datei hinzufügen" @click="addAttachment"><Plus :size="16" /></button>
+            </div>
           </div>
           <button
             v-for="attachment in exam.attachments"
@@ -128,7 +173,10 @@
             @click="openAttachment(attachment.id)"
           >
             <Paperclip :size="16" />
-            {{ attachment.originalName }}
+            <span class="attachment-row-meta">
+              <span>{{ attachment.originalName }}</span>
+              <small>{{ attachmentRoleLabel(attachment.role) }}</small>
+            </span>
           </button>
           <p v-if="!exam.attachments.length" class="empty-state">Keine Dateien importiert.</p>
         </section>
@@ -237,6 +285,11 @@ const title = ref('')
 const folderId = ref<string | null>(null)
 const tags = ref<string[]>([])
 const notes = ref('')
+const legalArea = ref<ExamDetails['legalArea']>(null)
+const examType = ref<ExamDetails['examType']>(null)
+const sourceName = ref('')
+const sourceUrl = ref('')
+const nextAttachmentRole = ref<'assignment' | 'candidate_note' | 'model_solution' | 'other'>('assignment')
 const content = ref<Record<string, unknown>>(structuredClone(EMPTY_TIPTAP_DOCUMENT))
 const toolbarHidden = ref(false)
 const iconUrl = 'assets/icon.png'
@@ -283,6 +336,10 @@ async function load(): Promise<void> {
   folderId.value = exam.value.folderId
   tags.value = [...exam.value.tags]
   notes.value = exam.value.notes
+  legalArea.value = exam.value.legalArea
+  examType.value = exam.value.examType
+  sourceName.value = exam.value.sourceName ?? ''
+  sourceUrl.value = exam.value.sourceUrl ?? ''
   content.value =
     exam.value.currentRevision?.content ??
     (structuredClone(EMPTY_TIPTAP_DOCUMENT) as unknown as Record<string, unknown>)
@@ -321,7 +378,11 @@ async function saveMeta(): Promise<void> {
     title: title.value,
     folderId: folderId.value,
     tags: [...tags.value],
-    notes: notes.value
+    notes: notes.value,
+    legalArea: legalArea.value,
+    examType: examType.value,
+    sourceName: sourceName.value,
+    sourceUrl: sourceUrl.value
   })
   tags.value = [...exam.value.tags]
   tagSuggestions.value = [...new Set([...tagSuggestions.value, ...exam.value.tags])].sort((left, right) =>
@@ -331,7 +392,7 @@ async function saveMeta(): Promise<void> {
 
 async function addAttachment(): Promise<void> {
   if (!exam.value) return
-  await api.addAttachment(exam.value.id)
+  await api.addAttachment(exam.value.id, nextAttachmentRole.value)
   await load()
 }
 
@@ -392,6 +453,16 @@ function statusLabel(status: ExamStatus): string {
     corrected: 'Korrigiert',
     archived: 'Archiviert'
   }[status]
+}
+
+function attachmentRoleLabel(role: string): string {
+  const labels: Record<string, string> = {
+    assignment: 'Aufgabenstellung',
+    candidate_note: 'Bearbeitervermerk',
+    model_solution: 'Musterlösung',
+    other: 'Sonstiges'
+  }
+  return labels[role] ?? 'Sonstiges'
 }
 
 function markDirty(): void {

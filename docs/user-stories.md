@@ -61,6 +61,16 @@ Akzeptanz:
 - Nach Neustart ist die letzte gespeicherte Fassung verfügbar.
 - Anhänge werden in den App-Speicher kopiert.
 
+### Quellen und Musterlösungen verwalten
+
+Als Referendar:in möchte ich Aufgabenstellung, Bearbeitervermerk und Musterlösung einer Prüfung zuordnen, damit eine spätere KI-Korrektur den richtigen Kontext nutzt.
+
+Akzeptanz:
+
+- Rechtsgebiet, Klausurtyp, Quelle und optionale URL können an der Prüfung gespeichert werden.
+- Uploads erhalten Rollen wie Aufgabenstellung, Bearbeitervermerk oder Musterlösung.
+- Fremde Klausurentexte werden nicht mitgeliefert, sondern nur durch Nutzer:innen importiert.
+
 ### Klausur abgeben
 
 Als Examenskandidat:in möchte ich eine Klausur abgeben, damit ein fester Bewertungsstand entsteht.
@@ -103,6 +113,26 @@ Akzeptanz:
 - Kommentare werden in der Randspalte ungefähr auf Höhe der Textstelle angezeigt.
 - Hover über einen Kommentar hebt die zugehörige Textstelle hervor.
 
+### KI-Korrektur prüfen
+
+Als Examenskandidat:in möchte ich für eine abgegebene Prüfung einen KI-Korrekturvorschlag anfordern und vor der Übernahme prüfen, damit automatisches Feedback nicht ungeprüft meine Bewertung verändert.
+
+Akzeptanz:
+
+- Die Anfrage wird nur bewusst gestartet und nutzt den lokal hinterlegten eigenen OpenAI-Schlüssel.
+- `gpt-5.5` ist das empfohlene Standardmodell für die komplexe Korrektur.
+- Die KI-Korrektur nutzt Aufgabenstellung, Musterlösung und Bearbeitung, sofern diese als Anhänge vorliegen.
+- Der Vorschlag wird durch eine zweite KI-Prüfer-Runde auf Punktplausibilität, Halluzinationen, Textanker und konkrete Verbesserungshinweise geprüft.
+- Die Einstellungen zeigen klar, ob kein Key, ein gespeicherter App-Key oder ein Entwicklungs-Key aus `.env` aktiv ist.
+- Wenn ein gespeicherter App-Key einen vorhandenen `.env`-Key übersteuert, wird das sichtbar und der `.env`-Key kann separat getestet werden.
+- Nach dem Speichern zeigt die App eine kurze Key-Endung und den Speicherzeitpunkt, damit der Zustand sichtbar ist.
+- Der OpenAI-Key wird nur in einem bewussten Einrichten- oder Ändern-Flow eingegeben; die normale Ansicht zeigt kein leeres Passwortfeld.
+- Eine Verbindung kann aus der App heraus getestet werden; laufender Test, Erfolg und Fehler erscheinen direkt in der KI-Karte.
+- Der Vorschlag zeigt Punkte, Gesamthinweis, Tags, Inline-Kommentare und Lernhinweise als Entwurf.
+- Annehmen überführt den Entwurf in normale Korrektur, Inline-Kommentare und Lernaufgaben.
+- Ablehnen verwirft den Vorschlag für den Arbeitsfluss, ohne Abgabe oder bestehende Korrektur zu verändern.
+- Rohentwürfe, API-Schlüssel und KI-Einstellungen werden nicht in `.jura` Pakete exportiert.
+
 ## Tags und Auswertung
 
 ### Tags konsequent nutzen
@@ -125,7 +155,43 @@ Akzeptanz:
 - Durchschnitt, Verlauf und Tabellenansicht sind sichtbar.
 - Auswertungen funktionieren offline.
 
+### Lernaufgaben nachverfolgen
+
+Als Examenskandidat:in möchte ich Lernaufgaben aus angenommenen KI-Korrekturen in der Auswertung sehen, damit ich wiederkehrende Schwächen gezielt bearbeiten kann.
+
+Akzeptanz:
+
+- Offene Lernaufgaben erscheinen lokal in der Auswertung.
+- Lernaufgaben haben Kategorie, Priorität und Status.
+- Statusänderungen bleiben lokal erhalten.
+- Lernaufgaben werden vorerst nicht in `.jura` Pakete exportiert.
+
+## Datenschutz und Cloud-Grenze
+
+### Lokale Daten schützen
+
+Als Nutzer:in möchte ich klar kontrollieren, wann Prüfungsdaten die App verlassen, damit lokale Übungsdaten nicht unbeabsichtigt in eine Cloud übertragen werden.
+
+Akzeptanz:
+
+- Schreiben, Speichern, Bewerten, Auswerten, PDF-Export und `.jura` Import/Export funktionieren lokal.
+- Eine Cloud-Anfrage passiert nur bei ausdrücklicher KI-Korrektur.
+- Die App nutzt im MVP nur einen selbst hinterlegten OpenAI-Schlüssel und keinen gebündelten Providerzugang.
+- `.jura` Pakete enthalten Prüfungsdaten wie Metadaten, Abgaben, Korrekturen und Attachment-Rollen, aber keine API-Schlüssel, KI-Einstellungen, rohe KI-Entwürfe oder lokale Lernaufgaben.
+
 ## Nutzer und Onboarding
+
+### Einstellungen zentral verwalten
+
+Als Nutzer:in möchte ich Nutzer, KI-Korrektur und Oberfläche an einer Stelle einstellen, damit ich die App nicht in einzelnen Arbeitsansichten konfigurieren muss.
+
+Akzeptanz:
+
+- Die linke Navigation enthält eine Einstellungsseite.
+- Nutzerwechsel, Nutzername, neuer lokaler Nutzer und Tour-Aktionen sind dort erreichbar.
+- OpenAI-Key und Modell können dort für KI-Korrekturen gespeichert werden.
+- Gespeicherter App-Key und Entwicklungs-Key aus `.env` werden als getrennte Quellen erklärt, damit ein fehlerhafter App-Key nicht mit einem funktionierenden `.env`-Key verwechselt wird.
+- Die Seite erklärt, dass KI-Korrekturen Daten nur auf ausdrückliche Anfrage an den konfigurierten Anbieter übertragen.
 
 ### Arbeitsbereich wechseln
 

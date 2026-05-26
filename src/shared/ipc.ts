@@ -1,12 +1,17 @@
 import type {
+  AiCorrectionDraft,
   Attachment,
+  AttachmentRole,
   CommentAnchor,
   Correction,
+  ExamType,
   ExamListItem as SchemaExamListItem,
   ExamRevision,
   ExamStatus,
   Folder as SchemaFolder,
   InlineComment,
+  LearningTask,
+  LegalArea,
   Submission
 } from './schemas'
 import type { User } from './schemas'
@@ -54,14 +59,16 @@ export type CreateExamInput = {
   title: string
   folderId?: string | null
   tags?: string[]
+  legalArea?: LegalArea | null
+  examType?: ExamType | null
+  sourceName?: string | null
+  sourceUrl?: string | null
 }
 
-export type UpdateExamInput = {
+export type UpdateExamInput = Omit<CreateExamInput, 'title'> & {
   id: string
   title?: string
-  folderId?: string | null
   status?: ExamStatus
-  tags?: string[]
   notes?: string
 }
 
@@ -86,10 +93,68 @@ export type AddInlineCommentInput = {
   tags: string[]
 }
 
+export type SaveAiSettingsInput = {
+  provider: 'openai'
+  apiKey: string
+  model: string
+}
+
+export type AiSettingsStatus = {
+  provider: 'openai'
+  configured: boolean
+  model: string | null
+  source: 'stored' | 'environment' | null
+  keyPreview: string | null
+  environmentAvailable: boolean
+  updatedAt: string | null
+}
+
+export type TestAiConnectionInput = {
+  source?: 'active' | 'environment'
+}
+
+export type AiConnectionTestResult = {
+  ok: boolean
+  model: string | null
+  source: 'stored' | 'environment' | null
+  message: string
+}
+
+export type GenerateAiCorrectionInput = {
+  submissionId: string
+}
+
+export type SaveAiCorrectionDraftInput = {
+  submissionId: string
+  provider: 'openai'
+  model: string
+  scorePoints: number | null
+  scoreReasoning: string
+  gradingComment: string
+  strengths: string[]
+  weaknesses: string[]
+  tags: string[]
+  confidence: 'low' | 'medium' | 'high'
+  improvementSuggestions: Array<{
+    category: string
+    priority: string
+    title: string
+    detail: string
+  }>
+  inlineComments: Array<{
+    selectedText: string
+    prefix: string
+    suffix: string
+    body: string
+    tags: string[]
+  }>
+}
+
 export type AppApi = {
   getCurrentUser(): Promise<AppUser>
   listUsers(): Promise<AppUser[]>
   createUser(displayName: string): Promise<AppUser>
+  updateUser(input: { id: string; displayName: string }): Promise<AppUser>
   switchUser(userId: string): Promise<AppUser>
   completeOnboarding(userId: string): Promise<AppUser>
   completeTour(userId: string): Promise<AppUser>
@@ -109,7 +174,17 @@ export type AppApi = {
   submitExam(examId: string): Promise<Submission>
   getSubmission(id: string): Promise<SubmissionDetails>
   listAnalyticsEntries(): Promise<AnalyticsEntry[]>
-  addAttachment(examId: string): Promise<Attachment | null>
+  getAiSettingsStatus(): Promise<AiSettingsStatus>
+  saveAiSettings(input: SaveAiSettingsInput): Promise<AiSettingsStatus>
+  removeAiSettings(): Promise<AiSettingsStatus>
+  testAiConnection(input?: TestAiConnectionInput): Promise<AiConnectionTestResult>
+  generateAiCorrectionDraft(input: GenerateAiCorrectionInput): Promise<AiCorrectionDraft>
+  listAiCorrectionDrafts(submissionId: string): Promise<AiCorrectionDraft[]>
+  acceptAiCorrectionDraft(draftId: string): Promise<AiCorrectionDraft>
+  rejectAiCorrectionDraft(draftId: string): Promise<AiCorrectionDraft>
+  listLearningTasks(): Promise<LearningTask[]>
+  updateLearningTaskStatus(taskId: string, status: 'open' | 'in_progress' | 'done'): Promise<LearningTask>
+  addAttachment(examId: string, role?: AttachmentRole): Promise<Attachment | null>
   openAttachment(id: string): Promise<void>
   exportExamPackage(examId: string): Promise<string | null>
   importExamPackage(): Promise<ExamDetails | null>

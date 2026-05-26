@@ -1,6 +1,7 @@
-import { EMPTY_TIPTAP_DOCUMENT } from '@shared/constants'
+import { EDITOR_SCHEMA_VERSION, EMPTY_TIPTAP_DOCUMENT } from '@shared/constants'
 import type {
   AddInlineCommentInput,
+  AiSettingsStatus,
   AnalyticsEntry,
   AppApi,
   CreateExamInput,
@@ -13,9 +14,22 @@ import type {
   UpdateFolderInput,
   UpdateExamInput
 } from '@shared/ipc'
-import type { Attachment, Correction, ExamRevision, InlineComment, Submission, User } from '@shared/schemas'
+import type {
+  AiCorrectionDraft,
+  Attachment,
+  Correction,
+  ExamType,
+  ExamRevision,
+  InlineComment,
+  LearningTask,
+  LegalArea,
+  Submission,
+  User
+} from '@shared/schemas'
+import { examStatusSchema, examTypeSchema, learningTaskStatusSchema, legalAreaSchema } from '@shared/schemas'
 
 const BROWSER_STORE_KEY = 'jura-wolpertinger-browser-dev-v1'
+const AI_CORRECTION_NOT_IMPLEMENTED_MESSAGE = 'KI-Korrektur ist noch nicht implementiert.'
 
 type BrowserStore = {
   users: User[]
@@ -26,6 +40,14 @@ type BrowserStore = {
   submissions: Submission[]
   attachments: Attachment[]
   corrections: Correction[]
+  aiSettings: {
+    provider: 'openai'
+    configured: boolean
+    model: string
+    updatedAt: string | null
+  } | null
+  aiCorrectionDrafts: AiCorrectionDraft[]
+  learningTasks: LearningTask[]
 }
 
 let browserDevApi: AppApi | null = null
@@ -60,6 +82,15 @@ function createBrowserDevApi(): AppApi {
       const user = createBrowserUser(displayName.trim() || 'Lokaler Nutzer', 'local')
       store.users.push(user)
       store.currentUserId = user.id
+      writeStore(store)
+      return user
+    },
+    async updateUser(input) {
+      const store = readStore()
+      const user = ensureBrowserUser(store)
+      if (input.id !== user.id) throw new Error(`Cannot update inactive user: ${input.id}`)
+      user.displayName = input.displayName.trim() || 'Lokaler Nutzer'
+      user.updatedAt = nowIso()
       writeStore(store)
       return user
     },
@@ -175,6 +206,8 @@ function createBrowserDevApi(): AppApi {
     async createExam(input: CreateExamInput) {
       const store = readStore()
       const user = ensureBrowserUser(store)
+      const legalArea = parseLegalArea(input.legalArea)
+      const examType = parseExamType(input.examType)
       const now = nowIso()
       const examId = newId()
       const revisionId = newId()
@@ -204,7 +237,11 @@ function createBrowserDevApi(): AppApi {
         updatedAt: now,
         lastSavedAt: now,
         currentRevisionId: revisionId,
-        latestScore: null
+        latestScore: null,
+        legalArea,
+        examType,
+        sourceName: input.sourceName ?? null,
+        sourceUrl: input.sourceUrl ?? null
       }
       store.exams.unshift(exam)
       store.revisions.push(revision)
@@ -219,6 +256,9 @@ function createBrowserDevApi(): AppApi {
       const index = store.exams.findIndex((exam) => exam.id === input.id)
       if (index < 0) throw new Error(`Exam not found: ${input.id}`)
       const current = store.exams[index]
+      const legalArea = input.legalArea === undefined ? current.legalArea : parseLegalArea(input.legalArea)
+      const examType = input.examType === undefined ? current.examType : parseExamType(input.examType)
+      const status = input.status === undefined ? current.status : examStatusSchema.parse(input.status)
       const next: ExamListItem = {
         ...current,
         title: input.title ?? current.title,
@@ -227,9 +267,13 @@ function createBrowserDevApi(): AppApi {
           store,
           input.folderId === undefined ? current.folderId : input.folderId
         ),
-        status: input.status ?? current.status,
+        status,
         tags: input.tags ? normalizeTags(input.tags) : current.tags,
         notes: input.notes ?? current.notes,
+        legalArea,
+        examType,
+        sourceName: input.sourceName === undefined ? current.sourceName : input.sourceName,
+        sourceUrl: input.sourceUrl === undefined ? current.sourceUrl : input.sourceUrl,
         updatedAt: nowIso()
       }
       store.exams[index] = next
@@ -322,6 +366,143 @@ function createBrowserDevApi(): AppApi {
           } satisfies AnalyticsEntry
         })
         .sort((left, right) => left.correctedAt.localeCompare(right.correctedAt))
+    },
+    async getAiSettingsStatus() {
+      const settings = readStore().aiSettings
+      return aiSettingsStatus(settings)
+    },
+    async saveAiSettings(input) {
+      const store = readStore()
+      const updatedAt = nowIso()
+      const provider = (input as { provider?: unknown }).provider
+      const apiKey = input.apiKey.trim()
+      const model = input.model.trim()
+      if (provider !== 'openai') throw new Error('AI provider wird noch nicht unterstuetzt.')
+      if (!apiKey && !store.aiSettings?.configured) throw new Error('OpenAI API key darf nicht leer sein')
+      if (!model) throw new Error('OpenAI model darf nicht leer sein')
+      store.aiSettings = {
+        provider,
+        configured: true,
+        model,
+        updatedAt
+      }
+      writeStore(store)
+      return aiSettingsStatus(store.aiSettings)
+    },
+    async removeAiSettings() {
+      const store = readStore()
+      store.aiSettings = null
+      writeStore(store)
+      return aiSettingsStatus(store.aiSettings)
+    },
+    async testAiConnection() {
+      const settings = readStore().aiSettings
+      if (!settings?.configured) {
+        return {
+          ok: false,
+          model: null,
+          source: null,
+          message: 'OpenAI-Key fehlt.'
+        }
+      }
+      return {
+        ok: false,
+        model: settings.model,
+        source: 'stored',
+        message: 'Verbindungstest ist nur in der Electron-App verfuegbar.'
+      }
+    },
+    async generateAiCorrectionDraft() {
+      throw new Error(AI_CORRECTION_NOT_IMPLEMENTED_MESSAGE)
+    },
+    async listAiCorrectionDrafts(submissionId: string) {
+      return readStore().aiCorrectionDrafts.filter((draft) => draft.submissionId === submissionId)
+    },
+    async acceptAiCorrectionDraft(draftId: string) {
+      const store = readStore()
+      const draft = findAiDraft(store, draftId)
+      requireDraftStatus(draft, 'accept')
+      const correction = ensureCorrectionForDraft(store, draft)
+      correction.score = draft.score
+      correction.gradingComment = draft.gradingComment
+      correction.tags = [...draft.tags]
+      correction.updatedAt = nowIso()
+      const submission = store.submissions.find((candidate) => candidate.id === draft.submissionId)
+      const revision = submission
+        ? store.revisions.find((candidate) => candidate.id === submission.revisionId)
+        : null
+      const submissionText = revision ? plainTextFromTipTapNode(revision.content) : ''
+      const contentHash =
+        submission?.contentHash ?? correction.inlineComments[0]?.anchor.contentHash ?? ''
+      for (const comment of draft.inlineComments) {
+        const anchor = buildBrowserAiInlineCommentAnchor(comment, contentHash, submissionText)
+        if (!anchor) continue
+        correction.inlineComments.push({
+          schemaVersion: 1,
+          id: newId(),
+          userId: draft.userId,
+          targetSubmissionId: draft.submissionId,
+          correctionId: correction.id,
+          createdAt: correction.updatedAt,
+          status: 'open',
+          body: comment.body,
+          anchor,
+          tags: normalizeTags(comment.tags)
+        })
+      }
+      draft.status = 'accepted'
+      draft.correctionId = correction.id
+      draft.updatedAt = correction.updatedAt
+      for (const otherDraft of store.aiCorrectionDrafts) {
+        if (otherDraft.submissionId === draft.submissionId && otherDraft.id !== draft.id && otherDraft.status === 'draft') {
+          otherDraft.status = 'superseded'
+          otherDraft.updatedAt = correction.updatedAt
+        }
+      }
+      for (const suggestion of draft.improvementSuggestions) {
+        store.learningTasks.push({
+          schemaVersion: 1,
+          id: newId(),
+          userId: draft.userId,
+          submissionId: draft.submissionId,
+          correctionId: correction.id,
+          aiDraftId: draft.id,
+          category: suggestion.category,
+          priority: suggestion.priority,
+          status: 'open',
+          title: suggestion.title,
+          detail: suggestion.detail,
+          createdAt: correction.updatedAt,
+          updatedAt: correction.updatedAt
+        })
+      }
+      writeStore(store)
+      return draft
+    },
+    async rejectAiCorrectionDraft(draftId: string) {
+      const store = readStore()
+      const draft = findAiDraft(store, draftId)
+      requireDraftStatus(draft, 'reject')
+      draft.status = 'rejected'
+      draft.updatedAt = nowIso()
+      writeStore(store)
+      return draft
+    },
+    async listLearningTasks() {
+      const store = readStore()
+      const user = ensureBrowserUser(store)
+      return store.learningTasks.filter((task) => task.userId === user.id)
+    },
+    async updateLearningTaskStatus(taskId, status) {
+      const store = readStore()
+      const user = ensureBrowserUser(store)
+      const nextStatus = learningTaskStatusSchema.parse(status)
+      const task = store.learningTasks.find((candidate) => candidate.id === taskId && candidate.userId === user.id)
+      if (!task) throw new Error(`Learning task not found: ${taskId}`)
+      task.status = nextStatus
+      task.updatedAt = nowIso()
+      writeStore(store)
+      return task
     },
     async addAttachment() {
       console.warn('Attachments are only available in the Electron app window.')
@@ -428,16 +609,30 @@ function readStore(): BrowserStore {
     parsed.exams = parsed.exams.map((exam) => ({
       ...exam,
       userId: exam.userId ?? user.id,
-      lastSavedAt: exam.lastSavedAt ?? exam.updatedAt ?? exam.createdAt
+      lastSavedAt: exam.lastSavedAt ?? exam.updatedAt ?? exam.createdAt,
+      legalArea: exam.legalArea ?? null,
+      examType: exam.examType ?? null,
+      sourceName: exam.sourceName ?? null,
+      sourceUrl: exam.sourceUrl ?? null
     }))
     parsed.revisions = parsed.revisions.map((revision) => ({ ...revision, userId: revision.userId ?? user.id }))
     parsed.submissions = parsed.submissions.map((submission) => ({ ...submission, userId: submission.userId ?? user.id }))
-    parsed.attachments = parsed.attachments.map((attachment) => ({ ...attachment, userId: attachment.userId ?? user.id }))
+    parsed.attachments = parsed.attachments.map((attachment) => ({
+      ...attachment,
+      userId: attachment.userId ?? user.id,
+      role: attachment.role ?? 'other'
+    }))
     parsed.corrections = parsed.corrections.map((correction) => ({
       ...correction,
       userId: correction.userId ?? user.id,
       inlineComments: correction.inlineComments.map((comment) => ({ ...comment, userId: comment.userId ?? user.id }))
     }))
+    const normalizedAiSettings = normalizeBrowserAiSettings(parsed.aiSettings)
+    const strippedAiSecret = Boolean(
+      parsed.aiSettings && 'apiKey' in parsed.aiSettings
+    )
+    parsed.aiSettings = normalizedAiSettings
+    if (strippedAiSecret) writeStore(parsed)
     if (normalizedIds) writeStore(parsed)
     return parsed
   } catch {
@@ -508,7 +703,10 @@ function buildBrowserIdMap(items: Array<{ id: string }>): Map<string, string> {
 }
 
 function writeStore(store: BrowserStore): void {
-  localStorage.setItem(BROWSER_STORE_KEY, JSON.stringify(store))
+  localStorage.setItem(BROWSER_STORE_KEY, JSON.stringify({
+    ...store,
+    aiSettings: normalizeBrowserAiSettings(store.aiSettings)
+  }))
 }
 
 function emptyStore(): BrowserStore {
@@ -520,7 +718,10 @@ function emptyStore(): BrowserStore {
     revisions: [],
     submissions: [],
     attachments: [],
-    corrections: []
+    corrections: [],
+    aiSettings: null,
+    aiCorrectionDrafts: [],
+    learningTasks: []
   }
 }
 
@@ -610,6 +811,90 @@ function submissionDetails(store: BrowserStore, id: string): SubmissionDetails {
   }
 }
 
+function aiSettingsStatus(settings: BrowserStore['aiSettings']): AiSettingsStatus {
+  return {
+    provider: 'openai',
+    configured: Boolean(settings?.configured),
+    model: settings?.model ?? null,
+    source: settings?.configured ? 'stored' : null,
+    keyPreview: settings?.configured ? 'gespeichert' : null,
+    environmentAvailable: false,
+    updatedAt: settings?.updatedAt ?? null
+  }
+}
+
+function normalizeBrowserAiSettings(settings: unknown): BrowserStore['aiSettings'] {
+  if (!settings || typeof settings !== 'object') return null
+  const candidate = settings as {
+    provider?: unknown
+    apiKey?: unknown
+    configured?: unknown
+    model?: unknown
+    updatedAt?: unknown
+  }
+  if (candidate.provider !== 'openai' || typeof candidate.model !== 'string') return null
+  return {
+    provider: 'openai',
+    configured: Boolean(candidate.configured) || Boolean(candidate.apiKey),
+    model: candidate.model,
+    updatedAt: typeof candidate.updatedAt === 'string' ? candidate.updatedAt : null
+  }
+}
+
+function buildBrowserAiInlineCommentAnchor(
+  comment: AiCorrectionDraft['inlineComments'][number],
+  contentHash: string,
+  submissionText: string
+): InlineComment['anchor'] | null {
+  const anchoredText = `${comment.prefix}${comment.selectedText}${comment.suffix}`
+  const anchoredIndex = comment.prefix || comment.suffix ? submissionText.indexOf(anchoredText) : -1
+  const selectedTextIndex = submissionText.indexOf(comment.selectedText)
+  const from = anchoredIndex >= 0 ? anchoredIndex + comment.prefix.length : selectedTextIndex
+  if (from < 0) return null
+  return {
+    type: 'prosemirror-selection',
+    editorSchemaVersion: EDITOR_SCHEMA_VERSION,
+    from,
+    to: from + comment.selectedText.length,
+    selectedText: comment.selectedText,
+    prefix: comment.prefix,
+    suffix: comment.suffix,
+    contentHash
+  }
+}
+
+function findAiDraft(store: BrowserStore, draftId: string): AiCorrectionDraft {
+  const draft = store.aiCorrectionDrafts.find((candidate) => candidate.id === draftId)
+  if (!draft) throw new Error(`AI correction draft not found: ${draftId}`)
+  return draft
+}
+
+function requireDraftStatus(draft: AiCorrectionDraft, action: 'accept' | 'reject'): void {
+  if (draft.status !== 'draft') {
+    throw new Error(`AI correction draft must have status draft to ${action}; current status is ${draft.status}`)
+  }
+}
+
+function ensureCorrectionForDraft(store: BrowserStore, draft: AiCorrectionDraft): Correction {
+  const existing = store.corrections.find((correction) => correction.targetSubmissionId === draft.submissionId)
+  if (existing) return existing
+  const now = nowIso()
+  const correction: Correction = {
+    schemaVersion: 1,
+    id: newId(),
+    userId: draft.userId,
+    targetSubmissionId: draft.submissionId,
+    createdAt: now,
+    updatedAt: now,
+    score: { system: 'bayern-0-18', points: null },
+    gradingComment: '',
+    tags: [],
+    inlineComments: []
+  }
+  store.corrections.push(correction)
+  return correction
+}
+
 function getRevision(store: BrowserStore, id: string): ExamRevision {
   const revision = store.revisions.find((candidate) => candidate.id === id)
   if (!revision) throw new Error(`Revision not found: ${id}`)
@@ -641,6 +926,14 @@ function normalizeTags(tags: string[]): string[] {
   return [...new Set(tags.map((tag) => tag.trim()).filter(Boolean))]
 }
 
+function parseLegalArea(value: CreateExamInput['legalArea']): LegalArea | null {
+  return value === undefined ? null : legalAreaSchema.nullable().parse(value)
+}
+
+function parseExamType(value: CreateExamInput['examType']): ExamType | null {
+  return value === undefined ? null : examTypeSchema.nullable().parse(value)
+}
+
 function nowIso(): string {
   return new Date().toISOString()
 }
@@ -660,6 +953,21 @@ function hashJson(value: Record<string, unknown>): string {
     hash = (hash * 31 + text.charCodeAt(index)) | 0
   }
   return `browser-${text.length}-${Math.abs(hash)}`
+}
+
+function plainTextFromTipTapNode(node: unknown): string {
+  if (!node || typeof node !== 'object') return ''
+  const record = node as { type?: unknown; text?: unknown; content?: unknown }
+  if (record.type === 'text') return typeof record.text === 'string' ? record.text : ''
+  const children = Array.isArray(record.content) ? record.content.map(plainTextFromTipTapNode) : []
+  const joined = children.join('')
+  if (['paragraph', 'heading', 'blockquote', 'listItem'].includes(String(record.type))) {
+    return `${joined}\n`
+  }
+  if (['bulletList', 'orderedList'].includes(String(record.type))) {
+    return `${joined}\n`
+  }
+  return joined
 }
 
 function clone<T>(value: T): T {

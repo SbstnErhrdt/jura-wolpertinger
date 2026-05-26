@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  aiCorrectionDraftSchema,
+  attachmentSchema,
   correctionSchema,
+  examListItemSchema,
   juraManifestSchema,
+  learningTaskSchema,
   revisionSchema,
   scoreSchema,
   submissionSchema
@@ -96,5 +100,142 @@ describe('shared schemas', () => {
 
   it('hashes JSON content stably independent of object key order', () => {
     expect(hashJson({ b: 2, a: 1 })).toBe(hashJson({ a: 1, b: 2 }))
+  })
+
+  it('validates exam metadata and attachment roles', () => {
+    const examWithoutMetadata = examListItemSchema.parse({
+      id: crypto.randomUUID(),
+      userId: crypto.randomUUID(),
+      title: 'ZR Urteil',
+      folderId: null,
+      folderName: null,
+      status: 'draft',
+      tags: ['zivilrecht'],
+      notes: '',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      lastSavedAt: new Date().toISOString(),
+      currentRevisionId: null,
+      latestScore: null
+    })
+    expect(examWithoutMetadata.legalArea).toBeNull()
+    expect(examWithoutMetadata.examType).toBeNull()
+    expect(examWithoutMetadata.sourceName).toBeNull()
+    expect(examWithoutMetadata.sourceUrl).toBeNull()
+
+    expect(
+      examListItemSchema.parse({
+        id: crypto.randomUUID(),
+        userId: crypto.randomUUID(),
+        title: 'ZR Urteil',
+        folderId: null,
+        folderName: null,
+        status: 'draft',
+        tags: ['zivilrecht'],
+        notes: '',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        lastSavedAt: new Date().toISOString(),
+        currentRevisionId: null,
+        latestScore: null,
+        legalArea: 'civil',
+        examType: 'judgment',
+        sourceName: 'Hemmer',
+        sourceUrl: 'https://example.test/klausur'
+      }).legalArea
+    ).toBe('civil')
+
+    expect(
+      attachmentSchema.parse({
+        schemaVersion: 1,
+        id: crypto.randomUUID(),
+        userId: crypto.randomUUID(),
+        examId: crypto.randomUUID(),
+        originalName: 'musterloesung.pdf',
+        storedName: 'stored.pdf',
+        mimeType: 'application/pdf',
+        size: 12,
+        relativePath: 'exams/x/attachments/y/stored.pdf',
+        role: 'model_solution',
+        createdAt: new Date().toISOString()
+      }).role
+    ).toBe('model_solution')
+
+    expect(
+      attachmentSchema.parse({
+        schemaVersion: 1,
+        id: crypto.randomUUID(),
+        userId: crypto.randomUUID(),
+        examId: crypto.randomUUID(),
+        originalName: 'sachverhalt.pdf',
+        storedName: 'stored.pdf',
+        mimeType: 'application/pdf',
+        size: 12,
+        relativePath: 'exams/x/attachments/y/stored.pdf',
+        createdAt: new Date().toISOString()
+      }).role
+    ).toBe('other')
+  })
+
+  it('validates AI correction drafts and learning tasks', () => {
+    const userId = crypto.randomUUID()
+    const submissionId = crypto.randomUUID()
+    const draft = aiCorrectionDraftSchema.parse({
+      schemaVersion: 1,
+      id: crypto.randomUUID(),
+      userId,
+      submissionId,
+      correctionId: null,
+      status: 'draft',
+      provider: 'openai',
+      model: 'gpt-5',
+      promptVersion: 'ai-correction-v1',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      score: { system: 'bayern-0-18', points: 8.5 },
+      scoreReasoning: 'Solide Grundstruktur, aber Schwerpunkt verfehlt.',
+      gradingComment: 'Die Hauptprobleme wurden teilweise erkannt.',
+      strengths: ['Gut lesbarer Aufbau'],
+      weaknesses: ['Schwerpunktsetzung zu breit'],
+      tags: ['schwerpunktsetzung'],
+      confidence: 'medium',
+      improvementSuggestions: [
+        {
+          category: 'structure',
+          priority: 'high',
+          title: 'Schwerpunkt frueher setzen',
+          detail: 'Pruefe die zentrale Anspruchsgrundlage vor Nebenfragen.'
+        }
+      ],
+      inlineComments: [
+        {
+          selectedText: 'zentrale Anspruchsgrundlage',
+          prefix: 'Pruefe die ',
+          suffix: ' vor Nebenfragen.',
+          body: 'Hier sollte der Schwerpunkt der Klausur frueher sichtbar werden.',
+          tags: ['schwerpunktsetzung']
+        }
+      ]
+    })
+    expect(draft.score.points).toBe(8.5)
+    expect(draft.inlineComments[0].selectedText).toBe('zentrale Anspruchsgrundlage')
+
+    expect(
+      learningTaskSchema.parse({
+        schemaVersion: 1,
+        id: crypto.randomUUID(),
+        userId,
+        submissionId,
+        correctionId: null,
+        aiDraftId: draft.id,
+        category: 'structure',
+        priority: 'high',
+        status: 'open',
+        title: 'Schwerpunkt frueher setzen',
+        detail: 'Pruefe zentrale Anspruchsgrundlagen vor Nebenfragen.',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }).status
+    ).toBe('open')
   })
 })

@@ -1,5 +1,6 @@
 .idea
 .dev-data
+.superpowers/
 references
 node_modules
 dist
@@ -16,3 +17,5 @@ build/icon.iconset
 *.sqlite-wal
 *.tsbuildinfo
 certs
+*.env
+.env.local

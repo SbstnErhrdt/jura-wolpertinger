@@ -195,6 +195,36 @@ footer p {
   color: #5c737e;
 }
 
+.ai-section {
+  background: #f8fbfc;
+}
+
+.ai-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 28px;
+}
+
+.ai-grid article {
+  background: #fff;
+  border: 1px solid #d5e6ef;
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.ai-grid strong {
+  color: #19313d;
+  display: block;
+  font-size: 18px;
+  margin-bottom: 8px;
+}
+
+.ai-grid p {
+  color: #5c737e;
+  margin-bottom: 0;
+}
+
 .screenshots-section {
   background: #eaf3f7;
 }
@@ -406,6 +436,7 @@ footer p {
   }
 
   .feature-grid,
+  .ai-grid,
   .screenshot-grid,
   .download-grid {
     grid-template-columns: 1fr;

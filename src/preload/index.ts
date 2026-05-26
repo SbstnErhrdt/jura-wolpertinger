@@ -2,18 +2,23 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type {
   AddInlineCommentInput,
   AppApi,
+  GenerateAiCorrectionInput,
   CreateExamInput,
   SaveRevisionInput,
+  SaveAiSettingsInput,
+  TestAiConnectionInput,
   TrashFolderInput,
   UpdateCorrectionInput,
   UpdateFolderInput,
   UpdateExamInput
 } from '@shared/ipc'
+import type { AttachmentRole, LearningTask } from '@shared/schemas'
 
 const api: AppApi = {
   getCurrentUser: () => ipcRenderer.invoke('users:current'),
   listUsers: () => ipcRenderer.invoke('users:list'),
   createUser: (displayName: string) => ipcRenderer.invoke('users:create', displayName),
+  updateUser: (input: { id: string; displayName: string }) => ipcRenderer.invoke('users:update', input),
   switchUser: (userId: string) => ipcRenderer.invoke('users:switch', userId),
   completeOnboarding: (userId: string) => ipcRenderer.invoke('users:completeOnboarding', userId),
   completeTour: (userId: string) => ipcRenderer.invoke('users:completeTour', userId),
@@ -34,7 +39,23 @@ const api: AppApi = {
   submitExam: (examId: string) => ipcRenderer.invoke('exams:submit', examId),
   getSubmission: (id: string) => ipcRenderer.invoke('submissions:get', id),
   listAnalyticsEntries: () => ipcRenderer.invoke('analytics:list'),
-  addAttachment: (examId: string) => ipcRenderer.invoke('attachments:add', examId),
+  getAiSettingsStatus: () => ipcRenderer.invoke('ai:settingsStatus'),
+  saveAiSettings: (input: SaveAiSettingsInput) => ipcRenderer.invoke('ai:saveSettings', input),
+  removeAiSettings: () => ipcRenderer.invoke('ai:removeSettings'),
+  testAiConnection: (input?: TestAiConnectionInput) => ipcRenderer.invoke('ai:testConnection', input),
+  generateAiCorrectionDraft: (input: GenerateAiCorrectionInput) =>
+    ipcRenderer.invoke('ai:generateCorrectionDraft', input),
+  listAiCorrectionDrafts: (submissionId: string) =>
+    ipcRenderer.invoke('ai:listCorrectionDrafts', submissionId),
+  acceptAiCorrectionDraft: (draftId: string) =>
+    ipcRenderer.invoke('ai:acceptCorrectionDraft', draftId),
+  rejectAiCorrectionDraft: (draftId: string) =>
+    ipcRenderer.invoke('ai:rejectCorrectionDraft', draftId),
+  listLearningTasks: () => ipcRenderer.invoke('learningTasks:list'),
+  updateLearningTaskStatus: (taskId: string, status: LearningTask['status']) =>
+    ipcRenderer.invoke('learningTasks:updateStatus', taskId, status),
+  addAttachment: (examId: string, role?: AttachmentRole) =>
+    ipcRenderer.invoke('attachments:add', examId, role),
   openAttachment: (id: string) => ipcRenderer.invoke('attachments:open', id),
   exportExamPackage: (examId: string) => ipcRenderer.invoke('package:export', examId),
   importExamPackage: () => ipcRenderer.invoke('package:import'),

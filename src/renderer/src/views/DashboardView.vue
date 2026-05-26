@@ -234,10 +234,10 @@
               </option>
             </select>
           </label>
-          <label class="dialog-field">
-            Tags
+          <div class="dialog-field">
+            <span>Tags</span>
             <TagInput v-model="tagValues" :suggestions="tagSuggestions" placeholder="Tags hinzufügen" />
-          </label>
+          </div>
           <div class="dialog-actions">
             <button type="button" class="secondary" @click="cancelCreateExam">Abbrechen</button>
             <button type="submit">
