@@ -2,6 +2,7 @@
 .dev-data
 .superpowers/
 references
+science/
 node_modules
 dist
 out
