@@ -28,6 +28,7 @@ import type { AttachmentRole, LearningTask } from '@shared/schemas'
 import { AppServices } from './services/services'
 import { seedDemoDataIfEnabled } from './services/demoData'
 import { exportExamPdf } from './services/pdf'
+import { resolveRuntimeDockIconPath } from './appIdentity'
 
 let mainWindow: BrowserWindow | null = null
 let splashWindow: BrowserWindow | null = null
@@ -49,15 +50,6 @@ function resolveAssetPath(...segments: string[]): string {
   return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0]
 }
 
-function resolveAppIconPath(): string {
-  const candidates =
-    process.platform === 'darwin'
-      ? [resolveAssetPath('build', 'icon.icns'), resolveAssetPath('build', 'icon.png'), resolveAssetPath('assets', 'icon.png')]
-      : [resolveAssetPath('build', 'icon.png'), resolveAssetPath('assets', 'icon.png')]
-
-  return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0]
-}
-
 function resolveDisplayIconPath(): string {
   const candidates = [resolveAssetPath('build', 'icon.png'), resolveAssetPath('assets', 'icon.png')]
   return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0]
@@ -66,9 +58,12 @@ function resolveDisplayIconPath(): string {
 function configureApplicationIdentity(): void {
   app.setName(APP_NAME)
 
-  if (process.platform !== 'darwin') return
-
-  const iconPath = resolveAppIconPath()
+  const iconPath = resolveRuntimeDockIconPath({
+    platform: process.platform,
+    isPackaged: app.isPackaged,
+    resolveAssetPath
+  })
+  if (!iconPath) return
   const icon = nativeImage.createFromPath(iconPath)
   if (!icon.isEmpty()) {
     app.dock.setIcon(icon)
