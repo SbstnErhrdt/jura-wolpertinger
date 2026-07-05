@@ -71,6 +71,17 @@ type CloudTagRow = {
   learning_tags: { name: string } | { name: string }[] | null
 }
 
+type CloudReviewBatchRow = {
+  prompt_id: string
+  item_id: string
+  collection_id: string
+  front_markdown: string
+  back_markdown: string
+  due_at: string | null
+}
+
+const CLOUD_QUERY_CHUNK_SIZE = 50
+
 export function createCloudLearningApi(localApi: AppApi): AppApi {
   return {
     ...localApi,
@@ -209,13 +220,14 @@ export function createCloudLearningApi(localApi: AppApi): AppApi {
       return updateCloudCard(input)
     },
     async getReviewBatch(input: GetReviewBatchInput = {}) {
+      if (!input.tag) return listCloudReviewBatch(input)
       const cards = await listCloudCards(input.collectionId ?? null)
       const excluded = new Set(input.excludeCardIds ?? [])
       const now = nowIso()
       const limit = Math.min(Math.max(input.limit ?? 30, 1), 100)
       return cards
         .filter((card) => card.dueAt <= now)
-        .filter((card) => !input.tag || card.tags.includes(input.tag))
+        .filter((card) => card.tags.includes(input.tag ?? ''))
         .filter((card) => !excluded.has(card.id))
         .sort((left, right) => left.dueAt.localeCompare(right.dueAt))
         .slice(0, limit)
@@ -394,31 +406,40 @@ async function listCloudCards(collectionId: string | null): Promise<LearningCard
   if (!items.length) return []
 
   const itemIds = items.map((item) => item.id)
-  const { data: prompts, error: promptsError } = await client
-    .from('learning_prompts')
-    .select('id, item_id, front_markdown, back_markdown, is_archived, created_at, updated_at')
-    .in('item_id', itemIds)
-    .eq('is_archived', false)
-    .order('sort_index', { ascending: true })
-    .returns<CloudPromptRow[]>()
-  if (promptsError) throw promptsError
+  const prompts = await selectInChunks(itemIds, async (chunk) => {
+    const { data, error } = await client
+      .from('learning_prompts')
+      .select('id, item_id, front_markdown, back_markdown, is_archived, created_at, updated_at')
+      .in('item_id', chunk)
+      .eq('is_archived', false)
+      .order('sort_index', { ascending: true })
+      .returns<CloudPromptRow[]>()
+    if (error) throw error
+    return data ?? []
+  })
   if (!prompts.length) return []
 
   const promptIds = prompts.map((prompt) => prompt.id)
-  const { data: schedules, error: schedulesError } = await client
-    .from('learning_prompt_schedules')
-    .select('prompt_id, due_at, reps, lapses, last_rating')
-    .eq('user_id', user.id)
-    .in('prompt_id', promptIds)
-    .returns<CloudScheduleRow[]>()
-  if (schedulesError) throw schedulesError
+  const schedules = await selectInChunks(promptIds, async (chunk) => {
+    const { data, error } = await client
+      .from('learning_prompt_schedules')
+      .select('prompt_id, due_at, reps, lapses, last_rating')
+      .eq('user_id', user.id)
+      .in('prompt_id', chunk)
+      .returns<CloudScheduleRow[]>()
+    if (error) throw error
+    return data ?? []
+  })
 
-  const { data: tagRows, error: tagsError } = await client
-    .from('learning_item_tags')
-    .select('item_id, learning_tags(name)')
-    .in('item_id', itemIds)
-    .returns<CloudTagRow[]>()
-  if (tagsError) throw tagsError
+  const tagRows = await selectInChunks(itemIds, async (chunk) => {
+    const { data, error } = await client
+      .from('learning_item_tags')
+      .select('item_id, learning_tags(name)')
+      .in('item_id', chunk)
+      .returns<CloudTagRow[]>()
+    if (error) throw error
+    return data ?? []
+  })
 
   const itemsById = new Map(items.map((item) => [item.id, item]))
   const schedulesByPromptId = new Map((schedules ?? []).map((schedule) => [schedule.prompt_id, schedule]))
@@ -449,6 +470,81 @@ async function listCloudCards(collectionId: string | null): Promise<LearningCard
       } satisfies LearningCard
     })
     .filter((card): card is LearningCard => Boolean(card))
+}
+
+async function listCloudReviewBatch(input: GetReviewBatchInput = {}): Promise<ReviewCard[]> {
+  const { client, user } = await requireCloudContext()
+  const limit = Math.min(Math.max(input.limit ?? 30, 1), 100)
+  const { data, error } = await client.rpc('get_review_batch', {
+    p_collection_ids: input.collectionId ? [input.collectionId] : null,
+    p_tag_ids: null,
+    p_limit: limit,
+    p_exclude_prompt_ids: input.excludeCardIds ?? []
+  })
+  if (error) throw error
+
+  const rows = (data ?? []) as CloudReviewBatchRow[]
+  if (!rows.length) return []
+
+  const itemIds = unique(rows.map((row) => row.item_id))
+  const promptIds = unique(rows.map((row) => row.prompt_id))
+  const [{ data: items, error: itemsError }, schedules, tagRows] = await Promise.all([
+    client
+      .from('learning_items')
+      .select('id, primary_collection_id, owner_user_id, title, external_id, is_archived, created_at, updated_at')
+      .in('id', itemIds)
+      .returns<CloudItemRow[]>(),
+    selectInChunks(promptIds, async (chunk) => {
+      const { data: scheduleRows, error: scheduleError } = await client
+        .from('learning_prompt_schedules')
+        .select('prompt_id, due_at, reps, lapses, last_rating')
+        .eq('user_id', user.id)
+        .in('prompt_id', chunk)
+        .returns<CloudScheduleRow[]>()
+      if (scheduleError) throw scheduleError
+      return scheduleRows ?? []
+    }),
+    selectInChunks(itemIds, async (chunk) => {
+      const { data: nextTagRows, error: tagsError } = await client
+        .from('learning_item_tags')
+        .select('item_id, learning_tags(name)')
+        .in('item_id', chunk)
+        .returns<CloudTagRow[]>()
+      if (tagsError) throw tagsError
+      return nextTagRows ?? []
+    })
+  ])
+  if (itemsError) throw itemsError
+
+  const itemsById = new Map((items ?? []).map((item) => [item.id, item]))
+  const schedulesByPromptId = new Map(schedules.map((schedule) => [schedule.prompt_id, schedule]))
+  const tagsByItemId = groupCloudTags(tagRows)
+
+  return rows
+    .map((row): ReviewCard | null => {
+      const item = itemsById.get(row.item_id)
+      if (!item) return null
+      const schedule = schedulesByPromptId.get(row.prompt_id)
+      return {
+        schemaVersion: 1,
+        id: row.prompt_id,
+        userId: item.owner_user_id,
+        collectionId: row.collection_id,
+        externalId: item.external_id,
+        title: item.title,
+        frontMarkdown: row.front_markdown,
+        backMarkdown: row.back_markdown,
+        tags: tagsByItemId.get(row.item_id) ?? [],
+        isArchived: false,
+        dueAt: schedule?.due_at ?? row.due_at ?? item.created_at,
+        lastRating: schedule?.last_rating ?? null,
+        reps: schedule?.reps ?? 0,
+        lapses: schedule?.lapses ?? 0,
+        createdAt: item.created_at,
+        updatedAt: item.updated_at
+      } satisfies ReviewCard
+    })
+    .filter((card): card is ReviewCard => Boolean(card))
 }
 
 async function createCloudCard(
@@ -608,6 +704,21 @@ function normalizeTags(tags: string[]): string[] {
   return [...new Set(tags.map((tag) => tag.trim()).filter(Boolean))].sort((a, b) =>
     a.localeCompare(b)
   )
+}
+
+async function selectInChunks<T>(
+  values: string[],
+  query: (chunk: string[]) => Promise<T[]>
+): Promise<T[]> {
+  const rows: T[] = []
+  for (let index = 0; index < values.length; index += CLOUD_QUERY_CHUNK_SIZE) {
+    rows.push(...await query(values.slice(index, index + CLOUD_QUERY_CHUNK_SIZE)))
+  }
+  return rows
+}
+
+function unique(values: string[]): string[] {
+  return [...new Set(values)]
 }
 
 function formatDueIntervalLabel(nextDueAt: string): string {
