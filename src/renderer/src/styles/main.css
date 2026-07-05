@@ -1876,6 +1876,13 @@ textarea {
   margin: 10px 0 0;
 }
 
+.empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
 .action-error {
   background: #fff4f4;
   border: 1px solid #f0b8b8;

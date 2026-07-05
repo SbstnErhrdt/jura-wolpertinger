@@ -9,6 +9,14 @@
     </header>
 
     <div v-if="loading" class="empty-state">Lade Karten...</div>
+    <div v-else-if="sessionCompleted" class="empty-state">
+      <h2>Runde geschafft</h2>
+      <p>Du kannst die Karten direkt noch einmal üben oder zurück zu deinen Sammlungen gehen.</p>
+      <div class="empty-actions">
+        <button type="button" @click="restartPractice">Nochmal üben</button>
+        <RouterLink class="secondary" :to="{ name: 'flashcards-collections' }">Zu den Sammlungen</RouterLink>
+      </div>
+    </div>
     <div v-else-if="!currentCard" class="empty-state">
       <h2>{{ emptyTitle }}</h2>
       <p>{{ emptyCopy }}</p>
@@ -76,36 +84,45 @@ const currentIndex = ref(0)
 const showBack = ref(false)
 const feedback = ref('')
 const collectionId = computed(() => (typeof route.query.collection === 'string' ? route.query.collection : null))
-const hasCollectionCards = ref(false)
+const hasPracticeCards = ref(false)
+const sessionCompleted = ref(false)
 
 const currentCard = computed(() => cards.value[currentIndex.value] ?? againQueue.value[0] ?? null)
 const positionLabel = computed(() => `${Math.min(currentIndex.value + 1, cards.value.length)} / ${cards.value.length}`)
-const emptyTitle = computed(() => (collectionId.value && !hasCollectionCards.value ? 'Noch keine Karten' : 'Keine Karten fällig'))
+const emptyTitle = computed(() => (!hasPracticeCards.value ? 'Noch keine Karten' : 'Karten bereit'))
 const emptyCopy = computed(() => {
-  if (collectionId.value && !hasCollectionCards.value) {
+  if (!hasPracticeCards.value && collectionId.value) {
     return 'Erstelle in dieser Sammlung zuerst eine Karteikarte.'
   }
-  return 'Wähle eine Karteikarten-Datei aus oder lege neue Karten in deinen Sammlungen an.'
+  if (!hasPracticeCards.value) {
+    return 'Erstelle zuerst eine Karteikarte in einer Sammlung.'
+  }
+  return 'Starte die Übungsrunde mit den vorhandenen Karten.'
 })
 
 onMounted(load)
 
 async function load(): Promise<void> {
   loading.value = true
+  sessionCompleted.value = false
   cards.value = await api.getReviewBatch({
     collectionId: collectionId.value,
     limit: 40
   })
-  if (!cards.value.length && collectionId.value) {
+  if (!cards.value.length) {
     const collectionCards = await api.listLearningCards(collectionId.value)
-    hasCollectionCards.value = collectionCards.length > 0
+    hasPracticeCards.value = collectionCards.length > 0
     cards.value = collectionCards.slice(0, 40)
   } else {
-    hasCollectionCards.value = cards.value.length > 0
+    hasPracticeCards.value = cards.value.length > 0
   }
   currentIndex.value = 0
   showBack.value = false
   loading.value = false
+}
+
+async function restartPractice(): Promise<void> {
+  await load()
 }
 
 async function rate(rating: ReviewRating): Promise<void> {
@@ -132,6 +149,7 @@ function nextCard(): void {
   }
   cards.value = []
   currentIndex.value = 0
+  sessionCompleted.value = true
 }
 
 function removeFromSession(): void {
