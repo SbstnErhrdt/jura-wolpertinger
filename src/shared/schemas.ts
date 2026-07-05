@@ -283,16 +283,15 @@ export const learningCardSchema = z.object({
   backMarkdown: z.string().min(1),
   tags: z.array(z.string()),
   isArchived: z.boolean(),
+  dueAt: isoDateSchema,
+  lastRating: reviewRatingSchema.nullable(),
+  reps: z.number().int().nonnegative(),
+  lapses: z.number().int().nonnegative(),
   createdAt: isoDateSchema,
   updatedAt: isoDateSchema
 })
 
-export const reviewCardSchema = learningCardSchema.extend({
-  dueAt: isoDateSchema,
-  lastRating: reviewRatingSchema.nullable(),
-  reps: z.number().int().nonnegative(),
-  lapses: z.number().int().nonnegative()
-})
+export const reviewCardSchema = learningCardSchema
 
 export const learningExportCardSchema = z.object({
   externalId: z.string().min(1),

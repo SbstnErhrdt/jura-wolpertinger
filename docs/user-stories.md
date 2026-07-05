@@ -46,6 +46,19 @@ Akzeptanz:
 - Tags filtern Karten über Collections und Ordner hinweg.
 - Eine Karte gehört genau zu einer Collection.
 
+### Karteikarten selbst erstellen
+
+Als Nutzer:in möchte ich ohne technische Begriffe neue Karteikarten schreiben können, damit ich eigene Lerninhalte schnell in die Wiederholung bekomme.
+
+Akzeptanz:
+
+- Die Kartenverwaltung bietet eine klare Aktion `Neue Karteikarte`.
+- Nutzer:innen öffnen zuerst eine Sammlung und erstellen die Karteikarte dort.
+- Nutzer:innen schreiben Vorderseite und Rückseite und können optional Schlagwörter setzen.
+- Nach dem Speichern ist die Karte sofort in der Sammlung sichtbar und zählt für die Wiederholung.
+- Datei-Funktionen sprechen von Karteikarten-Dateien, nicht von technischen Formaten.
+- Die Sammlungsdetailseite zeigt alle Karten der Sammlung mit Suche, Sortierung, Fälligkeit, letzter Bewertung und Wiederholungskennzahlen.
+
 ### Karteikarten wiederholen
 
 Als Nutzer:in möchte ich Karteikarten auf dem Handy und Laptop schnell wiederholen, damit kurze Lerneinheiten ohne Reibung möglich sind.

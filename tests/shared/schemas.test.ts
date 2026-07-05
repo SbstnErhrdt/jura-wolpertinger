@@ -282,6 +282,10 @@ describe('shared schemas', () => {
       backMarkdown: 'Nach § 24 StGB bei Aufgabe der weiteren Tatausführung.',
       tags: ['strafrecht', 'rücktritt'],
       isArchived: false,
+      dueAt: now,
+      lastRating: null,
+      reps: 0,
+      lapses: 0,
       createdAt: now,
       updatedAt: now
     })
@@ -289,11 +293,7 @@ describe('shared schemas', () => {
 
     expect(
       reviewCardSchema.parse({
-        ...card,
-        dueAt: now,
-        lastRating: null,
-        reps: 0,
-        lapses: 0
+        ...card
       }).reps
     ).toBe(0)
 

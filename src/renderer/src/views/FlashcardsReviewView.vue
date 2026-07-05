@@ -11,7 +11,7 @@
     <div v-if="loading" class="empty-state">Lade Karten...</div>
     <div v-else-if="!currentCard" class="empty-state">
       <h2>Keine Karten fällig</h2>
-      <p>Importiere eine JSON-Datei oder lege neue Karten in deinen Sammlungen an.</p>
+      <p>Wähle eine Karteikarten-Datei aus oder lege neue Karten in deinen Sammlungen an.</p>
       <RouterLink class="secondary" :to="{ name: 'flashcards-collections' }">Zu den Sammlungen</RouterLink>
     </div>
 

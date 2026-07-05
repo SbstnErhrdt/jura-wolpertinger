@@ -190,7 +190,7 @@
           <button type="button" class="onboarding-action-card" @click="openOnboardingTarget('import')">
             <FolderKanban :size="20" aria-hidden="true" />
             <span>Daten importieren</span>
-            <small>JSON-Karteikarten importieren.</small>
+            <small>Vorhandene Karteikarten aus einer Datei übernehmen.</small>
           </button>
           <button type="button" class="onboarding-action-card" @click="openOnboardingTarget('settings')">
             <Settings :size="20" aria-hidden="true" />

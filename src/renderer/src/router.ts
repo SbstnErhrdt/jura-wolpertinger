@@ -4,6 +4,7 @@ import ExamView from './views/ExamView.vue'
 import CorrectionView from './views/CorrectionView.vue'
 import AboutView from './views/AboutView.vue'
 import AnalyticsView from './views/AnalyticsView.vue'
+import FlashcardsCollectionDetailView from './views/FlashcardsCollectionDetailView.vue'
 import FlashcardsCollectionsView from './views/FlashcardsCollectionsView.vue'
 import FlashcardsReviewView from './views/FlashcardsReviewView.vue'
 import HelpView from './views/HelpView.vue'
@@ -16,6 +17,7 @@ export const router = createRouter({
     { path: '/', name: 'home', component: HomeView },
     { path: '/flashcards/review', name: 'flashcards-review', component: FlashcardsReviewView },
     { path: '/flashcards/collections', name: 'flashcards-collections', component: FlashcardsCollectionsView },
+    { path: '/flashcards/collections/:id', name: 'flashcards-collection', component: FlashcardsCollectionDetailView },
     { path: '/exams', name: 'dashboard', component: DashboardView },
     { path: '/analytics', name: 'analytics', component: AnalyticsView },
     { path: '/settings', name: 'settings', component: SettingsView },

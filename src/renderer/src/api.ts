@@ -661,7 +661,16 @@ function createBrowserDevApi(): AppApi {
       const user = ensureBrowserUser(store)
       return store.learningCards.filter(
         (card) => card.userId === user.id && !card.isArchived && (!collectionId || card.collectionId === collectionId)
-      )
+      ).map((card) => {
+        const schedule = browserScheduleFor(store, user.id, card.id)
+        return {
+          ...card,
+          dueAt: schedule.dueAt,
+          lastRating: schedule.lastRating,
+          reps: schedule.reps,
+          lapses: schedule.lapses
+        }
+      })
     },
     async createLearningCard(input: CreateLearningCardInput) {
       const store = readStore()
@@ -1198,6 +1207,10 @@ function createBrowserCard(userId: string, input: CreateLearningCardInput): Lear
     backMarkdown: input.backMarkdown.trim(),
     tags: normalizeTags(input.tags),
     isArchived: false,
+    dueAt: now,
+    lastRating: null,
+    reps: 0,
+    lapses: 0,
     createdAt: now,
     updatedAt: now
   }

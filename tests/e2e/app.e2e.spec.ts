@@ -24,7 +24,7 @@ test.describe('Jura Wolpertinger Electron app', () => {
         if (message.type() === 'error') errors.push(message.text())
       })
 
-      await expect(page.locator('.dashboard')).toBeVisible()
+      await expect(page.locator('.home-view')).toBeVisible()
       await expect
         .poll(() => page.locator('.brand img').evaluate((image) => (image as HTMLImageElement).naturalWidth))
         .toBeGreaterThan(0)
@@ -36,8 +36,29 @@ test.describe('Jura Wolpertinger Electron app', () => {
             .evaluate((image) => (image as HTMLImageElement).naturalWidth)
         )
         .toBeGreaterThan(0)
-      await page.click('.onboarding-card button:has-text("Später")')
+      await page.click('.onboarding-card button:has-text("Nicht mehr anzeigen")')
       await expect(page.locator('.sidebar-user select')).toContainText('Lokaler Nutzer')
+      await page.click('.nav a:has-text("Sammlungen")')
+      await expect(page).toHaveURL(/#\/flashcards\/collections/)
+      await page.click('button:has-text("Neue Sammlung")')
+      await page.fill('.dialog-card input[placeholder="z. B. Strafrecht AT"]', 'Arbeitsrecht')
+      await page.fill('.dialog-card input[placeholder="z. B. Strafrecht"]', 'Arbeitsrecht')
+      await page.click('.dialog-actions button:has-text("Sammlung speichern")')
+      await expect(page).toHaveURL(/#\/flashcards\/collections\/.+/)
+      await expect(page.locator('.page-header')).toContainText('Arbeitsrecht')
+      await page.click('button:has-text("Neue Karteikarte")')
+      await page.fill('input[placeholder="Kurzer Titel, z. B. Abmahnung"]', 'Abmahnung')
+      await page.fill('textarea[placeholder="Was soll auf der Vorderseite stehen?"]', 'Was ist eine Abmahnung?')
+      await page.fill(
+        'textarea[placeholder="Was soll auf der Rückseite stehen?"]',
+        'Eine Abmahnung rügt ein konkretes Fehlverhalten und warnt arbeitsrechtliche Konsequenzen an.'
+      )
+      await page.fill('.dialog-card .tag-input-field', 'arbeitsrecht')
+      await page.keyboard.press('Enter')
+      await page.click('.dialog-actions button:has-text("Karteikarte speichern")')
+      await expect(page.locator('.action-notice')).toContainText('Karteikarte gespeichert')
+      await expect(page.locator('.flashcard-list-card', { hasText: 'Abmahnung' })).toContainText('Noch nicht bewertet')
+      await expect(page.locator('.page-header')).toContainText('1 Karten')
       await page.click('.nav a:has-text("Hilfe")')
       await expect(page).toHaveURL(/#\/help/)
       await expect(page.locator('.help-item', { hasText: 'Gehen meine Klausuren verloren' })).toBeVisible()
@@ -93,7 +114,7 @@ test.describe('Jura Wolpertinger Electron app', () => {
       await expect(page.locator('.sidebar-user select')).toContainText('Sebastian')
       await page.click('.nav a:has-text("Hilfe")')
       await page.click('button:has-text("Tour starten")')
-      await expect(page).toHaveURL(/#\/$/)
+      await expect(page).toHaveURL(/#\/exams/)
       await expect(page.locator('.driver-popover')).toBeVisible()
       await page.click('.driver-popover-close-btn')
       await expect(page.locator('.driver-popover')).toHaveCount(0)
@@ -135,7 +156,7 @@ test.describe('Jura Wolpertinger Electron app', () => {
       await page.keyboard.type('Anspruch entstanden. Weitere Prüfung.')
       await expect(page.locator('.exam-editor-surface')).toContainText('Anspruch entstanden.')
 
-      await page.click('.brand')
+      await page.click('.nav a:has-text("Bibliothek")')
       await expect(page.locator('.dashboard')).toBeVisible()
       await page.click('button:has-text("Neue Klausur")')
       await page.fill('.dialog-card input[placeholder="Titel"]', 'Tag-Test')
@@ -270,8 +291,8 @@ async function findMainWindow(app: ElectronApplication): Promise<Page> {
   for (let attempt = 0; attempt < 80; attempt += 1) {
     for (const page of app.windows()) {
       if (!page.url().startsWith('data:')) {
-        await page.waitForSelector('.dashboard', { timeout: 500 }).catch(() => undefined)
-        if (await page.locator('.dashboard').isVisible().catch(() => false)) return page
+        await page.waitForSelector('.home-view, .dashboard', { timeout: 500 }).catch(() => undefined)
+        if (await page.locator('.home-view, .dashboard').first().isVisible().catch(() => false)) return page
       }
     }
     await new Promise((resolve) => setTimeout(resolve, 100))

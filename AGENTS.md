@@ -44,6 +44,13 @@ Vor größeren Änderungen zuerst lesen:
 - Buttons, Toggles und aktive States müssen klar erkennbar sein.
 - Keine dekorativen UI-Umbauten ohne konkreten Nutzen.
 - Die App soll lokal, ruhig und arbeitsorientiert wirken.
+- Die Zielgruppe sind Jura-Studierende und Referendarinnen/Referendare ohne technische Vorkenntnisse. UI-Texte müssen fachlich, einfach und nicht-technisch formuliert sein.
+- Technische Begriffe wie `JSON`, `API`, `Sync`, `Export`, `Import`, `Cloud-Key` oder Dateiformatnamen dürfen im Nutzer-UI nur stehen, wenn sie wirklich notwendig sind. Bevorzugt werden alltagstaugliche Begriffe wie `Karteikarten-Datei sichern`, `Karteikarten-Datei auswählen`, `Daten übertragen`, `mit der Online-Version verbinden`.
+- Primäre Nutzerflows müssen ohne technisches Vorwissen verständlich sein. Wenn ein Button eine Aktion direkt ausführt, muss der Text dies klar sagen, z. B. `Account jetzt erstellen`, `Karteikarte speichern`, `Datei auswählen`.
+- Erstellen und Bearbeiten von Inhalten muss über Modals oder eigene Detailseiten laufen, nicht über Inline-Formulare in Listen oder Übersichten.
+- Löschen, Archivieren oder andere potentiell destruktive Aktionen brauchen immer ein Confirm-Modal mit klarer Beschreibung der Folge.
+- Hierarchien sollen in der UI sichtbar navigierbar sein. Ein untergeordnetes Objekt wird im Kontext seines übergeordneten Objekts erstellt, z. B. Karteikarten innerhalb einer geöffneten Sammlung, nicht lose auf der Sammlungsübersicht.
+- Übersichtsseiten zeigen Orientierung und Einstiegspunkte; Detailseiten zeigen die eigentliche Arbeitsoberfläche mit Liste, Suche, Sortierung, Kennzahlen und Aktionen im Kontext.
 
 ## Datenmodell-Regeln
 

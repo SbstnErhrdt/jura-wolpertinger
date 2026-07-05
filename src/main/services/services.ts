@@ -1057,11 +1057,25 @@ export class AppServices {
     const rows = collectionId
       ? (this.db
           .prepare(
-            'SELECT * FROM learning_cards WHERE user_id = ? AND collection_id = ? AND is_archived = 0 ORDER BY updated_at DESC'
+            `
+            SELECT c.*, COALESCE(s.due_at, c.created_at) AS due_at, s.last_rating, COALESCE(s.reps, 0) AS reps, COALESCE(s.lapses, 0) AS lapses
+            FROM learning_cards c
+            LEFT JOIN learning_card_schedules s ON s.card_id = c.id AND s.user_id = c.user_id
+            WHERE c.user_id = ? AND c.collection_id = ? AND c.is_archived = 0
+            ORDER BY c.updated_at DESC
+          `
           )
           .all(userId, collectionId) as Row[])
       : (this.db
-          .prepare('SELECT * FROM learning_cards WHERE user_id = ? AND is_archived = 0 ORDER BY updated_at DESC')
+          .prepare(
+            `
+            SELECT c.*, COALESCE(s.due_at, c.created_at) AS due_at, s.last_rating, COALESCE(s.reps, 0) AS reps, COALESCE(s.lapses, 0) AS lapses
+            FROM learning_cards c
+            LEFT JOIN learning_card_schedules s ON s.card_id = c.id AND s.user_id = c.user_id
+            WHERE c.user_id = ? AND c.is_archived = 0
+            ORDER BY c.updated_at DESC
+          `
+          )
           .all(userId) as Row[])
     return rows.map((row) => learningCardFromRow(row, this.listTagsForCard(String(row.id))))
   }
@@ -1811,7 +1825,14 @@ export class AppServices {
 
   private getLearningCard(id: string): LearningCard {
     const row = this.db
-      .prepare('SELECT * FROM learning_cards WHERE id = ? AND user_id = ? AND is_archived = 0')
+      .prepare(
+        `
+        SELECT c.*, COALESCE(s.due_at, c.created_at) AS due_at, s.last_rating, COALESCE(s.reps, 0) AS reps, COALESCE(s.lapses, 0) AS lapses
+        FROM learning_cards c
+        LEFT JOIN learning_card_schedules s ON s.card_id = c.id AND s.user_id = c.user_id
+        WHERE c.id = ? AND c.user_id = ? AND c.is_archived = 0
+      `
+      )
       .get(id, this.getCurrentUserId()) as Row | undefined
     if (!row) throw new Error(`Learning card not found: ${id}`)
     return learningCardFromRow(row, this.listTagsForCard(id))
@@ -2261,19 +2282,17 @@ function learningCardFromRow(row: Row, tags: string[]): LearningCard {
     backMarkdown: String(row.back_markdown),
     tags,
     isArchived: Boolean(row.is_archived),
+    dueAt: String(row.due_at ?? row.created_at),
+    lastRating: row.last_rating === null || row.last_rating === undefined ? null : Number(row.last_rating),
+    reps: Number(row.reps ?? 0),
+    lapses: Number(row.lapses ?? 0),
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at)
   })
 }
 
 function reviewCardFromRow(row: Row, tags: string[]): ReviewCard {
-  return reviewCardSchema.parse({
-    ...learningCardFromRow(row, tags),
-    dueAt: String(row.due_at ?? row.created_at),
-    lastRating: row.last_rating === null || row.last_rating === undefined ? null : Number(row.last_rating),
-    reps: Number(row.reps ?? 0),
-    lapses: Number(row.lapses ?? 0)
-  })
+  return reviewCardSchema.parse(learningCardFromRow(row, tags))
 }
 
 function firstMarkdownLine(markdown: string): string | null {

@@ -4,11 +4,21 @@
       <div>
         <p class="eyebrow">Karteikarten</p>
         <h1>Sammlungen</h1>
-        <p>Sammlungen sind deine fachlichen Kartensätze. JSON-Import und Export bleiben lokal und portabel.</p>
+        <p>Sammlungen bündeln deine Karteikarten nach Rechtsgebiet, Kurs oder Lernziel.</p>
       </div>
       <div class="header-actions">
-        <button class="secondary" type="button" @click="triggerImport">JSON importieren</button>
-        <button type="button" @click="exportDecks">JSON exportieren</button>
+        <button type="button" @click="openCreateCollectionDialog">
+          <Plus :size="17" aria-hidden="true" />
+          Neue Sammlung
+        </button>
+        <button class="secondary" type="button" @click="triggerImport">
+          <Upload :size="17" aria-hidden="true" />
+          Datei auswählen
+        </button>
+        <button class="secondary" type="button" @click="exportDecks">
+          <Download :size="17" aria-hidden="true" />
+          Karten sichern
+        </button>
       </div>
     </header>
 
@@ -21,14 +31,10 @@
     />
     <div v-if="transferMessage" class="action-notice" :class="{ error: transferMessageKind === 'error' }">
       <span>{{ transferMessage }}</span>
-      <button v-if="showImportPrompt" class="secondary" type="button" @click="triggerImport">JSON importieren</button>
+      <button v-if="showImportPrompt" class="secondary" type="button" @click="triggerImport">
+        Karteikarten-Datei auswählen
+      </button>
     </div>
-
-    <form class="collection-form" @submit.prevent="createCollection">
-      <input v-model="newName" placeholder="Neue Sammlung, z. B. Strafrecht AT" />
-      <input v-model="newSubject" placeholder="Rechtsgebiet" />
-      <button :disabled="!newName.trim()">Anlegen</button>
-    </form>
 
     <div class="collection-grid">
       <article v-for="collection in collections" :key="collection.id" class="collection-card">
@@ -38,16 +44,43 @@
           <span>{{ collection.cardCount }} Karten</span>
           <span>{{ collection.dueCount }} fällig</span>
         </div>
-        <RouterLink class="secondary" :to="{ name: 'flashcards-review', query: { collection: collection.id } }">
-          Wiederholen
-        </RouterLink>
+        <div class="collection-card-actions">
+          <RouterLink class="secondary" :to="{ name: 'flashcards-collection', params: { id: collection.id } }">
+            Öffnen
+          </RouterLink>
+          <RouterLink class="secondary" :to="{ name: 'flashcards-review', query: { collection: collection.id } }">
+            Wiederholen
+          </RouterLink>
+        </div>
       </article>
+    </div>
+
+    <div v-if="showCreateCollectionDialog" class="dialog-backdrop" @click="cancelCreateCollection">
+      <div class="dialog-card" @click.stop>
+        <h2>Neue Sammlung</h2>
+        <p class="dialog-copy">Lege einen fachlichen Ort an, in dem du danach Karteikarten erstellst.</p>
+        <form class="dialog-form" @submit.prevent="createCollection">
+          <label class="dialog-field">
+            Name
+            <input v-model="newName" placeholder="z. B. Strafrecht AT" autofocus />
+          </label>
+          <label class="dialog-field">
+            Rechtsgebiet
+            <input v-model="newSubject" placeholder="z. B. Strafrecht" />
+          </label>
+          <div class="dialog-actions">
+            <button type="button" class="secondary" @click="cancelCreateCollection">Abbrechen</button>
+            <button type="submit" :disabled="!newName.trim()">Sammlung speichern</button>
+          </div>
+        </form>
+      </div>
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { Download, Plus, Upload } from 'lucide-vue-next'
 import { useRoute, useRouter } from 'vue-router'
 import type { LearningCollection } from '@shared/schemas'
 import { api } from '../api'
@@ -61,13 +94,14 @@ const importInput = ref<HTMLInputElement | null>(null)
 const transferMessage = ref('')
 const transferMessageKind = ref<'info' | 'error'>('info')
 const showImportPrompt = ref(false)
+const showCreateCollectionDialog = ref(false)
 
 onMounted(async () => {
   await load()
   if (route.query.import === '1') {
     showImportPrompt.value = true
     transferMessageKind.value = 'info'
-    transferMessage.value = 'Bereit für den JSON-Import. Wähle jetzt deine Karteikarten-Datei aus.'
+    transferMessage.value = 'Bereit zum Übernehmen deiner Karteikarten. Wähle jetzt die passende Datei aus.'
     await router.replace({ name: 'flashcards-collections' })
   }
 })
@@ -92,7 +126,7 @@ async function exportDecks(): Promise<void> {
   anchor.click()
   URL.revokeObjectURL(url)
   transferMessageKind.value = 'info'
-  transferMessage.value = 'JSON-Export wurde erstellt.'
+  transferMessage.value = 'Deine Karteikarten-Datei wurde erstellt.'
 }
 
 async function importDecks(event: Event): Promise<void> {
@@ -107,18 +141,28 @@ async function importDecks(event: Event): Promise<void> {
     await load()
   } catch {
     transferMessageKind.value = 'error'
-    transferMessage.value = 'Import fehlgeschlagen. Bitte eine gültige Jura-Wolpertinger-JSON-Datei auswählen.'
+    transferMessage.value = 'Die Datei konnte nicht gelesen werden. Bitte wähle eine Karteikarten-Datei aus Jura Wolpertinger.'
   }
+}
+
+function openCreateCollectionDialog(): void {
+  newName.value = ''
+  newSubject.value = ''
+  showCreateCollectionDialog.value = true
+}
+
+function cancelCreateCollection(): void {
+  showCreateCollectionDialog.value = false
 }
 
 async function createCollection(): Promise<void> {
   if (!newName.value.trim()) return
-  await api.createLearningCollection({
+  const collection = await api.createLearningCollection({
     name: newName.value,
     subject: newSubject.value || null
   })
-  newName.value = ''
-  newSubject.value = ''
+  showCreateCollectionDialog.value = false
   await load()
+  await router.push({ name: 'flashcards-collection', params: { id: collection.id } })
 }
 </script>
