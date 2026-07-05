@@ -38,6 +38,8 @@ import type {
   Submission,
   User
 } from '@shared/schemas'
+import { getSupabaseAuthClient, requiresCloudAuth } from './cloudAuth'
+import { createCloudLearningApi } from './cloudLearningApi'
 import {
   examStatusSchema,
   examTypeSchema,
@@ -83,6 +85,7 @@ type BrowserStore = {
 }
 
 let browserDevApi: AppApi | null = null
+let cloudLearningApi: AppApi | null = null
 
 export const isElectronApiAvailable = Boolean(window.juraApi)
 export const api: AppApi = getApi()
@@ -90,6 +93,10 @@ export const api: AppApi = getApi()
 export function getApi(): AppApi {
   if (window.juraApi) return window.juraApi
   browserDevApi ??= createBrowserDevApi()
+  if (requiresCloudAuth() && getSupabaseAuthClient()) {
+    cloudLearningApi ??= createCloudLearningApi(browserDevApi)
+    return cloudLearningApi
+  }
   return browserDevApi
 }
 

@@ -14,7 +14,7 @@ let authClient: SupabaseClient | null = null
 export function requiresCloudAuth(): boolean {
   if (typeof window === 'undefined') return false
   if (window.juraApi) return false
-  return window.location.hostname === PRODUCTION_APP_HOST || import.meta.env.VITE_JURA_REQUIRE_AUTH === '1'
+  return window.location?.hostname === PRODUCTION_APP_HOST || import.meta.env.VITE_JURA_REQUIRE_AUTH === '1'
 }
 
 export function getSupabaseAuthClient(): SupabaseClient | null {
