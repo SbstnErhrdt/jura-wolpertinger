@@ -78,6 +78,76 @@ textarea {
   width: 100%;
 }
 
+.app-breadcrumb {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  box-shadow: 0 8px 24px rgba(0, 79, 128, 0.08);
+  display: inline-flex;
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 4px;
+  scrollbar-width: none;
+}
+
+.app-breadcrumb::-webkit-scrollbar {
+  display: none;
+}
+
+.app-breadcrumb ol {
+  align-items: center;
+  display: flex;
+  gap: 2px;
+  list-style: none;
+  margin: 0;
+  min-width: 0;
+  padding: 0;
+  white-space: nowrap;
+}
+
+.app-breadcrumb-item {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 2px;
+}
+
+.app-breadcrumb-link,
+.app-breadcrumb-current {
+  align-items: center;
+  border-radius: 999px;
+  color: var(--color-text-muted);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 800;
+  gap: 5px;
+  line-height: 1;
+  min-height: 26px;
+  padding: 0 9px;
+  text-decoration: none;
+}
+
+.app-breadcrumb-link:hover {
+  background: var(--color-surface-muted);
+  color: var(--color-primary-strong);
+  filter: none;
+}
+
+.app-breadcrumb-current[aria-current='page'] {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.app-breadcrumb-separator {
+  color: var(--color-text-muted);
+  opacity: 0.62;
+}
+
+.app-breadcrumb + .eyebrow {
+  margin-top: 10px;
+}
+
 .visually-hidden {
   clip: rect(0 0 0 0);
   clip-path: inset(50%);
@@ -3175,6 +3245,31 @@ textarea {
 :root[data-theme='dark'] .tag {
   background: #12364a;
   color: #9bdcff !important;
+}
+
+:root[data-theme='dark'] .app-breadcrumb {
+  background: rgba(17, 27, 32, 0.78);
+  border-color: #31424a;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.24);
+}
+
+:root[data-theme='dark'] .app-breadcrumb-link,
+:root[data-theme='dark'] .app-breadcrumb-current {
+  color: #b7c9d0;
+}
+
+:root[data-theme='dark'] .app-breadcrumb-link:hover {
+  background: #172b34;
+  color: #9bdcff;
+}
+
+:root[data-theme='dark'] .app-breadcrumb-current[aria-current='page'] {
+  background: #0f6c9d;
+  color: #fff;
+}
+
+:root[data-theme='dark'] .app-breadcrumb-separator {
+  color: #8fa3ac;
 }
 
 :root[data-theme='dark'] .app-badge-blue {

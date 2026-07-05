@@ -2,6 +2,7 @@
   <section class="correction-view">
     <aside class="correction-list-panel">
       <div class="correction-list-header">
+        <AppBreadcrumb :items="listBreadcrumbItems" />
         <p class="eyebrow">Bewertung</p>
         <h1>Abgaben</h1>
       </div>
@@ -36,6 +37,7 @@
       <template v-if="submission && correction">
         <header class="page-header correction-detail-header">
           <div>
+            <AppBreadcrumb :items="detailBreadcrumbItems" />
             <p class="eyebrow">Korrektur · {{ formatDate(submission.submittedAt) }}</p>
             <h1>{{ submission.examTitle }}</h1>
           </div>
@@ -309,6 +311,7 @@
       </template>
       <div v-else class="correction-empty-detail">
         <div class="correction-start-panel">
+          <AppBreadcrumb :items="listBreadcrumbItems" />
           <p class="eyebrow">Bewertung</p>
           <h2>Abgabe auswählen</h2>
           <p>Wähle links eine abgegebene Prüfung aus, um die Bewertung zu starten.</p>
@@ -345,6 +348,7 @@ import type { AiSettingsStatus, SubmissionDetails } from '@shared/ipc'
 import type { AiCorrectionDraft, Correction, InlineComment } from '@shared/schemas'
 import { api } from '../api'
 import { requiresCloudAuth } from '../cloudAuth'
+import AppBreadcrumb, { type BreadcrumbItem } from '../components/ui/AppBreadcrumb.vue'
 import { renderTiptapHtml } from '../utils/renderTiptap'
 
 type SubmittedItem = {
@@ -411,6 +415,17 @@ const gradedSubmissionCount = computed(
 const nextOpenSubmission = computed(
   () => submittedItems.value.find((item) => item.scorePoints === null) ?? submittedItems.value[0] ?? null
 )
+const listBreadcrumbItems: BreadcrumbItem[] = [
+  { label: 'Home', to: { name: 'home' } },
+  { label: 'Prüfungen' },
+  { label: 'Bewertung' }
+]
+const detailBreadcrumbItems = computed<BreadcrumbItem[]>(() => [
+  { label: 'Home', to: { name: 'home' } },
+  { label: 'Prüfungen' },
+  { label: 'Bewertung', to: { name: 'correction' } },
+  { label: submission.value?.examTitle ?? 'Abgabe' }
+])
 const selectedAiDraft = computed(
   () => aiDrafts.value.find((draft) => draft.status === 'draft') ?? null
 )

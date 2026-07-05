@@ -2,6 +2,7 @@
   <section class="analytics-view">
     <header class="page-header analytics-header">
       <div>
+        <AppBreadcrumb :items="breadcrumbItems" />
         <p class="eyebrow">Leistung über die Zeit</p>
         <h1>Auswertung</h1>
       </div>
@@ -207,6 +208,7 @@ import type { AnalyticsEntry } from '@shared/ipc'
 import type { LearningTask } from '@shared/schemas'
 import { api } from '../api'
 import TagInput from '../components/TagInput.vue'
+import AppBreadcrumb, { type BreadcrumbItem } from '../components/ui/AppBreadcrumb.vue'
 
 type RangePresetId = '3m' | '6m' | '12m'
 
@@ -237,6 +239,11 @@ const entries = ref<AnalyticsEntry[]>([])
 const learningTasks = ref<LearningTask[]>([])
 const learningTasksError = ref('')
 const filters = ref<AnalyticsFilters>(loadFilters())
+const breadcrumbItems: BreadcrumbItem[] = [
+  { label: 'Home', to: { name: 'home' } },
+  { label: 'Prüfungen' },
+  { label: 'Auswertung' }
+]
 
 onMounted(load)
 

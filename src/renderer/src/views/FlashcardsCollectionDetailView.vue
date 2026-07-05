@@ -2,6 +2,7 @@
   <section class="page flashcards-page">
     <header class="page-header">
       <div>
+        <AppBreadcrumb :items="breadcrumbItems" />
         <p class="eyebrow">Sammlung</p>
         <h1>{{ collection?.name || 'Sammlung' }}</h1>
         <p>{{ collection?.subject || 'Allgemein' }} · {{ cards.length }} Karten · {{ collection?.dueCount ?? 0 }} fällig</p>
@@ -118,6 +119,7 @@ import type { LearningCard, LearningCollection, ReviewRating } from '@shared/sch
 import { api } from '../api'
 import TagInput from '../components/TagInput.vue'
 import ActionMenu, { type ActionMenuItem } from '../components/ui/ActionMenu.vue'
+import AppBreadcrumb, { type BreadcrumbItem } from '../components/ui/AppBreadcrumb.vue'
 import AppBadge from '../components/ui/AppBadge.vue'
 
 const route = useRoute()
@@ -135,6 +137,12 @@ const cardFront = ref('')
 const cardBack = ref('')
 const cardTags = ref<string[]>([])
 const canCreateCard = computed(() => Boolean(cardFront.value.trim()) && Boolean(cardBack.value.trim()))
+const breadcrumbItems = computed<BreadcrumbItem[]>(() => [
+  { label: 'Home', to: { name: 'home' } },
+  { label: 'Karteikarten' },
+  { label: 'Sammlungen', to: { name: 'flashcards-collections' } },
+  { label: collection.value?.name || 'Sammlung' }
+])
 const tagSuggestions = computed(() =>
   [...new Set(cards.value.flatMap((card) => card.tags).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de-DE'))
 )

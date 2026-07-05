@@ -2,6 +2,7 @@
   <section class="flashcard-review">
     <header class="review-header">
       <div>
+        <AppBreadcrumb :items="breadcrumbItems" />
         <p class="eyebrow">Wiederholen</p>
         <h1>Karteikarten</h1>
       </div>
@@ -74,6 +75,7 @@ import type { ReviewCard, ReviewRating } from '@shared/schemas'
 import { api } from '../api'
 import ActionMenu, { type ActionMenuItem } from '../components/ui/ActionMenu.vue'
 import AppBadge from '../components/ui/AppBadge.vue'
+import AppBreadcrumb, { type BreadcrumbItem } from '../components/ui/AppBreadcrumb.vue'
 
 const route = useRoute()
 const loading = ref(true)
@@ -83,11 +85,24 @@ const currentIndex = ref(0)
 const showBack = ref(false)
 const feedback = ref('')
 const collectionId = computed(() => (typeof route.query.collection === 'string' ? route.query.collection : null))
+const collectionName = ref('')
 const hasPracticeCards = ref(false)
 const sessionCompleted = ref(false)
 
 const currentCard = computed(() => cards.value[currentIndex.value] ?? againQueue.value[0] ?? null)
 const positionLabel = computed(() => `${Math.min(currentIndex.value + 1, cards.value.length)} / ${cards.value.length}`)
+const breadcrumbItems = computed<BreadcrumbItem[]>(() => {
+  const items: BreadcrumbItem[] = [
+    { label: 'Home', to: { name: 'home' } },
+    { label: 'Karteikarten' }
+  ]
+  if (collectionId.value) {
+    items.push({ label: 'Sammlungen', to: { name: 'flashcards-collections' } })
+    items.push({ label: collectionName.value || 'Sammlung', to: { name: 'flashcards-collection', params: { id: collectionId.value } } })
+  }
+  items.push({ label: 'Wiederholen' })
+  return items
+})
 const emptyTitle = computed(() => (!hasPracticeCards.value ? 'Noch keine Karten' : 'Karten bereit'))
 const emptyCopy = computed(() => {
   if (!hasPracticeCards.value && collectionId.value) {
@@ -111,6 +126,12 @@ onMounted(load)
 async function load(): Promise<void> {
   loading.value = true
   sessionCompleted.value = false
+  if (collectionId.value) {
+    const collections = await api.listLearningCollections()
+    collectionName.value = collections.find((collection) => collection.id === collectionId.value)?.name ?? ''
+  } else {
+    collectionName.value = ''
+  }
   cards.value = await api.getReviewBatch({
     collectionId: collectionId.value,
     limit: 40

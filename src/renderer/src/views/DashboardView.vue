@@ -2,6 +2,7 @@
   <section class="dashboard">
     <header class="page-header">
       <div>
+        <AppBreadcrumb :items="breadcrumbItems" />
         <p class="eyebrow">Lokale Bibliothek</p>
         <h1>Bibliothek</h1>
       </div>
@@ -311,6 +312,7 @@ import { useRouter } from 'vue-router'
 import { Download, FileText, FolderPlus, Pencil, Plus, RotateCcw, Trash2, Upload } from 'lucide-vue-next'
 import type { ExamStatus } from '@shared/schemas'
 import TagInput from '../components/TagInput.vue'
+import AppBreadcrumb, { type BreadcrumbItem } from '../components/ui/AppBreadcrumb.vue'
 import { useLibraryStore } from '../stores/library'
 
 const store = useLibraryStore()
@@ -360,6 +362,17 @@ const trashFolderState = computed(
 const trashTargetFolders = computed(() =>
   activeFolders.value.filter((folder) => folder.id !== trashFolderId.value)
 )
+const selectedFolderLabel = computed(() => {
+  if (!selectedFolderId.value) return null
+  if (selectedFolderId.value === UNASSIGNED_FOLDER_ID) return 'Ohne Ordner'
+  return activeFolders.value.find((folder) => folder.id === selectedFolderId.value)?.name ?? null
+})
+const breadcrumbItems = computed<BreadcrumbItem[]>(() => [
+  { label: 'Home', to: { name: 'home' } },
+  { label: 'Prüfungen' },
+  { label: 'Bibliothek' },
+  ...(selectedFolderLabel.value ? [{ label: selectedFolderLabel.value }] : [])
+])
 
 const filteredExams = computed(() => {
   if (!selectedFolderId.value) return activeExams.value

@@ -2,6 +2,7 @@
   <section class="page flashcards-page">
     <header class="page-header">
       <div>
+        <AppBreadcrumb :items="breadcrumbItems" />
         <p class="eyebrow">Karteikarten</p>
         <h1>Sammlungen</h1>
         <p>Sammlungen bündeln deine Karteikarten nach Rechtsgebiet, Kurs oder Lernziel.</p>
@@ -84,6 +85,7 @@ import { Download, Plus, Upload } from 'lucide-vue-next'
 import { useRoute, useRouter } from 'vue-router'
 import type { LearningCollection } from '@shared/schemas'
 import { api } from '../api'
+import AppBreadcrumb, { type BreadcrumbItem } from '../components/ui/AppBreadcrumb.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -95,6 +97,11 @@ const transferMessage = ref('')
 const transferMessageKind = ref<'info' | 'error'>('info')
 const showImportPrompt = ref(false)
 const showCreateCollectionDialog = ref(false)
+const breadcrumbItems: BreadcrumbItem[] = [
+  { label: 'Home', to: { name: 'home' } },
+  { label: 'Karteikarten' },
+  { label: 'Sammlungen' }
+]
 
 onMounted(async () => {
   await load()
