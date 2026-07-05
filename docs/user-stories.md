@@ -5,8 +5,79 @@ Diese Datei beschreibt die wichtigsten Nutzerbedürfnisse für Jura Wolpertinger
 ## Primäre Nutzer
 
 - Examenskandidat:in: schreibt regelmäßig Übungsklausuren und möchte Fortschritt, Schwächen und Bewertungen nachvollziehen.
+- Examenskandidat:in mit Smartphone: wiederholt Karteikarten unterwegs und möchte schnell in eine kurze Lerneinheit starten.
 - Lerngruppe: nutzt dieselbe App auf einem Rechner oder tauscht `.jura` Dateien aus.
 - Korrektor:in oder Lernpartner:in: bewertet abgegebene Klausuren und setzt konkrete Hinweise am Text.
+
+## Home und Motivation
+
+### Motivierend starten
+
+Als Examenskandidat:in möchte ich nach dem Login einen knappen Home Screen sehen, damit ich sofort weiß, was als nächstes zu tun ist.
+
+Akzeptanz:
+
+- Home zeigt Streak, fällige Karteikarten und schnelle Aktionen für Wiederholen und Prüfung schreiben.
+- Die Oberfläche ist freundlich und motivierend, aber nicht verspielt.
+- Vorhandene Wolpertinger-/Tiergrafiken können als visueller Einstieg genutzt werden.
+- Umfangreiche Analyse bleibt auf eigenen Auswertungsseiten.
+
+### Streak erhalten
+
+Als Nutzer:in möchte ich für echte Lerneinheiten einen Streak sehen, damit ich regelmäßig lerne, ohne durch notwendige Pausen frustriert zu werden.
+
+Akzeptanz:
+
+- Karteikarten-Bewertungen und geschriebene Prüfungen zählen als Lernaktivität.
+- App öffnen, Karten nur ansehen oder Einstellungen ändern zählen nicht.
+- Pro Woche gibt es zwei freie Tage, die den Streak erhalten, aber nicht erhöhen.
+- Die Berechnung nutzt die lokale Zeitzone.
+
+## Karteikarten
+
+### Karteikarten organisieren
+
+Als Examenskandidat:in möchte ich Karteikarten in Collections, Ordnern und Tags organisieren, damit ich Rechtsgebiete und Lernstände sauber trennen kann.
+
+Akzeptanz:
+
+- Collections sind fachliche Kartensätze.
+- Ordner dienen der persönlichen Ablage.
+- Tags filtern Karten über Collections und Ordner hinweg.
+- Eine Karte gehört genau zu einer Collection.
+
+### Karteikarten wiederholen
+
+Als Nutzer:in möchte ich Karteikarten auf dem Handy und Laptop schnell wiederholen, damit kurze Lerneinheiten ohne Reibung möglich sind.
+
+Akzeptanz:
+
+- Der Wiederholen-Flow zeigt Vorderseite und Rückseite.
+- Die Bewertung nutzt die vier Optionen Nochmal, Schwer, Gut und Leicht.
+- Nach der Bewertung erscheint kurz das nächste Intervall und dann automatisch die nächste Karte.
+- Nochmal-Karten erscheinen innerhalb derselben Session erneut.
+- Der Flow ist mobil mit großen, gut tappbaren Flächen nutzbar.
+
+### Karten beim Lernen korrigieren
+
+Als Nutzer:in möchte ich fehlerhafte Karten direkt aus dem Lernfluss heraus korrigieren können, damit schlechte Karten nicht im System bleiben.
+
+Akzeptanz:
+
+- Ein kleines Aktionsmenü bietet Bearbeiten, Tags ändern und Aus aktueller Session entfernen.
+- Das Menü unterbricht den Lernfluss nicht prominent.
+- Änderungen werden in der normalen Kartenverwaltung sichtbar.
+
+### Collections kopieren
+
+Als Nutzer:in möchte ich geteilte oder öffentliche Collections als eigene Kopie übernehmen, damit ich sie bearbeiten kann, ohne das Original zu verändern.
+
+Akzeptanz:
+
+- Beim Import entsteht eine eigene Collection.
+- Tags werden in die eigene Kopie übernommen.
+- Review-Historie, private Notizen, Mitglieder und Rechte werden nicht übernommen.
+- Der Nutzer wählt einen Zielordner; Default ist Unsortiert.
 
 ## Bibliothek und Organisation
 
@@ -133,6 +204,17 @@ Akzeptanz:
 - Ablehnen verwirft den Vorschlag für den Arbeitsfluss, ohne Abgabe oder bestehende Korrektur zu verändern.
 - Rohentwürfe, API-Schlüssel und KI-Einstellungen werden nicht in `.jura` Pakete exportiert.
 
+### Cloud-KI-Grenze verstehen
+
+Als Nutzer:in möchte ich in der Web-App erkennen, warum KI-Korrektur nicht verfügbar ist, damit die Funktion nicht kaputt wirkt.
+
+Akzeptanz:
+
+- KI-Korrektur bleibt in Navigation und Prüfungskontext sichtbar.
+- In der Cloud-Version ist die Aktion deaktiviert.
+- Die UI erklärt kurz, dass KI-Korrektur in der Cloud noch nicht freigeschaltet ist.
+- Die Desktop-Version kann weiterhin den eigenen OpenAI-Key nutzen.
+
 ## Tags und Auswertung
 
 ### Tags konsequent nutzen
@@ -180,6 +262,28 @@ Akzeptanz:
 - `.jura` Pakete enthalten Prüfungsdaten wie Metadaten, Abgaben, Korrekturen und Attachment-Rollen, aber keine API-Schlüssel, KI-Einstellungen, rohe KI-Entwürfe oder lokale Lernaufgaben.
 
 ## Nutzer und Onboarding
+
+### Web-App anmelden
+
+Als Nutzer:in möchte ich mich in der Web-App selbst registrieren und anmelden, damit ich den Service ohne Einladung nutzen kann.
+
+Akzeptanz:
+
+- `app.jura-wolpi.de` zeigt ohne gültige Session nur Login/Registrierung.
+- Ohne Login werden keine App-Daten, Demo-Daten oder lokalen Browser-Daten geladen.
+- Nach Login wird das User-Acknowledgement geprüft, bevor die App-Shell erscheint.
+- Bei abgelaufener Session kehrt die Web-App in den Auth-Zustand zurück.
+
+### Lokale App mit Remote verbinden
+
+Als Desktop-Nutzer:in möchte ich mein lokales Profil mit einem Remote-Konto verbinden, damit ich später Daten synchronisieren kann.
+
+Akzeptanz:
+
+- Die Desktop-App funktioniert weiterhin ohne Account.
+- Lokale Daten gehen beim Verbinden nicht verloren.
+- Konflikte werden nicht still überschrieben.
+- Lokale und Remote-Identität bleiben nachvollziehbar verknüpft.
 
 ### Einstellungen zentral verwalten
 
