@@ -166,16 +166,41 @@
 
     <div v-if="showTourPrompt" class="modal-backdrop" role="presentation">
       <section class="modal-card onboarding-card" role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
-        <img class="onboarding-image" :src="welcomeImageUrl" alt="" />
-        <p class="eyebrow">Erste Schritte</p>
-        <h2 id="onboarding-title">Willkommen in Jura Wolpertinger</h2>
-        <p>
-          Die App ist offline-ready und speichert deine Klausuren lokal pro Nutzer. Die Tour zeigt dir
-          Bibliothek, Bewertung, Tagging und Auswertung in wenigen Schritten.
-        </p>
+        <div class="onboarding-heading">
+          <img class="onboarding-image" :src="welcomeImageUrl" alt="" />
+          <div>
+            <p class="eyebrow">Erste Schritte</p>
+            <h2 id="onboarding-title">Was möchtest du als Nächstes tun?</h2>
+            <p>
+              Wähle einen Einstieg oder starte direkt. Du kannst alles später in den Einstellungen ändern.
+            </p>
+          </div>
+        </div>
+        <div class="onboarding-actions" aria-label="Onboarding Aktionen">
+          <button type="button" class="onboarding-action-card" @click="openOnboardingTarget('flashcards')">
+            <Layers :size="20" aria-hidden="true" />
+            <span>Karteikarten lernen</span>
+            <small>Wiederholen oder Sammlungen öffnen.</small>
+          </button>
+          <button type="button" class="onboarding-action-card" @click="openOnboardingTarget('exam')">
+            <LibraryBig :size="20" aria-hidden="true" />
+            <span>Klausur schreiben</span>
+            <small>Prüfungsbibliothek und Schreibmodus.</small>
+          </button>
+          <button type="button" class="onboarding-action-card" @click="openOnboardingTarget('import')">
+            <FolderKanban :size="20" aria-hidden="true" />
+            <span>Daten importieren</span>
+            <small>JSON-Karteikarten importieren.</small>
+          </button>
+          <button type="button" class="onboarding-action-card" @click="openOnboardingTarget('settings')">
+            <Settings :size="20" aria-hidden="true" />
+            <span>{{ onboardingSettingsTitle }}</span>
+            <small>{{ onboardingSettingsCopy }}</small>
+          </button>
+        </div>
         <div class="modal-actions">
-          <button class="secondary" @click="skipOnboarding">Später</button>
-          <button @click="startTour">Tour starten</button>
+          <button class="secondary" @click="showTourPrompt = false">Direkt zur App</button>
+          <button @click="skipOnboarding">Nicht mehr anzeigen</button>
         </div>
       </section>
     </div>
@@ -220,7 +245,7 @@ import {
 } from 'lucide-vue-next'
 import type { AppUser } from '@shared/ipc'
 import { APP_VERSION } from '@shared/constants'
-import { api } from './api'
+import { api, isElectronApiAvailable } from './api'
 import { getSupabaseAuthClient, readCloudAuthState, requiresCloudAuth, type CloudAuthState } from './cloudAuth'
 import { startOnboardingTour } from './onboarding'
 import { useTheme } from './theme'
@@ -270,6 +295,12 @@ const authSwitchText = computed(() =>
 )
 const authSwitchLabel = computed(() =>
   authMode.value === 'sign_up' ? 'Einloggen' : 'Kostenlos erstellen'
+)
+const onboardingSettingsTitle = computed(() => (isElectronApiAvailable ? 'Cloud verbinden' : 'Einstellungen prüfen'))
+const onboardingSettingsCopy = computed(() =>
+  isElectronApiAvailable
+    ? 'Optional synchronisieren. Lokal bleibt alles nutzbar.'
+    : 'Account, App-Status und Optionen prüfen.'
 )
 const startTourListener = () => startTour()
 const usersUpdatedListener = () => {
@@ -325,6 +356,27 @@ async function skipOnboarding(): Promise<void> {
   if (!currentUser.value) return
   currentUser.value = await api.completeOnboarding(currentUser.value.id)
   showTourPrompt.value = false
+}
+
+async function openOnboardingTarget(target: 'flashcards' | 'exam' | 'import' | 'settings'): Promise<void> {
+  showTourPrompt.value = false
+  if (currentUser.value) {
+    currentUser.value = await api.completeOnboarding(currentUser.value.id)
+  }
+  if (target === 'flashcards') {
+    const dashboard = await api.getLearningDashboard()
+    await router.push({ name: dashboard.dueCount > 0 ? 'flashcards-review' : 'flashcards-collections' })
+    return
+  }
+  if (target === 'exam') {
+    await router.push({ name: 'dashboard' })
+    return
+  }
+  if (target === 'import') {
+    await router.push({ name: 'flashcards-collections', query: { import: '1' } })
+    return
+  }
+  await router.push({ name: 'settings' })
 }
 
 async function startTour(): Promise<void> {

@@ -1656,24 +1656,74 @@ textarea {
 
 .onboarding-card {
   border-top: 4px solid #008bd2;
-  text-align: center;
+  max-width: 760px;
+  width: min(100%, 760px);
 }
 
 .onboarding-image {
   display: block;
   height: auto;
-  margin: 0 auto 14px;
-  max-width: min(220px, 70vw);
+  max-width: 118px;
   object-fit: contain;
+}
+
+.onboarding-heading {
+  align-items: center;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: 118px minmax(0, 1fr);
+  margin-bottom: 18px;
 }
 
 .onboarding-card .eyebrow,
 .onboarding-card p {
+  color: var(--color-text-muted);
   text-align: left;
 }
 
 .onboarding-card h2 {
+  color: var(--color-text);
   text-align: left;
+}
+
+.onboarding-actions {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.onboarding-action-card {
+  align-items: start;
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  color: var(--color-text);
+  display: grid;
+  gap: 7px;
+  justify-items: start;
+  min-height: 132px;
+  padding: 16px;
+  text-align: left;
+}
+
+.onboarding-action-card:hover {
+  border-color: var(--color-primary);
+  filter: none;
+}
+
+.onboarding-action-card svg {
+  color: var(--color-primary-strong);
+}
+
+.onboarding-action-card span {
+  font-size: 17px;
+  font-weight: 850;
+}
+
+.onboarding-action-card small {
+  color: var(--color-text-muted);
+  font-size: 13px;
+  line-height: 1.35;
 }
 
 .danger-button {
@@ -1768,12 +1818,26 @@ textarea {
 }
 
 .action-notice {
+  align-items: center;
   background: #f0fbf5;
   border: 1px solid #b9e5cb;
   border-radius: 6px;
   color: #23663b;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
   margin: 0 0 16px;
   padding: 10px 12px;
+}
+
+.action-notice.error {
+  background: #fff4f4;
+  border-color: #f0b8b8;
+  color: #8a1f1f;
+}
+
+.action-notice .secondary {
+  flex: 0 0 auto;
 }
 
 .title-input {
@@ -3181,6 +3245,12 @@ textarea {
   color: #b9efc9;
 }
 
+:root[data-theme='dark'] .action-notice.error {
+  background: #35191b;
+  border-color: #6d3438;
+  color: #ffc6c6;
+}
+
 :root[data-theme='dark'] .title-input {
   color: #e8f2f5;
 }
@@ -4049,6 +4119,24 @@ textarea {
   .auth-panel,
   .study-card {
     padding: 18px;
+  }
+
+  .onboarding-heading,
+  .onboarding-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .onboarding-heading {
+    text-align: left;
+  }
+
+  .onboarding-image {
+    max-width: 96px;
+  }
+
+  .action-notice {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .home-hero h1,
