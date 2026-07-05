@@ -1,32 +1,63 @@
 <template>
   <section v-if="cloudAuth.status !== 'not_required' && cloudAuth.status !== 'signed_in'" class="auth-gate">
     <div class="auth-panel">
-      <img :src="welcomeImageUrl" alt="" />
-      <p class="eyebrow">Jura Wolpertinger</p>
-      <h1>Einloggen</h1>
-      <p class="auth-copy">
-        Die Web-App ist geschlossen. Melde dich an oder erstelle kostenlos einen Account.
-      </p>
-      <form v-if="cloudAuth.status !== 'missing_config'" class="auth-form" @submit.prevent="submitAuth">
+      <div class="auth-brand">
+        <img :src="welcomeImageUrl" alt="" />
+        <div>
+          <p class="eyebrow">Jura Wolpertinger</p>
+          <h1>{{ authTitle }}</h1>
+        </div>
+      </div>
+      <p class="auth-copy">{{ authCopy }}</p>
+      <div
+        v-if="cloudAuth.status !== 'missing_config'"
+        class="auth-mode-switch"
+        aria-label="Anmeldung oder Registrierung auswählen"
+      >
+        <button
+          type="button"
+          :class="{ active: authMode === 'sign_in' }"
+          :aria-pressed="authMode === 'sign_in'"
+          @click="setAuthMode('sign_in')"
+        >
+          Einloggen
+        </button>
+        <button
+          type="button"
+          :class="{ active: authMode === 'sign_up' }"
+          :aria-pressed="authMode === 'sign_up'"
+          @click="setAuthMode('sign_up')"
+        >
+          Account erstellen
+        </button>
+      </div>
+      <form v-if="cloudAuth.status !== 'missing_config'" class="auth-form" @submit.prevent="submitAuthForm">
         <label class="form-field">
           E-Mail
           <input v-model="authEmail" type="email" autocomplete="email" required />
         </label>
         <label class="form-field">
           Passwort
-          <input v-model="authPassword" type="password" autocomplete="current-password" required />
+          <input
+            v-model="authPassword"
+            type="password"
+            :autocomplete="authMode === 'sign_up' ? 'new-password' : 'current-password'"
+            required
+          />
         </label>
+        <p class="auth-action-hint">{{ authActionHint }}</p>
         <p v-if="authMessage" class="auth-message" :class="{ error: authMessageKind === 'error' }">
           {{ authMessage }}
         </p>
         <div class="auth-actions">
-          <button type="submit" :disabled="authBusy">
-            {{ authBusy ? 'Bitte warten' : 'Einloggen' }}
-          </button>
-          <button type="button" class="secondary" :disabled="authBusy" @click="registerAuth">
-            Account erstellen
-          </button>
+          <button type="submit" :disabled="authBusy">{{ authSubmitLabel }}</button>
         </div>
+        <p class="auth-switch-copy">
+          {{ authSwitchText }}
+          <button type="button" class="link-button" :disabled="authBusy" @click="toggleAuthMode">
+            {{ authSwitchLabel }}
+          </button>
+        </p>
       </form>
       <p v-else class="auth-message error">{{ cloudAuth.error }}</p>
     </div>
@@ -216,6 +247,30 @@ const authPassword = ref('')
 const authBusy = ref(false)
 const authMessage = ref('')
 const authMessageKind = ref<'info' | 'error'>('info')
+const authMode = ref<'sign_in' | 'sign_up'>('sign_in')
+const authTitle = computed(() =>
+  authMode.value === 'sign_up' ? 'Kostenlosen Account erstellen' : 'Einloggen'
+)
+const authCopy = computed(() =>
+  authMode.value === 'sign_up'
+    ? 'Erstelle deinen kostenlosen Account. Wenn alles passt, wirst du direkt angemeldet.'
+    : 'Melde dich an, um deine Lern- und Prüfungsdaten zu öffnen.'
+)
+const authActionHint = computed(() =>
+  authMode.value === 'sign_up'
+    ? 'Mit dem Button unten wird der Account sofort erstellt.'
+    : 'Mit dem Button unten wirst du direkt angemeldet.'
+)
+const authSubmitLabel = computed(() => {
+  if (authBusy.value) return 'Bitte warten'
+  return authMode.value === 'sign_up' ? 'Account jetzt erstellen' : 'Jetzt einloggen'
+})
+const authSwitchText = computed(() =>
+  authMode.value === 'sign_up' ? 'Du hast schon einen Account?' : 'Noch kein Account?'
+)
+const authSwitchLabel = computed(() =>
+  authMode.value === 'sign_up' ? 'Einloggen' : 'Kostenlos erstellen'
+)
 const startTourListener = () => startTour()
 const usersUpdatedListener = () => {
   void loadUsers()
@@ -285,6 +340,23 @@ async function startTour(): Promise<void> {
   })
 }
 
+function setAuthMode(mode: 'sign_in' | 'sign_up'): void {
+  authMode.value = mode
+  authMessage.value = ''
+}
+
+function toggleAuthMode(): void {
+  setAuthMode(authMode.value === 'sign_up' ? 'sign_in' : 'sign_up')
+}
+
+async function submitAuthForm(): Promise<void> {
+  if (authMode.value === 'sign_up') {
+    await registerAuth()
+    return
+  }
+  await submitAuth()
+}
+
 async function submitAuth(): Promise<void> {
   const client = getSupabaseAuthClient()
   if (!client) return
@@ -297,7 +369,7 @@ async function submitAuth(): Promise<void> {
   authBusy.value = false
   if (error) {
     authMessageKind.value = 'error'
-    authMessage.value = 'Login fehlgeschlagen. Bitte E-Mail und Passwort prüfen.'
+    authMessage.value = 'Einloggen fehlgeschlagen. Bitte E-Mail und Passwort prüfen.'
     return
   }
   authMessageKind.value = 'info'
@@ -322,7 +394,10 @@ async function registerAuth(): Promise<void> {
     return
   }
   authMessageKind.value = 'info'
-  authMessage.value = 'Account erstellt. Bitte prüfe dein Postfach, falls eine Bestätigung erforderlich ist.'
+  authMessage.value = 'Account erstellt. Falls keine direkte Anmeldung erfolgt, bitte dein Postfach prüfen.'
   cloudAuth.value = await readCloudAuthState()
+  if (cloudAuth.value.status === 'signed_in') {
+    await loadUsers()
+  }
 }
 </script>

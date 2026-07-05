@@ -250,7 +250,9 @@ textarea {
 
 .auth-gate {
   align-items: center;
-  background: #f2f7fa;
+  background:
+    radial-gradient(circle at 20% 10%, rgba(0, 139, 210, 0.1), transparent 28%),
+    #f2f7fa;
   display: grid;
   min-height: 100vh;
   padding: 24px;
@@ -261,30 +263,49 @@ textarea {
   border: 1px solid #c8e0eb;
   border-radius: 8px;
   box-shadow: 0 18px 60px rgba(0, 79, 128, 0.12);
+  color-scheme: light;
   display: grid;
-  gap: 14px;
+  gap: 18px;
   justify-self: center;
-  max-width: 460px;
-  padding: 28px;
+  max-width: 500px;
+  padding: 30px;
   width: 100%;
 }
 
-.auth-panel img {
-  height: 96px;
-  justify-self: start;
+.auth-brand {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+}
+
+.auth-brand img {
+  flex: 0 0 auto;
+  height: 72px;
   object-fit: contain;
+  width: 72px;
 }
 
 .auth-panel h1 {
-  font-size: 36px;
-  line-height: 1.05;
+  color: #1e3440;
+  font-size: 30px;
+  line-height: 1.12;
   margin: 0;
 }
 
 .auth-copy,
-.auth-message {
+.auth-message,
+.auth-action-hint,
+.auth-switch-copy {
   color: #647985;
   margin: 0;
+}
+
+.auth-action-hint {
+  background: #edf7fc;
+  border: 1px solid #c8e0eb;
+  border-radius: 6px;
+  font-size: 14px;
+  padding: 9px 11px;
 }
 
 .auth-message.error {
@@ -298,8 +319,63 @@ textarea {
   gap: 12px;
 }
 
-.auth-actions {
+.auth-form input {
+  background: #fff;
+  color: #1e3440;
+}
+
+.auth-form input:-webkit-autofill,
+.auth-form input:-webkit-autofill:hover,
+.auth-form input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #1e3440;
+  box-shadow: 0 0 0 1000px #fff inset;
+  caret-color: #1e3440;
+}
+
+.auth-mode-switch {
+  background: #edf7fc;
+  border: 1px solid #c8e0eb;
+  border-radius: 8px;
+  display: grid;
   grid-template-columns: 1fr 1fr;
+  padding: 4px;
+}
+
+.auth-mode-switch button {
+  background: transparent;
+  border-color: transparent;
+  color: #38606f;
+  justify-content: center;
+}
+
+.auth-mode-switch button.active {
+  background: #fff;
+  border-color: #bdd9e6;
+  box-shadow: 0 3px 10px rgba(0, 79, 128, 0.1);
+  color: #1e3440;
+}
+
+.auth-actions button {
+  justify-content: center;
+  min-height: 44px;
+}
+
+.auth-switch-copy {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  text-align: center;
+}
+
+.link-button {
+  background: transparent;
+  border: 0;
+  color: #006ea8;
+  min-height: auto;
+  padding: 0;
+  text-decoration: underline;
 }
 
 .home-view,
@@ -2614,6 +2690,63 @@ textarea {
   color: #82939b;
 }
 
+:root[data-theme='dark'] .auth-gate {
+  background:
+    radial-gradient(circle at 20% 10%, rgba(0, 139, 210, 0.12), transparent 28%),
+    #f2f7fa;
+}
+
+:root[data-theme='dark'] .auth-panel {
+  background: #fff;
+  border-color: #c8e0eb;
+  color: #1e3440;
+}
+
+:root[data-theme='dark'] .auth-panel h1 {
+  color: #1e3440;
+}
+
+:root[data-theme='dark'] .auth-copy,
+:root[data-theme='dark'] .auth-message,
+:root[data-theme='dark'] .auth-action-hint,
+:root[data-theme='dark'] .auth-switch-copy {
+  color: #647985;
+}
+
+:root[data-theme='dark'] .auth-message.error {
+  color: #a72d2d;
+}
+
+:root[data-theme='dark'] .auth-form input {
+  background: #fff;
+  border-color: #bdd9e6;
+  color: #1e3440;
+}
+
+:root[data-theme='dark'] .auth-action-hint,
+:root[data-theme='dark'] .auth-mode-switch {
+  background: #edf7fc;
+  border-color: #c8e0eb;
+}
+
+:root[data-theme='dark'] .auth-mode-switch button {
+  background: transparent;
+  border-color: transparent;
+  color: #38606f;
+}
+
+:root[data-theme='dark'] .auth-mode-switch button.active {
+  background: #fff;
+  border-color: #bdd9e6;
+  color: #1e3440;
+}
+
+:root[data-theme='dark'] .link-button {
+  background: transparent;
+  border: 0;
+  color: #006ea8;
+}
+
 :root[data-theme='dark'] .eyebrow,
 :root[data-theme='dark'] .metric span,
 :root[data-theme='dark'] .field-hint,
@@ -3773,9 +3906,12 @@ textarea {
 }
 
 @media (max-width: 720px) {
-  .auth-actions,
   .rating-row {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .auth-actions {
+    grid-template-columns: 1fr;
   }
 
   .home-view,
