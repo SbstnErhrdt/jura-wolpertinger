@@ -44,11 +44,11 @@
 
     <div v-else class="card-list">
       <article v-for="card in filteredCards" :key="card.id" class="flashcard-list-card">
-        <div>
+        <div class="flashcard-list-main">
           <h2>{{ card.title }}</h2>
           <p>{{ preview(card.frontMarkdown) }}</p>
           <div v-if="card.tags.length" class="study-card-tags" aria-label="Schlagwörter">
-            <span v-for="tag in card.tags" :key="tag" class="tag">{{ tag }}</span>
+            <AppBadge v-for="tag in card.tags" :key="tag">{{ tag }}</AppBadge>
           </div>
         </div>
         <dl class="card-performance">
@@ -69,14 +69,17 @@
             <dd>{{ card.lapses }}</dd>
           </div>
         </dl>
+        <ActionMenu label="Karteikartenaktionen" :items="cardActions(card)" />
       </article>
     </div>
 
-    <div v-if="showCreateCardDialog" class="dialog-backdrop" @click="cancelCreateCard">
+    <div v-if="showCardDialog" class="dialog-backdrop" @click="cancelCardDialog">
       <div class="dialog-card dialog-card-wide" @click.stop>
-        <h2>Neue Karteikarte</h2>
-        <p class="dialog-copy">Diese Karte wird in der Sammlung „{{ collection?.name }}“ gespeichert.</p>
-        <form class="dialog-form" @submit.prevent="createCard">
+        <h2>{{ editingCard ? 'Karteikarte bearbeiten' : 'Neue Karteikarte' }}</h2>
+        <p class="dialog-copy">
+          {{ editingCard ? 'Passe die Karteikarte an.' : `Diese Karte wird in der Sammlung „${collection?.name}“ gespeichert.` }}
+        </p>
+        <form class="dialog-form" @submit.prevent="saveCard">
           <label class="dialog-field">
             Titel
             <input v-model="cardTitle" placeholder="Kurzer Titel, z. B. Abmahnung" autofocus />
@@ -94,10 +97,10 @@
             <TagInput v-model="cardTags" :suggestions="tagSuggestions" placeholder="Schlagwörter hinzufügen" />
           </div>
           <div class="dialog-actions">
-            <button type="button" class="secondary" @click="cancelCreateCard">Abbrechen</button>
+            <button type="button" class="secondary" @click="cancelCardDialog">Abbrechen</button>
             <button type="submit" :disabled="!canCreateCard">
               <Save :size="17" aria-hidden="true" />
-              Karteikarte speichern
+              {{ editingCard ? 'Änderungen speichern' : 'Karteikarte speichern' }}
             </button>
           </div>
         </form>
@@ -107,12 +110,15 @@
 </template>
 
 <script setup lang="ts">
+import type { Component } from 'vue'
 import { computed, onMounted, ref } from 'vue'
-import { Plus, Save } from 'lucide-vue-next'
+import { Pencil, Plus, Save } from 'lucide-vue-next'
 import { useRoute, useRouter } from 'vue-router'
 import type { LearningCard, LearningCollection, ReviewRating } from '@shared/schemas'
 import { api } from '../api'
 import TagInput from '../components/TagInput.vue'
+import ActionMenu, { type ActionMenuItem } from '../components/ui/ActionMenu.vue'
+import AppBadge from '../components/ui/AppBadge.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -122,7 +128,8 @@ const cards = ref<LearningCard[]>([])
 const search = ref('')
 const sortMode = ref<'updated' | 'title' | 'due' | 'rating'>('updated')
 const transferMessage = ref('')
-const showCreateCardDialog = ref(false)
+const showCardDialog = ref(false)
+const editingCard = ref<LearningCard | null>(null)
 const cardTitle = ref('')
 const cardFront = ref('')
 const cardBack = ref('')
@@ -162,29 +169,57 @@ async function load(): Promise<void> {
 }
 
 function openCreateCardDialog(): void {
+  editingCard.value = null
   cardTitle.value = ''
   cardFront.value = ''
   cardBack.value = ''
   cardTags.value = []
-  showCreateCardDialog.value = true
+  showCardDialog.value = true
 }
 
-function cancelCreateCard(): void {
-  showCreateCardDialog.value = false
+function openEditCardDialog(card: LearningCard): void {
+  editingCard.value = card
+  cardTitle.value = card.title
+  cardFront.value = card.frontMarkdown
+  cardBack.value = card.backMarkdown
+  cardTags.value = [...card.tags]
+  showCardDialog.value = true
 }
 
-async function createCard(): Promise<void> {
+function cancelCardDialog(): void {
+  showCardDialog.value = false
+  editingCard.value = null
+}
+
+async function saveCard(): Promise<void> {
   if (!canCreateCard.value) return
-  await api.createLearningCard({
+  const input = {
     collectionId: collectionId.value,
     title: cardTitle.value,
     frontMarkdown: cardFront.value,
     backMarkdown: cardBack.value,
     tags: [...cardTags.value]
-  })
-  showCreateCardDialog.value = false
-  transferMessage.value = 'Karteikarte gespeichert.'
+  }
+  if (editingCard.value) {
+    await api.updateLearningCard({ id: editingCard.value.id, ...input })
+    transferMessage.value = 'Karteikarte aktualisiert.'
+  } else {
+    await api.createLearningCard(input)
+    transferMessage.value = 'Karteikarte gespeichert.'
+  }
+  showCardDialog.value = false
+  editingCard.value = null
   await load()
+}
+
+function cardActions(card: LearningCard): ActionMenuItem[] {
+  return [
+    {
+      label: 'Karteikarte bearbeiten',
+      icon: Pencil as Component,
+      action: () => openEditCardDialog(card)
+    }
+  ]
 }
 
 function preview(markdown: string): string {

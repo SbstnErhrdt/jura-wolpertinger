@@ -30,16 +30,13 @@
           <strong>{{ currentCard.title }}</strong>
         </div>
         <span>{{ positionLabel }}</span>
-        <details>
-          <summary>Aktionen</summary>
-          <button type="button" class="secondary" @click="removeFromSession">Aus Session entfernen</button>
-        </details>
+        <ActionMenu label="Kartenaktionen" :items="reviewActions" />
       </div>
       <button class="study-card-face" type="button" @click="showBack = true">
         <MarkdownBlock :markdown="showBack ? currentCard.backMarkdown : currentCard.frontMarkdown" />
       </button>
       <div v-if="currentCard.tags.length" class="study-card-tags" aria-label="Tags">
-        <span v-for="tag in currentCard.tags" :key="tag" class="tag">{{ tag }}</span>
+        <AppBadge v-for="tag in currentCard.tags" :key="tag">{{ tag }}</AppBadge>
       </div>
       <p v-if="feedback" class="review-feedback">{{ feedback }}</p>
       <div v-if="showBack" class="rating-row">
@@ -72,9 +69,11 @@
 <script setup lang="ts">
 import { computed, defineComponent, h, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { CircleCheck, RotateCcw, Sparkles, TriangleAlert } from 'lucide-vue-next'
+import { CircleCheck, RotateCcw, Sparkles, Trash2, TriangleAlert } from 'lucide-vue-next'
 import type { ReviewCard, ReviewRating } from '@shared/schemas'
 import { api } from '../api'
+import ActionMenu, { type ActionMenuItem } from '../components/ui/ActionMenu.vue'
+import AppBadge from '../components/ui/AppBadge.vue'
 
 const route = useRoute()
 const loading = ref(true)
@@ -99,6 +98,13 @@ const emptyCopy = computed(() => {
   }
   return 'Starte die Übungsrunde mit den vorhandenen Karten.'
 })
+const reviewActions = computed<ActionMenuItem[]>(() => [
+  {
+    label: 'Aus Session entfernen',
+    icon: Trash2,
+    action: removeFromSession
+  }
+])
 
 onMounted(load)
 

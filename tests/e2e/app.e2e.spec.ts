@@ -59,6 +59,20 @@ test.describe('Jura Wolpertinger Electron app', () => {
       await expect(page.locator('.action-notice')).toContainText('Karteikarte gespeichert')
       await expect(page.locator('.flashcard-list-card', { hasText: 'Abmahnung' })).toContainText('Noch nicht bewertet')
       await expect(page.locator('.page-header')).toContainText('1 Karten')
+      const flashcardRow = page.locator('.flashcard-list-card', { hasText: 'Abmahnung' })
+      await flashcardRow.getByRole('button', { name: 'Karteikarte bearbeiten' }).click()
+      await expect(page.locator('.dialog-card')).toContainText('Karteikarte bearbeiten')
+      await page.fill('input[placeholder="Kurzer Titel, z. B. Abmahnung"]', 'Abmahnung im Arbeitsrecht')
+      await page.fill('textarea[placeholder="Was soll auf der Vorderseite stehen?"]', 'Wozu dient eine Abmahnung?')
+      await page.fill(
+        'textarea[placeholder="Was soll auf der Rückseite stehen?"]',
+        'Sie dokumentiert den Pflichtverstoß, fordert Vertragstreue und warnt vor Kündigung.'
+      )
+      await page.click('.dialog-actions button:has-text("Änderungen speichern")')
+      await expect(page.locator('.action-notice')).toContainText('Karteikarte aktualisiert')
+      await expect(page.locator('.flashcard-list-card', { hasText: 'Abmahnung im Arbeitsrecht' })).toContainText(
+        'Wozu dient eine Abmahnung?'
+      )
       const collectionUrl = page.url()
       await page.locator('header').getByRole('link', { name: 'Wiederholen' }).click()
       await expect(page).toHaveURL(/#\/flashcards\/review\?collection=/)
