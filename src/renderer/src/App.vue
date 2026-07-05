@@ -1,13 +1,60 @@
 <template>
-  <div class="app-shell" :class="{ 'exam-shell': isExamFocus }">
+  <section v-if="cloudAuth.status !== 'not_required' && cloudAuth.status !== 'signed_in'" class="auth-gate">
+    <div class="auth-panel">
+      <img :src="welcomeImageUrl" alt="" />
+      <p class="eyebrow">Jura Wolpertinger</p>
+      <h1>Einloggen</h1>
+      <p class="auth-copy">
+        Die Web-App ist geschlossen. Melde dich an oder erstelle kostenlos einen Account.
+      </p>
+      <form v-if="cloudAuth.status !== 'missing_config'" class="auth-form" @submit.prevent="submitAuth">
+        <label class="form-field">
+          E-Mail
+          <input v-model="authEmail" type="email" autocomplete="email" required />
+        </label>
+        <label class="form-field">
+          Passwort
+          <input v-model="authPassword" type="password" autocomplete="current-password" required />
+        </label>
+        <p v-if="authMessage" class="auth-message" :class="{ error: authMessageKind === 'error' }">
+          {{ authMessage }}
+        </p>
+        <div class="auth-actions">
+          <button type="submit" :disabled="authBusy">
+            {{ authBusy ? 'Bitte warten' : 'Einloggen' }}
+          </button>
+          <button type="button" class="secondary" :disabled="authBusy" @click="registerAuth">
+            Account erstellen
+          </button>
+        </div>
+      </form>
+      <p v-else class="auth-message error">{{ cloudAuth.error }}</p>
+    </div>
+  </section>
+
+  <div v-else class="app-shell" :class="{ 'exam-shell': isExamFocus }">
     <aside v-if="!isExamFocus" class="sidebar">
       <div class="beta-banner" aria-label="Beta-Version">BETA</div>
-      <RouterLink class="brand" to="/">
+        <RouterLink class="brand" to="/">
         <img :src="iconUrl" alt="" />
         <span>Jura Wolpertinger</span>
       </RouterLink>
       <nav class="nav">
         <RouterLink to="/">
+          <House :size="18" aria-hidden="true" />
+          <span>Home</span>
+        </RouterLink>
+        <p class="nav-section">Karteikarten</p>
+        <RouterLink :to="{ name: 'flashcards-review' }">
+          <Layers :size="18" aria-hidden="true" />
+          <span>Wiederholen</span>
+        </RouterLink>
+        <RouterLink :to="{ name: 'flashcards-collections' }">
+          <FolderKanban :size="18" aria-hidden="true" />
+          <span>Sammlungen</span>
+        </RouterLink>
+        <p class="nav-section">Prüfungen</p>
+        <RouterLink :to="{ name: 'dashboard' }">
           <LibraryBig :size="18" aria-hidden="true" />
           <span>Bibliothek</span>
         </RouterLink>
@@ -64,6 +111,24 @@
         <span class="sidebar-version">Version {{ appVersion }}</span>
       </div>
     </aside>
+    <nav v-if="!isExamFocus" class="mobile-nav" aria-label="Hauptnavigation">
+      <RouterLink to="/">
+        <House :size="18" aria-hidden="true" />
+        <span>Home</span>
+      </RouterLink>
+      <RouterLink :to="{ name: 'flashcards-review' }">
+        <Layers :size="18" aria-hidden="true" />
+        <span>Lernen</span>
+      </RouterLink>
+      <RouterLink :to="{ name: 'flashcards-collections' }">
+        <FolderKanban :size="18" aria-hidden="true" />
+        <span>Karten</span>
+      </RouterLink>
+      <RouterLink :to="{ name: 'dashboard' }">
+        <LibraryBig :size="18" aria-hidden="true" />
+        <span>Prüfungen</span>
+      </RouterLink>
+    </nav>
     <main class="main-pane">
       <RouterView />
     </main>
@@ -111,7 +176,10 @@ import {
   ChartNoAxesCombined,
   CircleHelp,
   ClipboardCheck,
+  FolderKanban,
+  House,
   Info,
+  Layers,
   LibraryBig,
   Moon,
   Route,
@@ -122,6 +190,7 @@ import {
 import type { AppUser } from '@shared/ipc'
 import { APP_VERSION } from '@shared/constants'
 import { api } from './api'
+import { getSupabaseAuthClient, readCloudAuthState, requiresCloudAuth, type CloudAuthState } from './cloudAuth'
 import { startOnboardingTour } from './onboarding'
 import { useTheme } from './theme'
 
@@ -137,6 +206,16 @@ const currentUser = ref<AppUser | null>(null)
 const showTourPrompt = ref(false)
 const showCreateUser = ref(false)
 const newUserName = ref('')
+const cloudAuth = ref<CloudAuthState>(
+  requiresCloudAuth()
+    ? { status: 'loading', session: null, error: null }
+    : { status: 'not_required', session: null, error: null }
+)
+const authEmail = ref('')
+const authPassword = ref('')
+const authBusy = ref(false)
+const authMessage = ref('')
+const authMessageKind = ref<'info' | 'error'>('info')
 const startTourListener = () => startTour()
 const usersUpdatedListener = () => {
   void loadUsers()
@@ -144,7 +223,16 @@ const usersUpdatedListener = () => {
 
 onMounted(async () => {
   applyTheme()
-  await loadUsers()
+  cloudAuth.value = await readCloudAuthState()
+  getSupabaseAuthClient()?.auth.onAuthStateChange((_event, session) => {
+    cloudAuth.value = session
+      ? { status: 'signed_in', session, error: null }
+      : { status: 'signed_out', session: null, error: null }
+    if (session) void loadUsers()
+  })
+  if (cloudAuth.value.status === 'not_required' || cloudAuth.value.status === 'signed_in') {
+    await loadUsers()
+  }
   window.addEventListener('jura:start-tour', startTourListener)
   window.addEventListener('jura:users-updated', usersUpdatedListener)
 })
@@ -195,5 +283,46 @@ async function startTour(): Promise<void> {
     currentUser.value = await api.completeTour(currentUser.value.id)
     currentUser.value = await api.completeOnboarding(currentUser.value.id)
   })
+}
+
+async function submitAuth(): Promise<void> {
+  const client = getSupabaseAuthClient()
+  if (!client) return
+  authBusy.value = true
+  authMessage.value = ''
+  const { error } = await client.auth.signInWithPassword({
+    email: authEmail.value.trim(),
+    password: authPassword.value
+  })
+  authBusy.value = false
+  if (error) {
+    authMessageKind.value = 'error'
+    authMessage.value = 'Login fehlgeschlagen. Bitte E-Mail und Passwort prüfen.'
+    return
+  }
+  authMessageKind.value = 'info'
+  authMessage.value = ''
+  cloudAuth.value = await readCloudAuthState()
+  await loadUsers()
+}
+
+async function registerAuth(): Promise<void> {
+  const client = getSupabaseAuthClient()
+  if (!client) return
+  authBusy.value = true
+  authMessage.value = ''
+  const { error } = await client.auth.signUp({
+    email: authEmail.value.trim(),
+    password: authPassword.value
+  })
+  authBusy.value = false
+  if (error) {
+    authMessageKind.value = 'error'
+    authMessage.value = 'Registrierung fehlgeschlagen. Bitte E-Mail und Passwort prüfen.'
+    return
+  }
+  authMessageKind.value = 'info'
+  authMessage.value = 'Account erstellt. Bitte prüfe dein Postfach, falls eine Bestätigung erforderlich ist.'
+  cloudAuth.value = await readCloudAuthState()
 }
 </script>

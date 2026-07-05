@@ -229,6 +229,15 @@ textarea {
   margin-top: 28px;
 }
 
+.nav-section {
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  margin: 22px 8px 6px;
+  text-transform: uppercase;
+}
+
 .nav a {
   align-items: center;
   border-radius: 6px;
@@ -237,6 +246,280 @@ textarea {
   gap: 10px;
   padding: 10px 8px;
   text-decoration: none;
+}
+
+.auth-gate {
+  align-items: center;
+  background: #f2f7fa;
+  display: grid;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.auth-panel {
+  background: #fff;
+  border: 1px solid #c8e0eb;
+  border-radius: 8px;
+  box-shadow: 0 18px 60px rgba(0, 79, 128, 0.12);
+  display: grid;
+  gap: 14px;
+  justify-self: center;
+  max-width: 460px;
+  padding: 28px;
+  width: 100%;
+}
+
+.auth-panel img {
+  height: 96px;
+  justify-self: start;
+  object-fit: contain;
+}
+
+.auth-panel h1 {
+  font-size: 36px;
+  line-height: 1.05;
+  margin: 0;
+}
+
+.auth-copy,
+.auth-message {
+  color: #647985;
+  margin: 0;
+}
+
+.auth-message.error {
+  color: #a72d2d;
+  font-weight: 700;
+}
+
+.auth-form,
+.auth-actions {
+  display: grid;
+  gap: 12px;
+}
+
+.auth-actions {
+  grid-template-columns: 1fr 1fr;
+}
+
+.home-view,
+.flashcards-page,
+.flashcard-review {
+  display: grid;
+  gap: 22px;
+  margin: 0 auto;
+  max-width: 1120px;
+  padding: 28px;
+}
+
+.home-hero {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #c8e0eb;
+  border-radius: 8px;
+  display: grid;
+  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 280px);
+  padding: 28px;
+}
+
+.home-hero h1,
+.page-header h1,
+.review-header h1 {
+  font-size: 42px;
+  letter-spacing: 0;
+  line-height: 1.08;
+  margin: 0;
+}
+
+.home-hero p,
+.page-header p {
+  color: #647985;
+  font-size: 18px;
+  margin: 10px 0 0;
+}
+
+.home-hero img {
+  max-height: 240px;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.home-actions,
+.page-header,
+.review-header {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.home-actions {
+  justify-content: flex-start;
+  margin-top: 22px;
+}
+
+.primary-action {
+  align-items: center;
+  background: #008bd2;
+  border: 1px solid #008bd2;
+  border-radius: 6px;
+  color: #fff;
+  display: inline-flex;
+  min-height: 42px;
+  padding: 0 14px;
+  text-decoration: none;
+}
+
+.home-metrics,
+.collection-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.home-metrics article,
+.collection-card,
+.study-card,
+.empty-state {
+  background: #fff;
+  border: 1px solid #c8e0eb;
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.home-metrics span {
+  color: #008bd2;
+  display: block;
+  font-size: 36px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.home-metrics strong,
+.home-metrics small {
+  display: block;
+}
+
+.home-metrics small,
+.collection-card p {
+  color: #647985;
+  margin-top: 6px;
+}
+
+.collection-form {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto;
+}
+
+.collection-card {
+  display: grid;
+  gap: 12px;
+}
+
+.collection-card h2 {
+  font-size: 22px;
+  margin: 0;
+}
+
+.collection-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.collection-stats span {
+  background: #eaf3f7;
+  border-radius: 999px;
+  color: #006ea8;
+  padding: 4px 10px;
+}
+
+.study-card {
+  display: grid;
+  gap: 16px;
+  min-height: min(620px, calc(100vh - 160px));
+}
+
+.study-card-toolbar {
+  align-items: center;
+  color: #647985;
+  display: flex;
+  justify-content: space-between;
+}
+
+.study-card-toolbar summary {
+  cursor: pointer;
+}
+
+.study-card-face {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #bdd9e6;
+  border-radius: 8px;
+  color: #1e3440;
+  display: grid;
+  min-height: 300px;
+  padding: 26px;
+  text-align: left;
+  width: 100%;
+}
+
+.study-card-face:hover {
+  filter: none;
+}
+
+.markdown-block {
+  font-size: 22px;
+  line-height: 1.45;
+  width: 100%;
+}
+
+.markdown-block p {
+  margin: 0 0 12px;
+}
+
+.rating-row {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.rating-row button {
+  justify-content: center;
+  min-height: 48px;
+}
+
+.rating-row .again {
+  background: #a72d2d;
+  border-color: #a72d2d;
+}
+
+.rating-row .hard {
+  background: #c56b00;
+  border-color: #c56b00;
+}
+
+.rating-row .good {
+  background: #008bd2;
+  border-color: #008bd2;
+}
+
+.rating-row .easy {
+  background: #006ea8;
+  border-color: #006ea8;
+}
+
+.review-feedback {
+  color: #006ea8;
+  font-weight: 800;
+  margin: 0;
+  text-align: center;
+}
+
+.reveal-button {
+  justify-content: center;
 }
 
 .nav a svg {
@@ -263,6 +546,10 @@ textarea {
   gap: 8px;
   margin-top: auto;
   position: sticky;
+}
+
+.mobile-nav {
+  display: none;
 }
 
 .sidebar-theme-toggle {
@@ -3398,8 +3685,38 @@ textarea {
     display: none;
   }
 
+  .mobile-nav {
+    background: rgba(255, 255, 255, 0.96);
+    border-top: 1px solid #c8e0eb;
+    bottom: 0;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    left: 0;
+    position: fixed;
+    right: 0;
+    z-index: 30;
+  }
+
+  .mobile-nav a {
+    align-items: center;
+    color: #4f6875;
+    display: grid;
+    font-size: 12px;
+    gap: 3px;
+    justify-items: center;
+    min-height: 58px;
+    padding: 7px 4px;
+    text-decoration: none;
+  }
+
+  .mobile-nav a.router-link-active {
+    color: #006ea8;
+    font-weight: 800;
+  }
+
   .main-pane {
     grid-column: 1;
+    padding-bottom: 66px;
   }
 
   .work-grid,
@@ -3443,12 +3760,62 @@ textarea {
   }
 
   .create-exam-form,
+  .collection-form,
+  .home-hero,
   .metric-row {
+    grid-template-columns: 1fr;
+  }
+
+  .home-metrics,
+  .collection-grid {
     grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 720px) {
+  .auth-actions,
+  .rating-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .home-view,
+  .flashcards-page,
+  .flashcard-review {
+    padding: 16px;
+  }
+
+  .home-hero,
+  .auth-panel,
+  .study-card {
+    padding: 18px;
+  }
+
+  .home-hero h1,
+  .page-header h1,
+  .review-header h1 {
+    font-size: 30px;
+  }
+
+  .home-actions,
+  .page-header,
+  .review-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .study-card {
+    min-height: calc(100vh - 96px);
+  }
+
+  .study-card-face {
+    min-height: 320px;
+    padding: 18px;
+  }
+
+  .markdown-block {
+    font-size: 19px;
+  }
+
   .analytics-filter-actions,
   .analytics-bar-meta {
     align-items: flex-start;

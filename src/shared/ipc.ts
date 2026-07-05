@@ -10,8 +10,14 @@ import type {
   ExamStatus,
   Folder as SchemaFolder,
   InlineComment,
+  LearningCard,
+  LearningCollection,
+  LearningDashboard,
+  LearningReviewEvent,
   LearningTask,
   LegalArea,
+  ReviewCard,
+  ReviewRating,
   Submission
 } from './schemas'
 import type { User } from './schemas'
@@ -124,6 +130,44 @@ export type GenerateAiCorrectionInput = {
   submissionId: string
 }
 
+export type CreateLearningCollectionInput = {
+  name: string
+  description?: string
+  subject?: string | null
+  source?: string | null
+}
+
+export type CreateLearningCardInput = {
+  collectionId: string
+  title: string
+  frontMarkdown: string
+  backMarkdown: string
+  tags: string[]
+}
+
+export type UpdateLearningCardInput = CreateLearningCardInput & {
+  id: string
+}
+
+export type GetReviewBatchInput = {
+  collectionId?: string | null
+  tag?: string | null
+  limit?: number
+  excludeCardIds?: string[]
+}
+
+export type RecordReviewInput = {
+  cardId: string
+  rating: ReviewRating
+  elapsedMs?: number | null
+}
+
+export type RecordReviewResult = {
+  event: LearningReviewEvent
+  nextDueAt: string
+  intervalLabel: string
+}
+
 export type SaveAiCorrectionDraftInput = {
   submissionId: string
   provider: 'openai'
@@ -184,6 +228,15 @@ export type AppApi = {
   rejectAiCorrectionDraft(draftId: string): Promise<AiCorrectionDraft>
   listLearningTasks(): Promise<LearningTask[]>
   updateLearningTaskStatus(taskId: string, status: 'open' | 'in_progress' | 'done'): Promise<LearningTask>
+  getLearningDashboard(): Promise<LearningDashboard>
+  seedLearningDecks(): Promise<LearningCollection[]>
+  listLearningCollections(): Promise<LearningCollection[]>
+  createLearningCollection(input: CreateLearningCollectionInput): Promise<LearningCollection>
+  listLearningCards(collectionId?: string | null): Promise<LearningCard[]>
+  createLearningCard(input: CreateLearningCardInput): Promise<LearningCard>
+  updateLearningCard(input: UpdateLearningCardInput): Promise<LearningCard>
+  getReviewBatch(input?: GetReviewBatchInput): Promise<ReviewCard[]>
+  recordReview(input: RecordReviewInput): Promise<RecordReviewResult>
   addAttachment(examId: string, role?: AttachmentRole): Promise<Attachment | null>
   openAttachment(id: string): Promise<void>
   exportExamPackage(examId: string): Promise<string | null>

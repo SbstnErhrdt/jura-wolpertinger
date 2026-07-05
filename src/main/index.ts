@@ -14,8 +14,12 @@ import {
 import electronUpdater from 'electron-updater'
 import type {
   AddInlineCommentInput,
+  CreateLearningCardInput,
+  CreateLearningCollectionInput,
   CreateExamInput,
   GenerateAiCorrectionInput,
+  GetReviewBatchInput,
+  RecordReviewInput,
   SaveRevisionInput,
   SaveAiSettingsInput,
   TestAiConnectionInput,
@@ -233,6 +237,27 @@ function registerIpc(): void {
     'learningTasks:updateStatus',
     (_event, taskId: string, status: LearningTask['status']) =>
       services.updateLearningTaskStatus(taskId, status)
+  )
+  ipcMain.handle('learning:dashboard', () => services.getLearningDashboard())
+  ipcMain.handle('learning:seedDecks', () => services.seedLearningDecks())
+  ipcMain.handle('learning:collections', () => services.listLearningCollections())
+  ipcMain.handle('learning:createCollection', (_event, input: CreateLearningCollectionInput) =>
+    services.createLearningCollection(input)
+  )
+  ipcMain.handle('learning:cards', (_event, collectionId?: string | null) =>
+    services.listLearningCards(collectionId ?? null)
+  )
+  ipcMain.handle('learning:createCard', (_event, input: CreateLearningCardInput) =>
+    services.createLearningCard(input)
+  )
+  ipcMain.handle('learning:updateCard', (_event, input: CreateLearningCardInput & { id: string }) =>
+    services.updateLearningCard(input)
+  )
+  ipcMain.handle('learning:reviewBatch', (_event, input?: GetReviewBatchInput) =>
+    services.getReviewBatch(input)
+  )
+  ipcMain.handle('learning:recordReview', (_event, input: RecordReviewInput) =>
+    services.recordReview(input)
   )
 
   ipcMain.handle('attachments:add', async (_event, examId: string, role: AttachmentRole = 'other') => {

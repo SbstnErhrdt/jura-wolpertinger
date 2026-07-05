@@ -5,8 +5,14 @@ import {
   correctionSchema,
   examListItemSchema,
   juraManifestSchema,
+  learningCardSchema,
+  learningCollectionSchema,
+  learningDashboardSchema,
+  learningReviewEventSchema,
   learningTaskSchema,
   revisionSchema,
+  reviewCardSchema,
+  reviewRatingSchema,
   scoreSchema,
   submissionSchema
 } from '@shared/schemas'
@@ -237,5 +243,81 @@ describe('shared schemas', () => {
         updatedAt: new Date().toISOString()
       }).status
     ).toBe('open')
+  })
+
+  it('validates learning cards, review ratings and dashboard summaries', () => {
+    const now = new Date().toISOString()
+    const userId = crypto.randomUUID()
+    const collectionId = crypto.randomUUID()
+    const cardId = crypto.randomUUID()
+
+    expect(reviewRatingSchema.parse(1)).toBe(1)
+    expect(reviewRatingSchema.parse(4)).toBe(4)
+    expect(() => reviewRatingSchema.parse(5)).toThrow()
+
+    expect(
+      learningCollectionSchema.parse({
+        schemaVersion: 1,
+        id: collectionId,
+        userId,
+        name: 'Strafrecht AT',
+        description: '',
+        subject: 'Strafrecht',
+        source: null,
+        cardCount: 12,
+        dueCount: 3,
+        createdAt: now,
+        updatedAt: now
+      }).name
+    ).toBe('Strafrecht AT')
+
+    const card = learningCardSchema.parse({
+      schemaVersion: 1,
+      id: cardId,
+      userId,
+      collectionId,
+      externalId: 'card-1',
+      title: 'Rücktritt',
+      frontMarkdown: 'Wann ist ein Rücktritt möglich?',
+      backMarkdown: 'Nach § 24 StGB bei Aufgabe der weiteren Tatausführung.',
+      tags: ['strafrecht', 'rücktritt'],
+      isArchived: false,
+      createdAt: now,
+      updatedAt: now
+    })
+    expect(card.tags).toContain('rücktritt')
+
+    expect(
+      reviewCardSchema.parse({
+        ...card,
+        dueAt: now,
+        lastRating: null,
+        reps: 0,
+        lapses: 0
+      }).reps
+    ).toBe(0)
+
+    expect(
+      learningReviewEventSchema.parse({
+        schemaVersion: 1,
+        id: crypto.randomUUID(),
+        userId,
+        cardId,
+        rating: 3,
+        reviewedAt: now,
+        elapsedMs: 1200
+      }).rating
+    ).toBe(3)
+
+    expect(
+      learningDashboardSchema.parse({
+        dueCount: 3,
+        totalCards: 12,
+        collectionCount: 1,
+        streakDays: 4,
+        freeDaysRemainingThisWeek: 2,
+        learnedToday: true
+      }).learnedToday
+    ).toBe(true)
   })
 })

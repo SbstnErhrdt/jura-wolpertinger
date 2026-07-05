@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { copyFile, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, extname, join, relative } from 'node:path'
 import JSZip from 'jszip'
@@ -23,9 +23,15 @@ import {
   examTypeSchema,
   folderSchema,
   juraManifestSchema,
+  learningCardSchema,
+  learningCollectionSchema,
+  learningDashboardSchema,
+  learningReviewEventSchema,
   learningTaskSchema,
   legalAreaSchema,
   revisionSchema,
+  reviewCardSchema,
+  reviewRatingSchema,
   scoreSchema,
   submissionSchema,
   userSchema,
@@ -37,20 +43,31 @@ import {
   type ExamRevision,
   type ExamStatus,
   type InlineComment,
+  type LearningCard,
+  type LearningCollection,
+  type LearningDashboard,
+  type LearningReviewEvent,
   type LearningTask,
   type JuraDocument,
   type JuraManifest,
+  type ReviewCard,
+  type ReviewRating,
   type Submission,
   type User
 } from '@shared/schemas'
 import type {
   AddInlineCommentInput,
   AiSettingsStatus,
+  CreateLearningCardInput,
+  CreateLearningCollectionInput,
   AnalyticsEntry,
   CreateExamInput,
   ExamDetails,
   ExamListItem,
   FolderDto,
+  GetReviewBatchInput,
+  RecordReviewInput,
+  RecordReviewResult,
   SaveAiCorrectionDraftInput,
   SaveAiSettingsInput,
   SubmissionDetails,
@@ -82,8 +99,23 @@ type ImportedAttachment = {
   attachment: Attachment
   payload: Buffer
 }
+type SeedDeck = {
+  deck: {
+    title?: string
+    subject?: string
+    source?: string
+  }
+  cards?: Array<{
+    id?: string
+    topic?: string
+    front?: string[]
+    back?: string[]
+    tags?: string[]
+  }>
+}
 
 let localEnvCache: Record<string, string> | null = null
+const LEARNING_DECKS_DIR = '/Users/sbstn/Documents/sabine/Karteikarten/decks'
 
 export class AppServices {
   readonly db: SqliteDatabase
@@ -941,6 +973,270 @@ export class AppServices {
     return this.getLearningTask(taskId)
   }
 
+  getLearningDashboard(): LearningDashboard {
+    const userId = this.getCurrentUserId()
+    const now = nowIso()
+    const dueCount = Number(
+      (
+        this.db
+          .prepare(
+            `
+            SELECT COUNT(*) AS count
+            FROM learning_cards c
+            LEFT JOIN learning_card_schedules s ON s.card_id = c.id AND s.user_id = c.user_id
+            WHERE c.user_id = ? AND c.is_archived = 0 AND COALESCE(s.due_at, c.created_at) <= ?
+          `
+          )
+          .get(userId, now) as { count: number }
+      ).count
+    )
+    const totalCards = Number(
+      (
+        this.db
+          .prepare('SELECT COUNT(*) AS count FROM learning_cards WHERE user_id = ? AND is_archived = 0')
+          .get(userId) as { count: number }
+      ).count
+    )
+    const collectionCount = Number(
+      (
+        this.db
+          .prepare('SELECT COUNT(*) AS count FROM learning_collections WHERE user_id = ?')
+          .get(userId) as { count: number }
+      ).count
+    )
+    const activityDays = this.listRecentActivityDays(userId)
+    const learnedToday = activityDays.has(localDateKey(new Date()))
+    const freeDaysRemainingThisWeek = Math.max(0, 2 - this.countMissedDaysThisWeek(activityDays))
+    const streakDays = calculateStreakDays(activityDays)
+    return learningDashboardSchema.parse({
+      dueCount,
+      totalCards,
+      collectionCount,
+      streakDays,
+      freeDaysRemainingThisWeek,
+      learnedToday
+    })
+  }
+
+  seedLearningDecks(): LearningCollection[] {
+    if (!existsSync(LEARNING_DECKS_DIR)) return this.listLearningCollections()
+    const files = readdirJsonFiles(LEARNING_DECKS_DIR)
+    for (const file of files) {
+      const deck = JSON.parse(readFileSync(join(LEARNING_DECKS_DIR, file), 'utf8')) as SeedDeck
+      this.importSeedDeck(deck)
+    }
+    return this.listLearningCollections()
+  }
+
+  listLearningCollections(): LearningCollection[] {
+    const rows = this.db
+      .prepare(
+        `
+        SELECT
+          c.*,
+          COUNT(DISTINCT card.id) AS card_count,
+          SUM(CASE WHEN card.id IS NOT NULL AND COALESCE(s.due_at, card.created_at) <= ? THEN 1 ELSE 0 END) AS due_count
+        FROM learning_collections c
+        LEFT JOIN learning_cards card ON card.collection_id = c.id AND card.is_archived = 0
+        LEFT JOIN learning_card_schedules s ON s.card_id = card.id AND s.user_id = c.user_id
+        WHERE c.user_id = ?
+        GROUP BY c.id
+        ORDER BY c.updated_at DESC, c.name ASC
+      `
+      )
+      .all(nowIso(), this.getCurrentUserId()) as Row[]
+    return rows.map(learningCollectionFromRow)
+  }
+
+  createLearningCollection(input: CreateLearningCollectionInput): LearningCollection {
+    const userId = this.getCurrentUserId()
+    const now = nowIso()
+    const id = newId()
+    this.db
+      .prepare(
+        `
+        INSERT INTO learning_collections
+          (id, user_id, name, description, subject, source, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `
+      )
+      .run(
+        id,
+        userId,
+        input.name.trim() || 'Neue Sammlung',
+        input.description?.trim() ?? '',
+        input.subject?.trim() || null,
+        input.source?.trim() || null,
+        now,
+        now
+      )
+    return this.getLearningCollection(id)
+  }
+
+  listLearningCards(collectionId: string | null = null): LearningCard[] {
+    const userId = this.getCurrentUserId()
+    const rows = collectionId
+      ? (this.db
+          .prepare(
+            'SELECT * FROM learning_cards WHERE user_id = ? AND collection_id = ? AND is_archived = 0 ORDER BY updated_at DESC'
+          )
+          .all(userId, collectionId) as Row[])
+      : (this.db
+          .prepare('SELECT * FROM learning_cards WHERE user_id = ? AND is_archived = 0 ORDER BY updated_at DESC')
+          .all(userId) as Row[])
+    return rows.map((row) => learningCardFromRow(row, this.listTagsForCard(String(row.id))))
+  }
+
+  createLearningCard(input: CreateLearningCardInput): LearningCard {
+    this.getLearningCollection(input.collectionId)
+    const userId = this.getCurrentUserId()
+    const now = nowIso()
+    const id = newId()
+    this.db.transaction(() => {
+      this.db
+        .prepare(
+          `
+          INSERT INTO learning_cards
+            (id, user_id, collection_id, external_id, title, front_markdown, back_markdown, is_archived, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `
+        )
+        .run(
+          id,
+          userId,
+          input.collectionId,
+          null,
+          input.title.trim() || 'Neue Karte',
+          input.frontMarkdown.trim(),
+          input.backMarkdown.trim(),
+          0,
+          now,
+          now
+        )
+      this.replaceCardTags(id, normalizeTags(input.tags))
+      this.ensureSchedule(id, now)
+      this.touchCollection(input.collectionId, now)
+    })()
+    return this.getLearningCard(id)
+  }
+
+  updateLearningCard(input: CreateLearningCardInput & { id: string }): LearningCard {
+    const card = this.getLearningCard(input.id)
+    this.getLearningCollection(input.collectionId)
+    const now = nowIso()
+    this.db.transaction(() => {
+      this.db
+        .prepare(
+          `
+          UPDATE learning_cards
+          SET collection_id = ?, title = ?, front_markdown = ?, back_markdown = ?, updated_at = ?
+          WHERE id = ? AND user_id = ?
+        `
+        )
+        .run(
+          input.collectionId,
+          input.title.trim() || card.title,
+          input.frontMarkdown.trim(),
+          input.backMarkdown.trim(),
+          now,
+          input.id,
+          this.getCurrentUserId()
+        )
+      this.replaceCardTags(input.id, normalizeTags(input.tags))
+      this.touchCollection(input.collectionId, now)
+      if (card.collectionId !== input.collectionId) this.touchCollection(card.collectionId, now)
+    })()
+    return this.getLearningCard(input.id)
+  }
+
+  getReviewBatch(input: GetReviewBatchInput = {}): ReviewCard[] {
+    const limit = Math.min(Math.max(input.limit ?? 30, 1), 100)
+    const excluded = new Set(input.excludeCardIds ?? [])
+    const now = nowIso()
+    let rows: Row[]
+    if (input.collectionId) {
+      this.getLearningCollection(input.collectionId)
+      rows = this.db
+        .prepare(
+          `
+          SELECT c.*, COALESCE(s.due_at, c.created_at) AS due_at, s.last_rating, COALESCE(s.reps, 0) AS reps, COALESCE(s.lapses, 0) AS lapses
+          FROM learning_cards c
+          LEFT JOIN learning_card_schedules s ON s.card_id = c.id AND s.user_id = c.user_id
+          WHERE c.user_id = ? AND c.collection_id = ? AND c.is_archived = 0 AND COALESCE(s.due_at, c.created_at) <= ?
+          ORDER BY COALESCE(s.due_at, c.created_at) ASC, c.created_at ASC
+        `
+        )
+        .all(this.getCurrentUserId(), input.collectionId, now) as Row[]
+    } else {
+      rows = this.db
+        .prepare(
+          `
+          SELECT c.*, COALESCE(s.due_at, c.created_at) AS due_at, s.last_rating, COALESCE(s.reps, 0) AS reps, COALESCE(s.lapses, 0) AS lapses
+          FROM learning_cards c
+          LEFT JOIN learning_card_schedules s ON s.card_id = c.id AND s.user_id = c.user_id
+          WHERE c.user_id = ? AND c.is_archived = 0 AND COALESCE(s.due_at, c.created_at) <= ?
+          ORDER BY COALESCE(s.due_at, c.created_at) ASC, c.created_at ASC
+        `
+        )
+        .all(this.getCurrentUserId(), now) as Row[]
+    }
+    const tag = input.tag?.trim()
+    return rows
+      .filter((row) => !excluded.has(String(row.id)))
+      .map((row) => reviewCardFromRow(row, this.listTagsForCard(String(row.id))))
+      .filter((card) => !tag || card.tags.includes(tag))
+      .slice(0, limit)
+  }
+
+  recordReview(input: RecordReviewInput): RecordReviewResult {
+    const rating = reviewRatingSchema.parse(input.rating)
+    const card = this.getLearningCard(input.cardId)
+    const userId = this.getCurrentUserId()
+    const reviewedAt = nowIso()
+    const schedule = this.getCardSchedule(card.id)
+    const reps = schedule.reps + 1
+    const lapses = schedule.lapses + (rating === 1 ? 1 : 0)
+    const { nextDueAt, intervalLabel } = scheduleNextReview(rating, reps)
+    const eventId = newId()
+    this.db.transaction(() => {
+      this.db
+        .prepare(
+          `
+          INSERT INTO learning_review_events
+            (id, user_id, card_id, rating, reviewed_at, elapsed_ms)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `
+        )
+        .run(eventId, userId, card.id, rating, reviewedAt, input.elapsedMs ?? null)
+      this.db
+        .prepare(
+          `
+          INSERT INTO learning_card_schedules
+            (user_id, card_id, due_at, reps, lapses, last_rating, last_reviewed_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(user_id, card_id) DO UPDATE SET
+            due_at = excluded.due_at,
+            reps = excluded.reps,
+            lapses = excluded.lapses,
+            last_rating = excluded.last_rating,
+            last_reviewed_at = excluded.last_reviewed_at,
+            updated_at = excluded.updated_at
+        `
+        )
+        .run(userId, card.id, nextDueAt, reps, lapses, rating, reviewedAt, reviewedAt)
+    })()
+    const event = learningReviewEventSchema.parse({
+      schemaVersion: 1,
+      id: eventId,
+      userId,
+      cardId: card.id,
+      rating,
+      reviewedAt,
+      elapsedMs: input.elapsedMs ?? null
+    })
+    return { event, nextDueAt, intervalLabel }
+  }
+
   async addAttachmentFromPath(
     examId: string,
     sourcePath: string,
@@ -1427,6 +1723,152 @@ export class AppServices {
     return learningTaskFromRow(row)
   }
 
+  private getLearningCollection(id: string): LearningCollection {
+    const row = this.db
+      .prepare(
+        `
+        SELECT c.*, COUNT(DISTINCT card.id) AS card_count, 0 AS due_count
+        FROM learning_collections c
+        LEFT JOIN learning_cards card ON card.collection_id = c.id AND card.is_archived = 0
+        WHERE c.id = ? AND c.user_id = ?
+        GROUP BY c.id
+      `
+      )
+      .get(id, this.getCurrentUserId()) as Row | undefined
+    if (!row) throw new Error(`Learning collection not found: ${id}`)
+    return learningCollectionFromRow(row)
+  }
+
+  private getLearningCard(id: string): LearningCard {
+    const row = this.db
+      .prepare('SELECT * FROM learning_cards WHERE id = ? AND user_id = ? AND is_archived = 0')
+      .get(id, this.getCurrentUserId()) as Row | undefined
+    if (!row) throw new Error(`Learning card not found: ${id}`)
+    return learningCardFromRow(row, this.listTagsForCard(id))
+  }
+
+  private listTagsForCard(cardId: string): string[] {
+    const rows = this.db
+      .prepare('SELECT tag FROM learning_card_tags WHERE card_id = ? AND user_id = ? ORDER BY tag ASC')
+      .all(cardId, this.getCurrentUserId()) as Array<{ tag: string }>
+    return rows.map((row) => row.tag)
+  }
+
+  private replaceCardTags(cardId: string, tags: string[]): void {
+    const userId = this.getCurrentUserId()
+    this.db.prepare('DELETE FROM learning_card_tags WHERE card_id = ? AND user_id = ?').run(cardId, userId)
+    const insert = this.db.prepare('INSERT OR IGNORE INTO learning_card_tags (user_id, card_id, tag) VALUES (?, ?, ?)')
+    for (const tag of tags) insert.run(userId, cardId, tag)
+  }
+
+  private ensureSchedule(cardId: string, dueAt: string): void {
+    this.db
+      .prepare(
+        `
+        INSERT OR IGNORE INTO learning_card_schedules
+          (user_id, card_id, due_at, reps, lapses, last_rating, last_reviewed_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `
+      )
+      .run(this.getCurrentUserId(), cardId, dueAt, 0, 0, null, null, dueAt)
+  }
+
+  private getCardSchedule(cardId: string): { reps: number; lapses: number } {
+    this.ensureSchedule(cardId, nowIso())
+    const row = this.db
+      .prepare('SELECT reps, lapses FROM learning_card_schedules WHERE user_id = ? AND card_id = ?')
+      .get(this.getCurrentUserId(), cardId) as { reps: number; lapses: number } | undefined
+    return { reps: Number(row?.reps ?? 0), lapses: Number(row?.lapses ?? 0) }
+  }
+
+  private touchCollection(collectionId: string, updatedAt: string): void {
+    this.db
+      .prepare('UPDATE learning_collections SET updated_at = ? WHERE id = ? AND user_id = ?')
+      .run(updatedAt, collectionId, this.getCurrentUserId())
+  }
+
+  private importSeedDeck(deck: SeedDeck): void {
+    const title = deck.deck?.title?.trim() || 'Importierte Sammlung'
+    const existing = this.db
+      .prepare('SELECT id FROM learning_collections WHERE user_id = ? AND name = ?')
+      .get(this.getCurrentUserId(), title) as { id: string } | undefined
+    const collection = existing
+      ? this.getLearningCollection(existing.id)
+      : this.createLearningCollection({
+          name: title,
+          description: deck.deck?.source ? `Quelle: ${deck.deck.source}` : '',
+          subject: deck.deck?.subject ?? null,
+          source: deck.deck?.source ?? null
+        })
+    const now = nowIso()
+    this.db.transaction(() => {
+      for (const card of deck.cards ?? []) {
+        const externalId = card.id?.trim() || null
+        if (!externalId) continue
+        const exists = this.db
+          .prepare(
+            'SELECT id FROM learning_cards WHERE user_id = ? AND collection_id = ? AND external_id = ?'
+          )
+          .get(this.getCurrentUserId(), collection.id, externalId)
+        if (exists) continue
+        const cardId = newId()
+        const frontMarkdown = linesToMarkdown(card.front ?? [])
+        const backMarkdown = linesToMarkdown(card.back ?? [])
+        if (!frontMarkdown || !backMarkdown) continue
+        this.db
+          .prepare(
+            `
+            INSERT INTO learning_cards
+              (id, user_id, collection_id, external_id, title, front_markdown, back_markdown, is_archived, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `
+          )
+          .run(
+            cardId,
+            this.getCurrentUserId(),
+            collection.id,
+            externalId,
+            card.topic?.trim() || firstMarkdownLine(frontMarkdown) || 'Karte',
+            frontMarkdown,
+            backMarkdown,
+            0,
+            now,
+            now
+          )
+        this.replaceCardTags(cardId, normalizeTags(card.tags ?? []))
+        this.ensureSchedule(cardId, now)
+      }
+      this.touchCollection(collection.id, now)
+    })()
+  }
+
+  private listRecentActivityDays(userId: string): Set<string> {
+    const rows = this.db
+      .prepare(
+        `
+        SELECT reviewed_at AS activity_at FROM learning_review_events WHERE user_id = ?
+        UNION ALL
+        SELECT submitted_at AS activity_at FROM submissions WHERE user_id = ?
+      `
+      )
+      .all(userId, userId) as Array<{ activity_at: string }>
+    return new Set(rows.map((row) => localDateKey(new Date(row.activity_at))))
+  }
+
+  private countMissedDaysThisWeek(activityDays: Set<string>): number {
+    const today = new Date()
+    const day = today.getDay() || 7
+    const monday = new Date(today)
+    monday.setDate(today.getDate() - day + 1)
+    let missed = 0
+    for (let index = 0; index < day - 1; index += 1) {
+      const date = new Date(monday)
+      date.setDate(monday.getDate() + index)
+      if (!activityDays.has(localDateKey(date))) missed += 1
+    }
+    return missed
+  }
+
   private listAttachmentsForExam(examId: string): Attachment[] {
     const rows = this.db
       .prepare('SELECT * FROM attachments WHERE exam_id = ? AND user_id = ? ORDER BY created_at DESC')
@@ -1774,6 +2216,115 @@ function normalizeTags(tags: string[]): string[] {
   return [...new Set(tags.map((tag) => tag.trim()).filter(Boolean))].sort((a, b) =>
     a.localeCompare(b)
   )
+}
+
+function learningCollectionFromRow(row: Row): LearningCollection {
+  return learningCollectionSchema.parse({
+    schemaVersion: 1,
+    id: String(row.id),
+    userId: String(row.user_id),
+    name: String(row.name),
+    description: String(row.description ?? ''),
+    subject: row.subject ? String(row.subject) : null,
+    source: row.source ? String(row.source) : null,
+    cardCount: Number(row.card_count ?? 0),
+    dueCount: Number(row.due_count ?? 0),
+    createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at)
+  })
+}
+
+function learningCardFromRow(row: Row, tags: string[]): LearningCard {
+  return learningCardSchema.parse({
+    schemaVersion: 1,
+    id: String(row.id),
+    userId: String(row.user_id),
+    collectionId: String(row.collection_id),
+    externalId: row.external_id ? String(row.external_id) : null,
+    title: String(row.title),
+    frontMarkdown: String(row.front_markdown),
+    backMarkdown: String(row.back_markdown),
+    tags,
+    isArchived: Boolean(row.is_archived),
+    createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at)
+  })
+}
+
+function reviewCardFromRow(row: Row, tags: string[]): ReviewCard {
+  return reviewCardSchema.parse({
+    ...learningCardFromRow(row, tags),
+    dueAt: String(row.due_at ?? row.created_at),
+    lastRating: row.last_rating === null || row.last_rating === undefined ? null : Number(row.last_rating),
+    reps: Number(row.reps ?? 0),
+    lapses: Number(row.lapses ?? 0)
+  })
+}
+
+function readdirJsonFiles(directory: string): string[] {
+  return readdirSync(directory).filter((file) => file.endsWith('.json')).sort((a, b) => a.localeCompare(b))
+}
+
+function linesToMarkdown(lines: string[]): string {
+  return lines.map((line) => line.trim()).filter(Boolean).join('\n\n')
+}
+
+function firstMarkdownLine(markdown: string): string | null {
+  return markdown.split(/\r?\n/).find((line) => line.trim())?.trim() ?? null
+}
+
+function scheduleNextReview(
+  rating: ReviewRating,
+  reps: number
+): { nextDueAt: string; intervalLabel: string } {
+  if (rating === 1) {
+    return { nextDueAt: addMinutesIso(12), intervalLabel: 'gleich nochmal' }
+  }
+  const baseDaysByRating: Record<2 | 3 | 4, number> = {
+    2: 1,
+    3: 3,
+    4: 6
+  }
+  const multiplier = Math.max(1, reps)
+  const days = Math.min(90, baseDaysByRating[rating] * multiplier)
+  return { nextDueAt: addDaysIso(days), intervalLabel: days === 1 ? 'morgen' : `in ${days} Tagen` }
+}
+
+function addMinutesIso(minutes: number): string {
+  const date = new Date()
+  date.setMinutes(date.getMinutes() + minutes)
+  return date.toISOString()
+}
+
+function addDaysIso(days: number): string {
+  const date = new Date()
+  date.setDate(date.getDate() + days)
+  return date.toISOString()
+}
+
+function localDateKey(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function calculateStreakDays(activityDays: Set<string>): number {
+  let streak = 0
+  let freeDays = 2
+  const cursor = new Date()
+  for (let index = 0; index < 365; index += 1) {
+    const key = localDateKey(cursor)
+    if (activityDays.has(key)) {
+      streak += 1
+    } else if (freeDays > 0) {
+      freeDays -= 1
+    } else {
+      break
+    }
+    cursor.setDate(cursor.getDate() - 1)
+  }
+  return streak
 }
 
 async function readZipText(zip: JSZip, path: string): Promise<string> {

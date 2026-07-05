@@ -43,6 +43,12 @@ export const improvementCategorySchema = z.enum([
 ])
 export const learningTaskStatusSchema = z.enum(['open', 'in_progress', 'done'])
 export const learningTaskPrioritySchema = z.enum(['low', 'medium', 'high'])
+export const reviewRatingSchema = z.union([
+  z.literal(1),
+  z.literal(2),
+  z.literal(3),
+  z.literal(4)
+])
 
 const nullableDefaultSchema = <Schema extends z.ZodTypeAny>(schema: Schema) =>
   z.preprocess((value) => value ?? null, schema.nullable())
@@ -252,6 +258,61 @@ export const learningTaskSchema = z.object({
   updatedAt: isoDateSchema
 })
 
+export const learningCollectionSchema = z.object({
+  schemaVersion: z.literal(1),
+  id: uuidSchema,
+  userId: uuidSchema,
+  name: z.string().min(1),
+  description: z.string(),
+  subject: z.string().nullable(),
+  source: z.string().nullable(),
+  cardCount: z.number().int().nonnegative(),
+  dueCount: z.number().int().nonnegative(),
+  createdAt: isoDateSchema,
+  updatedAt: isoDateSchema
+})
+
+export const learningCardSchema = z.object({
+  schemaVersion: z.literal(1),
+  id: uuidSchema,
+  userId: uuidSchema,
+  collectionId: uuidSchema,
+  externalId: z.string().nullable(),
+  title: z.string().min(1),
+  frontMarkdown: z.string().min(1),
+  backMarkdown: z.string().min(1),
+  tags: z.array(z.string()),
+  isArchived: z.boolean(),
+  createdAt: isoDateSchema,
+  updatedAt: isoDateSchema
+})
+
+export const reviewCardSchema = learningCardSchema.extend({
+  dueAt: isoDateSchema,
+  lastRating: reviewRatingSchema.nullable(),
+  reps: z.number().int().nonnegative(),
+  lapses: z.number().int().nonnegative()
+})
+
+export const learningReviewEventSchema = z.object({
+  schemaVersion: z.literal(1),
+  id: uuidSchema,
+  userId: uuidSchema,
+  cardId: uuidSchema,
+  rating: reviewRatingSchema,
+  reviewedAt: isoDateSchema,
+  elapsedMs: z.number().int().nonnegative().nullable()
+})
+
+export const learningDashboardSchema = z.object({
+  dueCount: z.number().int().nonnegative(),
+  totalCards: z.number().int().nonnegative(),
+  collectionCount: z.number().int().nonnegative(),
+  streakDays: z.number().int().nonnegative(),
+  freeDaysRemainingThisWeek: z.number().int().min(0).max(2),
+  learnedToday: z.boolean()
+})
+
 export const attachmentSchema = z.object({
   schemaVersion: z.literal(1),
   id: uuidSchema,
@@ -275,6 +336,7 @@ export type AiConfidence = z.infer<typeof aiConfidenceSchema>
 export type ImprovementCategory = z.infer<typeof improvementCategorySchema>
 export type LearningTaskStatus = z.infer<typeof learningTaskStatusSchema>
 export type LearningTaskPriority = z.infer<typeof learningTaskPrioritySchema>
+export type ReviewRating = z.infer<typeof reviewRatingSchema>
 export type User = z.infer<typeof userSchema>
 export type Folder = z.infer<typeof folderSchema>
 export type ExamListItem = z.infer<typeof examListItemSchema>
@@ -288,6 +350,11 @@ export type InlineComment = z.infer<typeof inlineCommentSchema>
 export type Correction = z.infer<typeof correctionSchema>
 export type AiCorrectionDraft = z.infer<typeof aiCorrectionDraftSchema>
 export type LearningTask = z.infer<typeof learningTaskSchema>
+export type LearningCollection = z.infer<typeof learningCollectionSchema>
+export type LearningCard = z.infer<typeof learningCardSchema>
+export type ReviewCard = z.infer<typeof reviewCardSchema>
+export type LearningReviewEvent = z.infer<typeof learningReviewEventSchema>
+export type LearningDashboard = z.infer<typeof learningDashboardSchema>
 export type ImprovementSuggestion = z.infer<typeof improvementSuggestionSchema>
 export type AiInlineCommentSuggestion = z.infer<typeof aiInlineCommentSuggestionSchema>
 export type Attachment = z.infer<typeof attachmentSchema>

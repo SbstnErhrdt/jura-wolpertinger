@@ -4,10 +4,15 @@ import type {
   AiSettingsStatus,
   AnalyticsEntry,
   AppApi,
+  CreateLearningCardInput,
+  CreateLearningCollectionInput,
   CreateExamInput,
   ExamDetails,
   ExamListItem,
   FolderDto,
+  GetReviewBatchInput,
+  RecordReviewInput,
+  RecordReviewResult,
   SubmissionDetails,
   TrashFolderInput,
   UpdateCorrectionInput,
@@ -21,12 +26,18 @@ import type {
   ExamType,
   ExamRevision,
   InlineComment,
+  LearningCard,
+  LearningCollection,
+  LearningDashboard,
+  LearningReviewEvent,
   LearningTask,
   LegalArea,
+  ReviewCard,
+  ReviewRating,
   Submission,
   User
 } from '@shared/schemas'
-import { examStatusSchema, examTypeSchema, learningTaskStatusSchema, legalAreaSchema } from '@shared/schemas'
+import { examStatusSchema, examTypeSchema, learningTaskStatusSchema, legalAreaSchema, reviewRatingSchema } from '@shared/schemas'
 
 const BROWSER_STORE_KEY = 'jura-wolpertinger-browser-dev-v1'
 const AI_CORRECTION_NOT_IMPLEMENTED_MESSAGE = 'KI-Korrektur ist noch nicht implementiert.'
@@ -48,6 +59,18 @@ type BrowserStore = {
   } | null
   aiCorrectionDrafts: AiCorrectionDraft[]
   learningTasks: LearningTask[]
+  learningCollections: LearningCollection[]
+  learningCards: LearningCard[]
+  learningReviewEvents: LearningReviewEvent[]
+  learningSchedules: Array<{
+    userId: string
+    cardId: string
+    dueAt: string
+    reps: number
+    lapses: number
+    lastRating: ReviewRating | null
+    lastReviewedAt: string | null
+  }>
 }
 
 let browserDevApi: AppApi | null = null
@@ -504,6 +527,151 @@ function createBrowserDevApi(): AppApi {
       writeStore(store)
       return task
     },
+    async getLearningDashboard() {
+      const store = readStore()
+      const user = ensureBrowserUser(store)
+      const now = nowIso()
+      const dueCount = store.learningCards.filter((card) => {
+        if (card.userId !== user.id || card.isArchived) return false
+        return browserScheduleFor(store, user.id, card.id).dueAt <= now
+      }).length
+      const activityDays = new Set(
+        [
+          ...store.learningReviewEvents
+            .filter((event) => event.userId === user.id)
+            .map((event) => localDateKey(new Date(event.reviewedAt))),
+          ...store.submissions
+            .filter((submission) => submission.userId === user.id)
+            .map((submission) => localDateKey(new Date(submission.submittedAt)))
+        ]
+      )
+      return {
+        dueCount,
+        totalCards: store.learningCards.filter((card) => card.userId === user.id && !card.isArchived).length,
+        collectionCount: store.learningCollections.filter((collection) => collection.userId === user.id).length,
+        streakDays: calculateBrowserStreakDays(activityDays),
+        freeDaysRemainingThisWeek: Math.max(0, 2 - countBrowserMissedDaysThisWeek(activityDays)),
+        learnedToday: activityDays.has(localDateKey(new Date()))
+      } satisfies LearningDashboard
+    },
+    async seedLearningDecks() {
+      const store = readStore()
+      const user = ensureBrowserUser(store)
+      if (!store.learningCollections.some((collection) => collection.userId === user.id)) {
+        const collection = createBrowserCollection(user.id, {
+          name: 'Wolpertinger Startkarten',
+          description: 'Lokale Testkarten fuer die Entwicklung.',
+          subject: 'Jura',
+          source: 'Browser-Dev'
+        })
+        store.learningCollections.push(collection)
+        const card = createBrowserCard(user.id, {
+          collectionId: collection.id,
+          title: 'Gutachtenstil',
+          frontMarkdown: 'Was ist der Kern des Gutachtenstils?',
+          backMarkdown: 'Obersatz, Definition, Subsumtion und Ergebnis.',
+          tags: ['gutachtenstil']
+        })
+        store.learningCards.push(card)
+        store.learningSchedules.push(createBrowserSchedule(user.id, card.id, card.createdAt))
+        writeStore(store)
+      }
+      return browserCollectionsForCurrentUser(store)
+    },
+    async listLearningCollections() {
+      return browserCollectionsForCurrentUser(readStore())
+    },
+    async createLearningCollection(input: CreateLearningCollectionInput) {
+      const store = readStore()
+      const user = ensureBrowserUser(store)
+      const collection = createBrowserCollection(user.id, input)
+      store.learningCollections.unshift(collection)
+      writeStore(store)
+      return { ...collection, cardCount: 0, dueCount: 0 }
+    },
+    async listLearningCards(collectionId?: string | null) {
+      const store = readStore()
+      const user = ensureBrowserUser(store)
+      return store.learningCards.filter(
+        (card) => card.userId === user.id && !card.isArchived && (!collectionId || card.collectionId === collectionId)
+      )
+    },
+    async createLearningCard(input: CreateLearningCardInput) {
+      const store = readStore()
+      const user = ensureBrowserUser(store)
+      const card = createBrowserCard(user.id, input)
+      store.learningCards.unshift(card)
+      store.learningSchedules.push(createBrowserSchedule(user.id, card.id, card.createdAt))
+      writeStore(store)
+      return card
+    },
+    async updateLearningCard(input: CreateLearningCardInput & { id: string }) {
+      const store = readStore()
+      const user = ensureBrowserUser(store)
+      const card = store.learningCards.find((candidate) => candidate.id === input.id && candidate.userId === user.id)
+      if (!card) throw new Error(`Learning card not found: ${input.id}`)
+      card.collectionId = input.collectionId
+      card.title = input.title.trim() || card.title
+      card.frontMarkdown = input.frontMarkdown.trim()
+      card.backMarkdown = input.backMarkdown.trim()
+      card.tags = normalizeTags(input.tags)
+      card.updatedAt = nowIso()
+      writeStore(store)
+      return card
+    },
+    async getReviewBatch(input: GetReviewBatchInput = {}) {
+      const store = readStore()
+      const user = ensureBrowserUser(store)
+      const now = nowIso()
+      const excluded = new Set(input.excludeCardIds ?? [])
+      const limit = Math.min(Math.max(input.limit ?? 30, 1), 100)
+      return store.learningCards
+        .filter((card) => card.userId === user.id && !card.isArchived)
+        .filter((card) => !input.collectionId || card.collectionId === input.collectionId)
+        .filter((card) => !input.tag || card.tags.includes(input.tag))
+        .filter((card) => !excluded.has(card.id))
+        .map((card): ReviewCard => {
+          const schedule = browserScheduleFor(store, user.id, card.id)
+          return {
+            ...card,
+            dueAt: schedule.dueAt,
+            lastRating: schedule.lastRating,
+            reps: schedule.reps,
+            lapses: schedule.lapses
+          }
+        })
+        .filter((card) => card.dueAt <= now)
+        .sort((left, right) => left.dueAt.localeCompare(right.dueAt))
+        .slice(0, limit)
+    },
+    async recordReview(input: RecordReviewInput): Promise<RecordReviewResult> {
+      const store = readStore()
+      const user = ensureBrowserUser(store)
+      const rating = reviewRatingSchema.parse(input.rating)
+      const card = store.learningCards.find((candidate) => candidate.id === input.cardId && candidate.userId === user.id)
+      if (!card) throw new Error(`Learning card not found: ${input.cardId}`)
+      const schedule = browserScheduleFor(store, user.id, card.id)
+      const reps = schedule.reps + 1
+      const lapses = schedule.lapses + (rating === 1 ? 1 : 0)
+      const { nextDueAt, intervalLabel } = scheduleBrowserNextReview(rating, reps)
+      const event: LearningReviewEvent = {
+        schemaVersion: 1,
+        id: newId(),
+        userId: user.id,
+        cardId: card.id,
+        rating,
+        reviewedAt: nowIso(),
+        elapsedMs: input.elapsedMs ?? null
+      }
+      store.learningReviewEvents.push(event)
+      schedule.dueAt = nextDueAt
+      schedule.reps = reps
+      schedule.lapses = lapses
+      schedule.lastRating = rating
+      schedule.lastReviewedAt = event.reviewedAt
+      writeStore(store)
+      return { event, nextDueAt, intervalLabel }
+    },
     async addAttachment() {
       console.warn('Attachments are only available in the Electron app window.')
       return null
@@ -721,7 +889,11 @@ function emptyStore(): BrowserStore {
     corrections: [],
     aiSettings: null,
     aiCorrectionDrafts: [],
-    learningTasks: []
+    learningTasks: [],
+    learningCollections: [],
+    learningCards: [],
+    learningReviewEvents: [],
+    learningSchedules: []
   }
 }
 
@@ -923,7 +1095,160 @@ function folderName(store: BrowserStore, folderId: string | null | undefined): s
 }
 
 function normalizeTags(tags: string[]): string[] {
-  return [...new Set(tags.map((tag) => tag.trim()).filter(Boolean))]
+  return [...new Set(tags.map((tag) => tag.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b))
+}
+
+function createBrowserCollection(
+  userId: string,
+  input: CreateLearningCollectionInput
+): LearningCollection {
+  const now = nowIso()
+  return {
+    schemaVersion: 1,
+    id: newId(),
+    userId,
+    name: input.name.trim() || 'Neue Sammlung',
+    description: input.description?.trim() ?? '',
+    subject: input.subject?.trim() || null,
+    source: input.source?.trim() || null,
+    cardCount: 0,
+    dueCount: 0,
+    createdAt: now,
+    updatedAt: now
+  }
+}
+
+function createBrowserCard(userId: string, input: CreateLearningCardInput): LearningCard {
+  const now = nowIso()
+  return {
+    schemaVersion: 1,
+    id: newId(),
+    userId,
+    collectionId: input.collectionId,
+    externalId: null,
+    title: input.title.trim() || 'Neue Karte',
+    frontMarkdown: input.frontMarkdown.trim(),
+    backMarkdown: input.backMarkdown.trim(),
+    tags: normalizeTags(input.tags),
+    isArchived: false,
+    createdAt: now,
+    updatedAt: now
+  }
+}
+
+function createBrowserSchedule(
+  userId: string,
+  cardId: string,
+  dueAt: string
+): BrowserStore['learningSchedules'][number] {
+  return {
+    userId,
+    cardId,
+    dueAt,
+    reps: 0,
+    lapses: 0,
+    lastRating: null,
+    lastReviewedAt: null
+  }
+}
+
+function browserScheduleFor(
+  store: BrowserStore,
+  userId: string,
+  cardId: string
+): BrowserStore['learningSchedules'][number] {
+  let schedule = store.learningSchedules.find(
+    (candidate) => candidate.userId === userId && candidate.cardId === cardId
+  )
+  if (!schedule) {
+    const card = store.learningCards.find((candidate) => candidate.id === cardId)
+    schedule = createBrowserSchedule(userId, cardId, card?.createdAt ?? nowIso())
+    store.learningSchedules.push(schedule)
+  }
+  return schedule
+}
+
+function browserCollectionsForCurrentUser(store: BrowserStore): LearningCollection[] {
+  const user = ensureBrowserUser(store)
+  const now = nowIso()
+  return store.learningCollections
+    .filter((collection) => collection.userId === user.id)
+    .map((collection) => {
+      const cards = store.learningCards.filter(
+        (card) => card.userId === user.id && card.collectionId === collection.id && !card.isArchived
+      )
+      const dueCount = cards.filter((card) => browserScheduleFor(store, user.id, card.id).dueAt <= now).length
+      return {
+        ...collection,
+        cardCount: cards.length,
+        dueCount
+      }
+    })
+}
+
+function scheduleBrowserNextReview(
+  rating: ReviewRating,
+  reps: number
+): { nextDueAt: string; intervalLabel: string } {
+  if (rating === 1) return { nextDueAt: addBrowserMinutesIso(12), intervalLabel: 'gleich nochmal' }
+  const daysByRating: Record<2 | 3 | 4, number> = {
+    2: 1,
+    3: 3,
+    4: 6
+  }
+  const days = Math.min(90, daysByRating[rating] * Math.max(1, reps))
+  return { nextDueAt: addBrowserDaysIso(days), intervalLabel: days === 1 ? 'morgen' : `in ${days} Tagen` }
+}
+
+function addBrowserMinutesIso(minutes: number): string {
+  const date = new Date()
+  date.setMinutes(date.getMinutes() + minutes)
+  return date.toISOString()
+}
+
+function addBrowserDaysIso(days: number): string {
+  const date = new Date()
+  date.setDate(date.getDate() + days)
+  return date.toISOString()
+}
+
+function localDateKey(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function countBrowserMissedDaysThisWeek(activityDays: Set<string>): number {
+  const today = new Date()
+  const day = today.getDay() || 7
+  const monday = new Date(today)
+  monday.setDate(today.getDate() - day + 1)
+  let missed = 0
+  for (let index = 0; index < day - 1; index += 1) {
+    const date = new Date(monday)
+    date.setDate(monday.getDate() + index)
+    if (!activityDays.has(localDateKey(date))) missed += 1
+  }
+  return missed
+}
+
+function calculateBrowserStreakDays(activityDays: Set<string>): number {
+  let streak = 0
+  let freeDays = 2
+  const cursor = new Date()
+  for (let index = 0; index < 365; index += 1) {
+    const key = localDateKey(cursor)
+    if (activityDays.has(key)) {
+      streak += 1
+    } else if (freeDays > 0) {
+      freeDays -= 1
+    } else {
+      break
+    }
+    cursor.setDate(cursor.getDate() - 1)
+  }
+  return streak
 }
 
 function parseLegalArea(value: CreateExamInput['legalArea']): LegalArea | null {

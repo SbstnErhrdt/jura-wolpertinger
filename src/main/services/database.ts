@@ -30,25 +30,28 @@ export function initializeDatabase(db: SqliteDatabase): void {
   const version = Number(row?.value ?? 0)
   const targetSchemaVersion: number = DATABASE_SCHEMA_VERSION
 
-  if (version === 1 && DATABASE_SCHEMA_VERSION === 3) {
+  if (version === 1 && DATABASE_SCHEMA_VERSION >= 3) {
     migrateV1ToV2(db)
     migrateV2ToV3(db)
+    if (DATABASE_SCHEMA_VERSION >= 4) migrateV3ToV4(db)
     return
   }
 
-  if (version === 2 && DATABASE_SCHEMA_VERSION === 3) {
+  if (version === 2 && DATABASE_SCHEMA_VERSION >= 3) {
     migrateV2ToV3(db)
+    if (DATABASE_SCHEMA_VERSION >= 4) migrateV3ToV4(db)
     return
   }
 
-  if (version === 1 && targetSchemaVersion === 2) {
-    migrateV1ToV2(db)
+  if (version === 3 && DATABASE_SCHEMA_VERSION >= 4) {
+    migrateV3ToV4(db)
     return
   }
 
   if (version === targetSchemaVersion) {
     repairMissingUserScope(db)
-    if (DATABASE_SCHEMA_VERSION === 3) repairMissingV3Schema(db)
+    repairMissingV3Schema(db)
+    repairMissingV4Schema(db)
     updateAppVersion(db)
     return
   }
@@ -239,6 +242,8 @@ function createSchema(db: SqliteDatabase): void {
       CREATE INDEX idx_learning_tasks_user_id ON learning_tasks(user_id);
     `)
 
+    createLearningSchema(db)
+
     db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)').run(
       'schema_version',
       String(DATABASE_SCHEMA_VERSION)
@@ -315,6 +320,79 @@ function migrateV2ToV3(db: SqliteDatabase): void {
   })()
 }
 
+function migrateV3ToV4(db: SqliteDatabase): void {
+  const migratedAt = nowIso()
+  db.transaction(() => {
+    createLearningSchema(db)
+    db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run('schema_version', '4')
+    db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run('last_migrated_at', migratedAt)
+    updateAppVersion(db)
+  })()
+}
+
+function createLearningSchema(db: SqliteDatabase): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS learning_collections (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      subject TEXT,
+      source TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(user_id, name)
+    );
+
+    CREATE TABLE IF NOT EXISTS learning_cards (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      collection_id TEXT NOT NULL REFERENCES learning_collections(id) ON DELETE CASCADE,
+      external_id TEXT,
+      title TEXT NOT NULL,
+      front_markdown TEXT NOT NULL,
+      back_markdown TEXT NOT NULL,
+      is_archived INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(user_id, collection_id, external_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS learning_card_tags (
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      card_id TEXT NOT NULL REFERENCES learning_cards(id) ON DELETE CASCADE,
+      tag TEXT NOT NULL,
+      PRIMARY KEY(card_id, tag)
+    );
+
+    CREATE TABLE IF NOT EXISTS learning_review_events (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      card_id TEXT NOT NULL REFERENCES learning_cards(id) ON DELETE CASCADE,
+      rating INTEGER NOT NULL,
+      reviewed_at TEXT NOT NULL,
+      elapsed_ms INTEGER
+    );
+
+    CREATE TABLE IF NOT EXISTS learning_card_schedules (
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      card_id TEXT NOT NULL REFERENCES learning_cards(id) ON DELETE CASCADE,
+      due_at TEXT NOT NULL,
+      reps INTEGER NOT NULL DEFAULT 0,
+      lapses INTEGER NOT NULL DEFAULT 0,
+      last_rating INTEGER,
+      last_reviewed_at TEXT,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY(user_id, card_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_learning_cards_user_collection ON learning_cards(user_id, collection_id);
+    CREATE INDEX IF NOT EXISTS idx_learning_card_tags_user_tag ON learning_card_tags(user_id, tag);
+    CREATE INDEX IF NOT EXISTS idx_learning_review_events_user_reviewed ON learning_review_events(user_id, reviewed_at);
+    CREATE INDEX IF NOT EXISTS idx_learning_card_schedules_due ON learning_card_schedules(user_id, due_at);
+  `)
+}
+
 function repairMissingUserScope(db: SqliteDatabase): void {
   const hasCompleteUserScope =
     tableExists(db, 'users') &&
@@ -339,6 +417,17 @@ function repairMissingV3Schema(db: SqliteDatabase): void {
     tableExists(db, 'ai_settings')
 
   if (!hasV3Schema) migrateV2ToV3(db)
+}
+
+function repairMissingV4Schema(db: SqliteDatabase): void {
+  const hasV4Schema =
+    tableExists(db, 'learning_collections') &&
+    tableExists(db, 'learning_cards') &&
+    tableExists(db, 'learning_card_tags') &&
+    tableExists(db, 'learning_review_events') &&
+    tableExists(db, 'learning_card_schedules')
+
+  if (!hasV4Schema) migrateV3ToV4(db)
 }
 
 function addUserScopeToLegacySchema(db: SqliteDatabase, targetSchemaVersion: number): void {
@@ -393,6 +482,11 @@ const USER_SCOPED_TABLES = [
   'attachments',
   'ai_correction_drafts',
   'learning_tasks',
+  'learning_collections',
+  'learning_cards',
+  'learning_card_tags',
+  'learning_review_events',
+  'learning_card_schedules',
   'ai_settings',
   'tags',
   'exam_tags'

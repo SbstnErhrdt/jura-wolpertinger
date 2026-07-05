@@ -46,8 +46,8 @@
             <button type="button" class="secondary" @click="showAiSettings = !showAiSettings">
               KI einrichten
             </button>
-            <button type="button" :disabled="aiBusy || !aiSettings.configured" @click="generateAiDraft">
-              {{ aiBusy ? 'KI arbeitet...' : 'KI-Korrektur vorschlagen' }}
+            <button type="button" :disabled="aiBusy || !aiSettings.configured || cloudAiDisabled" @click="generateAiDraft">
+              {{ cloudAiDisabled ? 'Cloud-KI noch nicht freigeschaltet' : aiBusy ? 'KI arbeitet...' : 'KI-Korrektur vorschlagen' }}
             </button>
             <button :disabled="aiBusy" @click="saveCorrection">Speichern</button>
           </div>
@@ -344,6 +344,7 @@ import { aiConnectionFallbackMessage, type AiConnectionTestSource } from '@share
 import type { AiSettingsStatus, SubmissionDetails } from '@shared/ipc'
 import type { AiCorrectionDraft, Correction, InlineComment } from '@shared/schemas'
 import { api } from '../api'
+import { requiresCloudAuth } from '../cloudAuth'
 import { renderTiptapHtml } from '../utils/renderTiptap'
 
 type SubmittedItem = {
@@ -389,6 +390,7 @@ const aiBusy = ref(false)
 const aiNotice = ref('')
 const aiConnectionMessage = ref('')
 const aiConnectionOk = ref(false)
+const cloudAiDisabled = requiresCloudAuth()
 const effectiveAiSource = computed(() =>
   aiSettings.value.source ?? (aiSettings.value.configured ? 'stored' : null)
 )
@@ -419,11 +421,13 @@ const storedKeyOverridesEnvironment = computed(
   () => effectiveAiSource.value === 'stored' && Boolean(aiSettings.value.environmentAvailable)
 )
 const aiStatusTitle = computed(() => {
+  if (cloudAiDisabled) return 'Cloud-KI noch nicht freigeschaltet'
   if (effectiveAiSource.value === 'stored') return 'OpenAI-Key gespeichert'
   if (effectiveAiSource.value === 'environment') return 'Entwicklungs-Key aktiv'
   return 'OpenAI-Key fehlt'
 })
 const aiStatusDescription = computed(() => {
+  if (cloudAiDisabled) return 'KI-Korrektur ist in der Cloud-Version sichtbar, aber noch deaktiviert.'
   if (effectiveAiSource.value === 'stored') return 'KI-Korrekturen nutzen den lokal gespeicherten App-Key.'
   if (effectiveAiSource.value === 'environment') return 'Der Key kommt aus deiner lokalen .env-Datei.'
   return 'Richte einen eigenen OpenAI-Key ein, bevor KI-Korrekturen gestartet werden.'
@@ -631,6 +635,10 @@ async function testEnvironmentConnection(): Promise<void> {
 
 async function generateAiDraft(): Promise<void> {
   if (!submission.value) return
+  if (cloudAiDisabled) {
+    actionError.value = 'KI-Korrektur ist in der Cloud-Version noch nicht freigeschaltet.'
+    return
+  }
   actionError.value = ''
   aiNotice.value = ''
   aiBusy.value = true

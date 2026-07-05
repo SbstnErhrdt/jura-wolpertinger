@@ -2,8 +2,12 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type {
   AddInlineCommentInput,
   AppApi,
+  CreateLearningCardInput,
+  CreateLearningCollectionInput,
   GenerateAiCorrectionInput,
   CreateExamInput,
+  GetReviewBatchInput,
+  RecordReviewInput,
   SaveRevisionInput,
   SaveAiSettingsInput,
   TestAiConnectionInput,
@@ -54,6 +58,17 @@ const api: AppApi = {
   listLearningTasks: () => ipcRenderer.invoke('learningTasks:list'),
   updateLearningTaskStatus: (taskId: string, status: LearningTask['status']) =>
     ipcRenderer.invoke('learningTasks:updateStatus', taskId, status),
+  getLearningDashboard: () => ipcRenderer.invoke('learning:dashboard'),
+  seedLearningDecks: () => ipcRenderer.invoke('learning:seedDecks'),
+  listLearningCollections: () => ipcRenderer.invoke('learning:collections'),
+  createLearningCollection: (input: CreateLearningCollectionInput) =>
+    ipcRenderer.invoke('learning:createCollection', input),
+  listLearningCards: (collectionId?: string | null) => ipcRenderer.invoke('learning:cards', collectionId ?? null),
+  createLearningCard: (input: CreateLearningCardInput) => ipcRenderer.invoke('learning:createCard', input),
+  updateLearningCard: (input: CreateLearningCardInput & { id: string }) =>
+    ipcRenderer.invoke('learning:updateCard', input),
+  getReviewBatch: (input?: GetReviewBatchInput) => ipcRenderer.invoke('learning:reviewBatch', input),
+  recordReview: (input: RecordReviewInput) => ipcRenderer.invoke('learning:recordReview', input),
   addAttachment: (examId: string, role?: AttachmentRole) =>
     ipcRenderer.invoke('attachments:add', examId, role),
   openAttachment: (id: string) => ipcRenderer.invoke('attachments:open', id),
