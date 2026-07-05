@@ -41,7 +41,7 @@ export async function readCloudAuthState(): Promise<CloudAuthState> {
     return {
       status: 'missing_config',
       session: null,
-      error: 'Supabase Auth ist fuer diese Web-App noch nicht konfiguriert.'
+      error: 'Die Anmeldung ist gerade nicht eingerichtet. Bitte versuche es später erneut.'
     }
   }
   const { data, error } = await client.auth.getSession()
