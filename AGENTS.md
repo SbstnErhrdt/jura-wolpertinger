@@ -59,6 +59,8 @@ Vor größeren Änderungen zuerst lesen:
 - Tests für Migrationen, Scores, Submissions und `.jura` sollten angepasst werden.
 - `score_points` akzeptiert fachlich `0-18` in `0.5` Schritten.
 - Tags sind aktuell in JSON-Feldern aktiv; die normalisierten Tabellen sind vorbereitet.
+- Cloud-Listen, Review-Batches und Sync-Flows dürfen nicht clientseitig "alles laden und filtern". Große Datenmengen müssen serverseitig begrenzt, paginiert oder per RPC geladen werden.
+- Supabase-REST-Abfragen mit `.in(...)` brauchen bewusst kleine Chunks und Regressionstests, sobald die ID-Liste aus Nutzerdaten wachsen kann.
 
 ## Arbeitsweise
 

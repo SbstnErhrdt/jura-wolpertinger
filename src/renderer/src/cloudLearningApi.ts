@@ -33,6 +33,8 @@ type CloudCollectionRow = {
   description_markdown: string | null
   subject: string | null
   source: string | null
+  card_count: number
+  due_count: number
   created_at: string
   updated_at: string
 }
@@ -118,18 +120,16 @@ export function createCloudLearningApi(localApi: AppApi): AppApi {
       return cloudUserFromSupabaseUser(user)
     },
     async getLearningDashboard() {
-      const [{ user }, cards, collections, reviewDays] = await Promise.all([
-        requireCloudContext(),
-        listCloudCards(null),
-        listCloudCollections(),
+      const [summary, reviewDays] = await Promise.all([
+        getCloudLearningDashboardSummary(),
         listCloudReviewDays()
       ])
       const now = nowIso()
       const activityDays = new Set(reviewDays)
       return {
-        dueCount: cards.filter((card) => card.dueAt <= now).length,
-        totalCards: cards.length,
-        collectionCount: collections.length,
+        dueCount: summary.dueCount,
+        totalCards: summary.totalCards,
+        collectionCount: summary.collectionCount,
         streakDays: calculateCloudStreakDays(activityDays),
         freeDaysRemainingThisWeek: Math.max(0, 2 - countCloudMissedDaysThisWeek(activityDays)),
         learnedToday: activityDays.has(localDateKey(new Date()))
@@ -296,34 +296,23 @@ function cloudUserFromSupabaseUser(user: SupabaseUser): User {
 }
 
 async function listCloudCollections(): Promise<LearningCollection[]> {
-  const { client, user } = await requireCloudContext()
-  const { data: rows, error } = await client
-    .from('learning_collections')
-    .select('id, owner_user_id, name, description_markdown, subject, source, created_at, updated_at')
-    .eq('owner_user_id', user.id)
-    .eq('is_archived', false)
-    .order('updated_at', { ascending: false })
-    .returns<CloudCollectionRow[]>()
+  const { client } = await requireCloudContext()
+  const { data: rows, error } = await client.rpc('get_learning_collection_summaries')
   if (error) throw error
 
-  const cards = await listCloudCards(null)
-  const now = nowIso()
-  return rows.map((row) => {
-    const collectionCards = cards.filter((card) => card.collectionId === row.id)
-    return {
-      schemaVersion: 1,
-      id: row.id,
-      userId: row.owner_user_id,
-      name: row.name,
-      description: row.description_markdown ?? '',
-      subject: row.subject,
-      source: row.source,
-      cardCount: collectionCards.length,
-      dueCount: collectionCards.filter((card) => card.dueAt <= now).length,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at
-    }
-  })
+  return ((rows ?? []) as CloudCollectionRow[]).map((row) => ({
+    schemaVersion: 1,
+    id: row.id,
+    userId: row.owner_user_id,
+    name: row.name,
+    description: row.description_markdown ?? '',
+    subject: row.subject,
+    source: row.source,
+    cardCount: Number(row.card_count ?? 0),
+    dueCount: Number(row.due_count ?? 0),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  }))
 }
 
 async function createCloudCollection(
@@ -488,12 +477,16 @@ async function listCloudReviewBatch(input: GetReviewBatchInput = {}): Promise<Re
 
   const itemIds = unique(rows.map((row) => row.item_id))
   const promptIds = unique(rows.map((row) => row.prompt_id))
-  const [{ data: items, error: itemsError }, schedules, tagRows] = await Promise.all([
-    client
-      .from('learning_items')
-      .select('id, primary_collection_id, owner_user_id, title, external_id, is_archived, created_at, updated_at')
-      .in('id', itemIds)
-      .returns<CloudItemRow[]>(),
+  const [items, schedules, tagRows] = await Promise.all([
+    selectInChunks(itemIds, async (chunk) => {
+      const { data: itemRows, error: itemsError } = await client
+        .from('learning_items')
+        .select('id, primary_collection_id, owner_user_id, title, external_id, is_archived, created_at, updated_at')
+        .in('id', chunk)
+        .returns<CloudItemRow[]>()
+      if (itemsError) throw itemsError
+      return itemRows ?? []
+    }),
     selectInChunks(promptIds, async (chunk) => {
       const { data: scheduleRows, error: scheduleError } = await client
         .from('learning_prompt_schedules')
@@ -514,9 +507,8 @@ async function listCloudReviewBatch(input: GetReviewBatchInput = {}): Promise<Re
       return nextTagRows ?? []
     })
   ])
-  if (itemsError) throw itemsError
 
-  const itemsById = new Map((items ?? []).map((item) => [item.id, item]))
+  const itemsById = new Map(items.map((item) => [item.id, item]))
   const schedulesByPromptId = new Map(schedules.map((schedule) => [schedule.prompt_id, schedule]))
   const tagsByItemId = groupCloudTags(tagRows)
 
@@ -635,7 +627,60 @@ async function updateCloudCard(input: UpdateLearningCardInput): Promise<Learning
 }
 
 async function getCloudCard(promptId: string): Promise<LearningCard> {
-  const card = (await listCloudCards(null)).find((candidate) => candidate.id === promptId)
+  const { client, user } = await requireCloudContext()
+  const { data: prompt, error: promptError } = await client
+    .from('learning_prompts')
+    .select('id, item_id, front_markdown, back_markdown, is_archived, created_at, updated_at')
+    .eq('id', promptId)
+    .eq('is_archived', false)
+    .single<CloudPromptRow>()
+  if (promptError) throw promptError
+
+  const { data: item, error: itemError } = await client
+    .from('learning_items')
+    .select('id, primary_collection_id, owner_user_id, title, external_id, is_archived, created_at, updated_at')
+    .eq('id', prompt.item_id)
+    .eq('owner_user_id', user.id)
+    .single<CloudItemRow>()
+  if (itemError) throw itemError
+
+  const [{ data: schedule, error: scheduleError }, tagRows] = await Promise.all([
+    client
+      .from('learning_prompt_schedules')
+      .select('prompt_id, due_at, reps, lapses, last_rating')
+      .eq('user_id', user.id)
+      .eq('prompt_id', promptId)
+      .maybeSingle<CloudScheduleRow>(),
+    selectInChunks([item.id], async (chunk) => {
+      const { data, error } = await client
+        .from('learning_item_tags')
+        .select('item_id, learning_tags(name)')
+        .in('item_id', chunk)
+        .returns<CloudTagRow[]>()
+      if (error) throw error
+      return data ?? []
+    })
+  ])
+  if (scheduleError) throw scheduleError
+  const tagsByItemId = groupCloudTags(tagRows)
+  const card = {
+    schemaVersion: 1,
+    id: prompt.id,
+    userId: item.owner_user_id,
+    collectionId: item.primary_collection_id,
+    externalId: item.external_id,
+    title: item.title,
+    frontMarkdown: prompt.front_markdown,
+    backMarkdown: prompt.back_markdown,
+    tags: tagsByItemId.get(item.id) ?? [],
+    isArchived: item.is_archived || prompt.is_archived,
+    dueAt: schedule?.due_at ?? prompt.created_at,
+    lastRating: schedule?.last_rating ?? null,
+    reps: schedule?.reps ?? 0,
+    lapses: schedule?.lapses ?? 0,
+    createdAt: prompt.created_at,
+    updatedAt: prompt.updated_at > item.updated_at ? prompt.updated_at : item.updated_at
+  } satisfies LearningCard
   if (!card) throw new Error(`Karte nicht gefunden: ${promptId}`)
   return card
 }
@@ -659,16 +704,19 @@ async function replaceCloudTags(
     )
   if (upsertError) throw upsertError
 
-  const { data: tagRows, error: tagSelectError } = await client
-    .from('learning_tags')
-    .select('id, name')
-    .eq('owner_user_id', userId)
-    .in('name', normalizedTags)
-  if (tagSelectError) throw tagSelectError
+  const tagRows = await selectInChunks(normalizedTags, async (chunk) => {
+    const { data, error } = await client
+      .from('learning_tags')
+      .select('id, name')
+      .eq('owner_user_id', userId)
+      .in('name', chunk)
+    if (error) throw error
+    return data ?? []
+  })
 
   const { error: linkError } = await client
     .from('learning_item_tags')
-    .insert((tagRows ?? []).map((tag) => ({ item_id: itemId, tag_id: String(tag.id) })))
+    .insert(tagRows.map((tag) => ({ item_id: itemId, tag_id: String(tag.id) })))
   if (linkError) throw linkError
 }
 
@@ -698,6 +746,26 @@ async function listCloudReviewDays(): Promise<string[]> {
     .limit(500)
   if (error) throw error
   return (data ?? []).map((row) => localDateKey(new Date(String(row.reviewed_at))))
+}
+
+async function getCloudLearningDashboardSummary(): Promise<{
+  dueCount: number
+  totalCards: number
+  collectionCount: number
+}> {
+  const { client } = await requireCloudContext()
+  const { data, error } = await client.rpc('get_learning_dashboard_summary')
+  if (error) throw error
+  const summary = (data ?? {}) as {
+    due_count?: number
+    total_cards?: number
+    collection_count?: number
+  }
+  return {
+    dueCount: Number(summary.due_count ?? 0),
+    totalCards: Number(summary.total_cards ?? 0),
+    collectionCount: Number(summary.collection_count ?? 0)
+  }
 }
 
 function normalizeTags(tags: string[]): string[] {
