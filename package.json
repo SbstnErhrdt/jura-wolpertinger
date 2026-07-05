@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "electron-rebuild -f -w better-sqlite3 && electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
+    "build:web:production": "node scripts/verify-production-web-env.mjs && npm run build && node scripts/verify-production-web-build.mjs",
     "build:icons": "node scripts/prepare-icons.mjs",
     "rebuild:native": "electron-rebuild -f -w better-sqlite3",
     "preview": "electron-vite preview",
