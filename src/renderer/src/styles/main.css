@@ -226,7 +226,10 @@ textarea {
 }
 
 .nav {
+  flex: 1 1 auto;
   margin-top: 28px;
+  overflow-y: auto;
+  padding-bottom: 16px;
 }
 
 .nav-section {
@@ -616,12 +619,12 @@ textarea {
 .sidebar-footer {
   align-self: center;
   align-items: center;
-  bottom: 18px;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  flex: 0 0 auto;
   margin-top: auto;
-  position: sticky;
+  width: 100%;
 }
 
 .mobile-nav {
@@ -2757,8 +2760,13 @@ textarea {
 }
 
 :root[data-theme='dark'] .metric,
+:root[data-theme='dark'] .home-hero,
+:root[data-theme='dark'] .home-metrics article,
 :root[data-theme='dark'] .analytics-filters,
 :root[data-theme='dark'] .analytics-panel,
+:root[data-theme='dark'] .collection-card,
+:root[data-theme='dark'] .study-card,
+:root[data-theme='dark'] .empty-state,
 :root[data-theme='dark'] .panel,
 :root[data-theme='dark'] .settings-panel,
 :root[data-theme='dark'] .about-panel,
@@ -2768,6 +2776,23 @@ textarea {
   background: #152126;
   border-color: #2d3b42;
   color: #d9e5ea;
+}
+
+:root[data-theme='dark'] .home-hero h1,
+:root[data-theme='dark'] .home-metrics strong,
+:root[data-theme='dark'] .collection-card h2,
+:root[data-theme='dark'] .study-card h2 {
+  color: #f2f8fa;
+}
+
+:root[data-theme='dark'] .home-hero p,
+:root[data-theme='dark'] .home-metrics small,
+:root[data-theme='dark'] .collection-card p {
+  color: #afc0c7;
+}
+
+:root[data-theme='dark'] .home-metrics span {
+  color: #4db7ed;
 }
 
 :root[data-theme='dark'] .about-hero {
