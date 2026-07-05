@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { copyFile, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, extname, join, relative } from 'node:path'
 import JSZip from 'jszip'
@@ -26,6 +26,8 @@ import {
   learningCardSchema,
   learningCollectionSchema,
   learningDashboardSchema,
+  learningExportFileSchema,
+  learningImportResultSchema,
   learningReviewEventSchema,
   learningTaskSchema,
   legalAreaSchema,
@@ -46,6 +48,8 @@ import {
   type LearningCard,
   type LearningCollection,
   type LearningDashboard,
+  type LearningExportFile,
+  type LearningImportResult,
   type LearningReviewEvent,
   type LearningTask,
   type JuraDocument,
@@ -99,23 +103,8 @@ type ImportedAttachment = {
   attachment: Attachment
   payload: Buffer
 }
-type SeedDeck = {
-  deck: {
-    title?: string
-    subject?: string
-    source?: string
-  }
-  cards?: Array<{
-    id?: string
-    topic?: string
-    front?: string[]
-    back?: string[]
-    tags?: string[]
-  }>
-}
 
 let localEnvCache: Record<string, string> | null = null
-const LEARNING_DECKS_DIR = '/Users/sbstn/Documents/sabine/Karteikarten/decks'
 
 export class AppServices {
   readonly db: SqliteDatabase
@@ -1018,16 +1007,6 @@ export class AppServices {
     })
   }
 
-  seedLearningDecks(): LearningCollection[] {
-    if (!existsSync(LEARNING_DECKS_DIR)) return this.listLearningCollections()
-    const files = readdirJsonFiles(LEARNING_DECKS_DIR)
-    for (const file of files) {
-      const deck = JSON.parse(readFileSync(join(LEARNING_DECKS_DIR, file), 'utf8')) as SeedDeck
-      this.importSeedDeck(deck)
-    }
-    return this.listLearningCollections()
-  }
-
   listLearningCollections(): LearningCollection[] {
     const rows = this.db
       .prepare(
@@ -1147,6 +1126,97 @@ export class AppServices {
       if (card.collectionId !== input.collectionId) this.touchCollection(card.collectionId, now)
     })()
     return this.getLearningCard(input.id)
+  }
+
+  exportLearningDecks(): string {
+    const collections = this.listLearningCollections().map((collection) => {
+      const cards = this.listLearningCards(collection.id).map((card) => ({
+        externalId: card.externalId ?? card.id,
+        title: card.title,
+        frontMarkdown: card.frontMarkdown,
+        backMarkdown: card.backMarkdown,
+        tags: normalizeTags(card.tags)
+      }))
+      return {
+        externalId: collection.id,
+        name: collection.name,
+        description: collection.description,
+        subject: collection.subject,
+        source: collection.source,
+        cards
+      }
+    })
+    const file = learningExportFileSchema.parse({
+      format: 'jura-wolpertinger.learning-export',
+      formatVersion: 1,
+      exportedAt: nowIso(),
+      collections
+    })
+    return JSON.stringify(file, null, 2)
+  }
+
+  importLearningDecksFromJson(json: string): LearningImportResult {
+    const input = learningExportFileSchema.parse(JSON.parse(json)) satisfies LearningExportFile
+    const userId = this.getCurrentUserId()
+    const now = nowIso()
+    const result = {
+      collectionsImported: 0,
+      cardsImported: 0,
+      cardsSkipped: 0
+    }
+    this.db.transaction(() => {
+      for (const collectionInput of input.collections) {
+        const existing = this.db
+          .prepare('SELECT id FROM learning_collections WHERE user_id = ? AND name = ?')
+          .get(userId, collectionInput.name) as { id: string } | undefined
+        const collection = existing
+          ? this.getLearningCollection(existing.id)
+          : this.createLearningCollection({
+              name: collectionInput.name,
+              description: collectionInput.description,
+              subject: collectionInput.subject,
+              source: collectionInput.source
+            })
+        if (!existing) result.collectionsImported += 1
+
+        for (const cardInput of collectionInput.cards) {
+          const existingCard = this.db
+            .prepare('SELECT id FROM learning_cards WHERE user_id = ? AND collection_id = ? AND external_id = ?')
+            .get(userId, collection.id, cardInput.externalId) as { id: string } | undefined
+          if (existingCard) {
+            result.cardsSkipped += 1
+            continue
+          }
+
+          const cardId = newId()
+          this.db
+            .prepare(
+              `
+              INSERT INTO learning_cards
+                (id, user_id, collection_id, external_id, title, front_markdown, back_markdown, is_archived, created_at, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `
+            )
+            .run(
+              cardId,
+              userId,
+              collection.id,
+              cardInput.externalId,
+              cardInput.title.trim() || firstMarkdownLine(cardInput.frontMarkdown) || 'Karte',
+              cardInput.frontMarkdown.trim(),
+              cardInput.backMarkdown.trim(),
+              0,
+              now,
+              now
+            )
+          this.replaceCardTags(cardId, normalizeTags(cardInput.tags))
+          this.ensureSchedule(cardId, now)
+          result.cardsImported += 1
+        }
+        this.touchCollection(collection.id, now)
+      }
+    })()
+    return learningImportResultSchema.parse(result)
   }
 
   getReviewBatch(input: GetReviewBatchInput = {}): ReviewCard[] {
@@ -1787,61 +1857,6 @@ export class AppServices {
       .run(updatedAt, collectionId, this.getCurrentUserId())
   }
 
-  private importSeedDeck(deck: SeedDeck): void {
-    const title = deck.deck?.title?.trim() || 'Importierte Sammlung'
-    const existing = this.db
-      .prepare('SELECT id FROM learning_collections WHERE user_id = ? AND name = ?')
-      .get(this.getCurrentUserId(), title) as { id: string } | undefined
-    const collection = existing
-      ? this.getLearningCollection(existing.id)
-      : this.createLearningCollection({
-          name: title,
-          description: deck.deck?.source ? `Quelle: ${deck.deck.source}` : '',
-          subject: deck.deck?.subject ?? null,
-          source: deck.deck?.source ?? null
-        })
-    const now = nowIso()
-    this.db.transaction(() => {
-      for (const card of deck.cards ?? []) {
-        const externalId = card.id?.trim() || null
-        if (!externalId) continue
-        const exists = this.db
-          .prepare(
-            'SELECT id FROM learning_cards WHERE user_id = ? AND collection_id = ? AND external_id = ?'
-          )
-          .get(this.getCurrentUserId(), collection.id, externalId)
-        if (exists) continue
-        const cardId = newId()
-        const frontMarkdown = linesToMarkdown(card.front ?? [])
-        const backMarkdown = linesToMarkdown(card.back ?? [])
-        if (!frontMarkdown || !backMarkdown) continue
-        this.db
-          .prepare(
-            `
-            INSERT INTO learning_cards
-              (id, user_id, collection_id, external_id, title, front_markdown, back_markdown, is_archived, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `
-          )
-          .run(
-            cardId,
-            this.getCurrentUserId(),
-            collection.id,
-            externalId,
-            card.topic?.trim() || firstMarkdownLine(frontMarkdown) || 'Karte',
-            frontMarkdown,
-            backMarkdown,
-            0,
-            now,
-            now
-          )
-        this.replaceCardTags(cardId, normalizeTags(card.tags ?? []))
-        this.ensureSchedule(cardId, now)
-      }
-      this.touchCollection(collection.id, now)
-    })()
-  }
-
   private listRecentActivityDays(userId: string): Set<string> {
     const rows = this.db
       .prepare(
@@ -2259,14 +2274,6 @@ function reviewCardFromRow(row: Row, tags: string[]): ReviewCard {
     reps: Number(row.reps ?? 0),
     lapses: Number(row.lapses ?? 0)
   })
-}
-
-function readdirJsonFiles(directory: string): string[] {
-  return readdirSync(directory).filter((file) => file.endsWith('.json')).sort((a, b) => a.localeCompare(b))
-}
-
-function linesToMarkdown(lines: string[]): string {
-  return lines.map((line) => line.trim()).filter(Boolean).join('\n\n')
 }
 
 function firstMarkdownLine(markdown: string): string | null {

@@ -29,6 +29,7 @@ import type {
   LearningCard,
   LearningCollection,
   LearningDashboard,
+  LearningImportResult,
   LearningReviewEvent,
   LearningTask,
   LegalArea,
@@ -37,7 +38,15 @@ import type {
   Submission,
   User
 } from '@shared/schemas'
-import { examStatusSchema, examTypeSchema, learningTaskStatusSchema, legalAreaSchema, reviewRatingSchema } from '@shared/schemas'
+import {
+  examStatusSchema,
+  examTypeSchema,
+  learningExportFileSchema,
+  learningImportResultSchema,
+  learningTaskStatusSchema,
+  legalAreaSchema,
+  reviewRatingSchema
+} from '@shared/schemas'
 
 const BROWSER_STORE_KEY = 'jura-wolpertinger-browser-dev-v1'
 const AI_CORRECTION_NOT_IMPLEMENTED_MESSAGE = 'KI-Korrektur ist noch nicht implementiert.'
@@ -554,29 +563,87 @@ function createBrowserDevApi(): AppApi {
         learnedToday: activityDays.has(localDateKey(new Date()))
       } satisfies LearningDashboard
     },
-    async seedLearningDecks() {
+    async exportLearningDecksJson() {
       const store = readStore()
       const user = ensureBrowserUser(store)
-      if (!store.learningCollections.some((collection) => collection.userId === user.id)) {
-        const collection = createBrowserCollection(user.id, {
-          name: 'Wolpertinger Startkarten',
-          description: 'Lokale Testkarten fuer die Entwicklung.',
-          subject: 'Jura',
-          source: 'Browser-Dev'
-        })
-        store.learningCollections.push(collection)
-        const card = createBrowserCard(user.id, {
-          collectionId: collection.id,
-          title: 'Gutachtenstil',
-          frontMarkdown: 'Was ist der Kern des Gutachtenstils?',
-          backMarkdown: 'Obersatz, Definition, Subsumtion und Ergebnis.',
-          tags: ['gutachtenstil']
-        })
-        store.learningCards.push(card)
-        store.learningSchedules.push(createBrowserSchedule(user.id, card.id, card.createdAt))
-        writeStore(store)
+      const collections = browserCollectionsForCurrentUser(store).map((collection) => ({
+        externalId: collection.id,
+        name: collection.name,
+        description: collection.description,
+        subject: collection.subject,
+        source: collection.source,
+        cards: store.learningCards
+          .filter((card) => card.userId === user.id && card.collectionId === collection.id && !card.isArchived)
+          .map((card) => ({
+            externalId: card.externalId ?? card.id,
+            title: card.title,
+            frontMarkdown: card.frontMarkdown,
+            backMarkdown: card.backMarkdown,
+            tags: normalizeTags(card.tags)
+          }))
+      }))
+      return JSON.stringify(
+        learningExportFileSchema.parse({
+          format: 'jura-wolpertinger.learning-export',
+          formatVersion: 1,
+          exportedAt: nowIso(),
+          collections
+        }),
+        null,
+        2
+      )
+    },
+    async importLearningDecksJson(json: string): Promise<LearningImportResult> {
+      const file = learningExportFileSchema.parse(JSON.parse(json))
+      const store = readStore()
+      const user = ensureBrowserUser(store)
+      const result = {
+        collectionsImported: 0,
+        cardsImported: 0,
+        cardsSkipped: 0
       }
-      return browserCollectionsForCurrentUser(store)
+      for (const collectionInput of file.collections) {
+        let collection = store.learningCollections.find(
+          (candidate) => candidate.userId === user.id && candidate.name === collectionInput.name
+        )
+        if (!collection) {
+          collection = createBrowserCollection(user.id, {
+            name: collectionInput.name,
+            description: collectionInput.description,
+            subject: collectionInput.subject,
+            source: collectionInput.source
+          })
+          store.learningCollections.push(collection)
+          result.collectionsImported += 1
+        }
+        for (const cardInput of collectionInput.cards) {
+          const existingCard = store.learningCards.find(
+            (candidate) =>
+              candidate.userId === user.id &&
+              candidate.collectionId === collection.id &&
+              candidate.externalId === cardInput.externalId &&
+              !candidate.isArchived
+          )
+          if (existingCard) {
+            result.cardsSkipped += 1
+            continue
+          }
+          const card = createBrowserCard(user.id, {
+            collectionId: collection.id,
+            title: cardInput.title,
+            frontMarkdown: cardInput.frontMarkdown,
+            backMarkdown: cardInput.backMarkdown,
+            tags: cardInput.tags
+          })
+          card.externalId = cardInput.externalId
+          store.learningCards.push(card)
+          store.learningSchedules.push(createBrowserSchedule(user.id, card.id, card.createdAt))
+          result.cardsImported += 1
+        }
+        collection.updatedAt = nowIso()
+      }
+      writeStore(store)
+      return learningImportResultSchema.parse(result)
     },
     async listLearningCollections() {
       return browserCollectionsForCurrentUser(readStore())

@@ -4,10 +4,24 @@
       <div>
         <p class="eyebrow">Karteikarten</p>
         <h1>Sammlungen</h1>
-        <p>Collections sind deine fachlichen Kartensätze. Tags helfen beim gezielten Wiederholen.</p>
+        <p>Sammlungen sind deine fachlichen Kartensätze. JSON-Import und Export bleiben lokal und portabel.</p>
       </div>
-      <button @click="seedDecks">Seed-Decks importieren</button>
+      <div class="header-actions">
+        <button class="secondary" type="button" @click="triggerImport">JSON importieren</button>
+        <button type="button" @click="exportDecks">JSON exportieren</button>
+      </div>
     </header>
+
+    <input
+      ref="importInput"
+      class="visually-hidden"
+      type="file"
+      accept="application/json,.json"
+      @change="importDecks"
+    />
+    <p v-if="transferMessage" class="action-notice" :class="{ error: transferMessageKind === 'error' }">
+      {{ transferMessage }}
+    </p>
 
     <form class="collection-form" @submit.prevent="createCollection">
       <input v-model="newName" placeholder="Neue Sammlung, z. B. Strafrecht AT" />
@@ -39,6 +53,9 @@ import { api } from '../api'
 const collections = ref<LearningCollection[]>([])
 const newName = ref('')
 const newSubject = ref('')
+const importInput = ref<HTMLInputElement | null>(null)
+const transferMessage = ref('')
+const transferMessageKind = ref<'info' | 'error'>('info')
 
 onMounted(load)
 
@@ -46,8 +63,38 @@ async function load(): Promise<void> {
   collections.value = await api.listLearningCollections()
 }
 
-async function seedDecks(): Promise<void> {
-  collections.value = await api.seedLearningDecks()
+function triggerImport(): void {
+  transferMessage.value = ''
+  importInput.value?.click()
+}
+
+async function exportDecks(): Promise<void> {
+  const json = await api.exportLearningDecksJson()
+  const blob = new Blob([json], { type: 'application/json;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = `jura-wolpertinger-karteikarten-${new Date().toISOString().slice(0, 10)}.json`
+  anchor.click()
+  URL.revokeObjectURL(url)
+  transferMessageKind.value = 'info'
+  transferMessage.value = 'JSON-Export wurde erstellt.'
+}
+
+async function importDecks(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  try {
+    const result = await api.importLearningDecksJson(await file.text())
+    transferMessageKind.value = 'info'
+    transferMessage.value = `${result.cardsImported} Karten importiert, ${result.cardsSkipped} bereits vorhanden.`
+    await load()
+  } catch {
+    transferMessageKind.value = 'error'
+    transferMessage.value = 'Import fehlgeschlagen. Bitte eine gueltige Jura-Wolpertinger-JSON-Datei auswaehlen.'
+  }
 }
 
 async function createCollection(): Promise<void> {

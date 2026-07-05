@@ -294,6 +294,36 @@ export const reviewCardSchema = learningCardSchema.extend({
   lapses: z.number().int().nonnegative()
 })
 
+export const learningExportCardSchema = z.object({
+  externalId: z.string().min(1),
+  title: z.string().min(1),
+  frontMarkdown: z.string().min(1),
+  backMarkdown: z.string().min(1),
+  tags: z.array(z.string())
+})
+
+export const learningExportCollectionSchema = z.object({
+  externalId: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string(),
+  subject: z.string().nullable(),
+  source: z.string().nullable(),
+  cards: z.array(learningExportCardSchema)
+})
+
+export const learningExportFileSchema = z.object({
+  format: z.literal('jura-wolpertinger.learning-export'),
+  formatVersion: z.literal(1),
+  exportedAt: isoDateSchema,
+  collections: z.array(learningExportCollectionSchema)
+})
+
+export const learningImportResultSchema = z.object({
+  collectionsImported: z.number().int().nonnegative(),
+  cardsImported: z.number().int().nonnegative(),
+  cardsSkipped: z.number().int().nonnegative()
+})
+
 export const learningReviewEventSchema = z.object({
   schemaVersion: z.literal(1),
   id: uuidSchema,
@@ -353,6 +383,8 @@ export type LearningTask = z.infer<typeof learningTaskSchema>
 export type LearningCollection = z.infer<typeof learningCollectionSchema>
 export type LearningCard = z.infer<typeof learningCardSchema>
 export type ReviewCard = z.infer<typeof reviewCardSchema>
+export type LearningExportFile = z.infer<typeof learningExportFileSchema>
+export type LearningImportResult = z.infer<typeof learningImportResultSchema>
 export type LearningReviewEvent = z.infer<typeof learningReviewEventSchema>
 export type LearningDashboard = z.infer<typeof learningDashboardSchema>
 export type ImprovementSuggestion = z.infer<typeof improvementSuggestionSchema>

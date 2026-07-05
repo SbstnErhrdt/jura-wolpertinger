@@ -11,12 +11,16 @@
     <div v-if="loading" class="empty-state">Lade Karten...</div>
     <div v-else-if="!currentCard" class="empty-state">
       <h2>Keine Karten fällig</h2>
-      <p>Importiere Seed-Decks oder lege neue Karten an, um zu starten.</p>
-      <button @click="seedDecks">Seed-Decks importieren</button>
+      <p>Importiere eine JSON-Datei oder lege neue Karten in deinen Sammlungen an.</p>
+      <RouterLink class="secondary" :to="{ name: 'flashcards-collections' }">Zu den Sammlungen</RouterLink>
     </div>
 
     <article v-else class="study-card">
       <div class="study-card-toolbar">
+        <div>
+          <span class="study-card-kicker">{{ showBack ? 'Rückseite' : 'Vorderseite' }}</span>
+          <strong>{{ currentCard.title }}</strong>
+        </div>
         <span>{{ positionLabel }}</span>
         <details>
           <summary>Aktionen</summary>
@@ -26,12 +30,31 @@
       <button class="study-card-face" type="button" @click="showBack = true">
         <MarkdownBlock :markdown="showBack ? currentCard.backMarkdown : currentCard.frontMarkdown" />
       </button>
+      <div v-if="currentCard.tags.length" class="study-card-tags" aria-label="Tags">
+        <span v-for="tag in currentCard.tags" :key="tag" class="tag">{{ tag }}</span>
+      </div>
       <p v-if="feedback" class="review-feedback">{{ feedback }}</p>
       <div v-if="showBack" class="rating-row">
-        <button class="again" @click="rate(1)">Nochmal</button>
-        <button class="hard" @click="rate(2)">Schwer</button>
-        <button class="good" @click="rate(3)">Gut</button>
-        <button class="easy" @click="rate(4)">Leicht</button>
+        <button class="rating-option again" @click="rate(1)">
+          <RotateCcw :size="18" aria-hidden="true" />
+          <span>Nochmal</span>
+          <small>nicht sicher</small>
+        </button>
+        <button class="rating-option hard" @click="rate(2)">
+          <TriangleAlert :size="18" aria-hidden="true" />
+          <span>Schwer</span>
+          <small>wackelig</small>
+        </button>
+        <button class="rating-option good" @click="rate(3)">
+          <CircleCheck :size="18" aria-hidden="true" />
+          <span>Gut</span>
+          <small>sauber</small>
+        </button>
+        <button class="rating-option easy" @click="rate(4)">
+          <Sparkles :size="18" aria-hidden="true" />
+          <span>Leicht</span>
+          <small>sicher</small>
+        </button>
       </div>
       <button v-else class="secondary reveal-button" @click="showBack = true">Rückseite zeigen</button>
     </article>
@@ -41,6 +64,7 @@
 <script setup lang="ts">
 import { computed, defineComponent, h, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
+import { CircleCheck, RotateCcw, Sparkles, TriangleAlert } from 'lucide-vue-next'
 import type { ReviewCard, ReviewRating } from '@shared/schemas'
 import { api } from '../api'
 
@@ -66,11 +90,6 @@ async function load(): Promise<void> {
   currentIndex.value = 0
   showBack.value = false
   loading.value = false
-}
-
-async function seedDecks(): Promise<void> {
-  await api.seedLearningDecks()
-  await load()
 }
 
 async function rate(rating: ReviewRating): Promise<void> {

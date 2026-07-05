@@ -59,7 +59,8 @@ const api: AppApi = {
   updateLearningTaskStatus: (taskId: string, status: LearningTask['status']) =>
     ipcRenderer.invoke('learningTasks:updateStatus', taskId, status),
   getLearningDashboard: () => ipcRenderer.invoke('learning:dashboard'),
-  seedLearningDecks: () => ipcRenderer.invoke('learning:seedDecks'),
+  exportLearningDecksJson: () => ipcRenderer.invoke('learning:exportDecksJson'),
+  importLearningDecksJson: (json: string) => ipcRenderer.invoke('learning:importDecksJson', json),
   listLearningCollections: () => ipcRenderer.invoke('learning:collections'),
   createLearningCollection: (input: CreateLearningCollectionInput) =>
     ipcRenderer.invoke('learning:createCollection', input),

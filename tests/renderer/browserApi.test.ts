@@ -352,4 +352,44 @@ describe('browser development API', () => {
     expect(updated.status).toBe('done')
     expect(await api.listLearningTasks()).toEqual([expect.objectContaining({ id: currentTaskId, status: 'done' })])
   })
+
+  it('exports and imports flashcard JSON in the browser fallback', async () => {
+    const apiModulePath = '../../src/renderer/src/api'
+    const { getApi } = (await import(/* @vite-ignore */ apiModulePath)) as {
+      getApi: () => AppApi
+    }
+    const api = getApi()
+    const collection = await api.createLearningCollection({
+      name: 'Ö-Recht Basics',
+      subject: 'Öffentliches Recht',
+      source: 'Browser Test'
+    })
+    await api.createLearningCard({
+      collectionId: collection.id,
+      title: 'Verwaltungsakt',
+      frontMarkdown: 'Was ist ein Verwaltungsakt?',
+      backMarkdown: 'Eine hoheitliche Maßnahme auf dem Gebiet des öffentlichen Rechts.',
+      tags: ['ö-recht', 'verwaltungsakt']
+    })
+
+    const exported = await api.exportLearningDecksJson()
+    storage.clear()
+    vi.resetModules()
+    const { getApi: getFreshApi } = (await import(/* @vite-ignore */ apiModulePath)) as {
+      getApi: () => AppApi
+    }
+    const freshApi = getFreshApi()
+    const result = await freshApi.importLearningDecksJson(exported)
+
+    expect(result).toEqual({ collectionsImported: 1, cardsImported: 1, cardsSkipped: 0 })
+    expect(await freshApi.listLearningCollections()).toEqual([
+      expect.objectContaining({ name: 'Ö-Recht Basics', cardCount: 1 })
+    ])
+    expect(await freshApi.listLearningCards()).toEqual([
+      expect.objectContaining({
+        title: 'Verwaltungsakt',
+        tags: ['ö-recht', 'verwaltungsakt']
+      })
+    ])
+  })
 })

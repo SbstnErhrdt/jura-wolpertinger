@@ -13,6 +13,7 @@ import type {
   LearningCard,
   LearningCollection,
   LearningDashboard,
+  LearningImportResult,
   LearningReviewEvent,
   LearningTask,
   LegalArea,
@@ -229,7 +230,8 @@ export type AppApi = {
   listLearningTasks(): Promise<LearningTask[]>
   updateLearningTaskStatus(taskId: string, status: 'open' | 'in_progress' | 'done'): Promise<LearningTask>
   getLearningDashboard(): Promise<LearningDashboard>
-  seedLearningDecks(): Promise<LearningCollection[]>
+  exportLearningDecksJson(): Promise<string>
+  importLearningDecksJson(json: string): Promise<LearningImportResult>
   listLearningCollections(): Promise<LearningCollection[]>
   createLearningCollection(input: CreateLearningCollectionInput): Promise<LearningCollection>
   listLearningCards(collectionId?: string | null): Promise<LearningCard[]>

@@ -277,15 +277,72 @@ describe('AppServices', () => {
     expect(dashboardAfter.learnedToday).toBe(true)
   })
 
-  it('imports seed decks idempotently when deck files are available', () => {
-    const collections = services.seedLearningDecks()
-    const firstCount = services.listLearningCards().length
-    const secondCollections = services.seedLearningDecks()
+  it('exports and imports flashcard collections as portable JSON', async () => {
+    const collection = services.createLearningCollection({
+      name: 'Strafrecht AT',
+      description: 'Examensrelevante Grundlagen',
+      subject: 'Strafrecht',
+      source: 'Eigene Karten'
+    })
+    services.createLearningCard({
+      collectionId: collection.id,
+      title: 'Rücktritt',
+      frontMarkdown: 'Wann ist ein Rücktritt möglich?',
+      backMarkdown: 'Nach § 24 StGB.',
+      tags: ['strafrecht', 'rücktritt']
+    })
 
-    expect(collections.length).toBeGreaterThan(0)
-    expect(firstCount).toBeGreaterThan(0)
-    expect(services.listLearningCards().length).toBe(firstCount)
-    expect(secondCollections.length).toBe(collections.length)
+    const exported = services.exportLearningDecks()
+    const payload = JSON.parse(exported)
+
+    expect(payload).toEqual({
+      format: 'jura-wolpertinger.learning-export',
+      formatVersion: 1,
+      exportedAt: expect.any(String),
+      collections: [
+        {
+          externalId: collection.id,
+          name: 'Strafrecht AT',
+          description: 'Examensrelevante Grundlagen',
+          subject: 'Strafrecht',
+          source: 'Eigene Karten',
+          cards: [
+            {
+              externalId: expect.any(String),
+              title: 'Rücktritt',
+              frontMarkdown: 'Wann ist ein Rücktritt möglich?',
+              backMarkdown: 'Nach § 24 StGB.',
+              tags: ['rücktritt', 'strafrecht']
+            }
+          ]
+        }
+      ]
+    })
+
+    services.close()
+    const importedDataDir = await mkdtemp(join(tmpdir(), 'jura-services-learning-import-'))
+    const importedServices = new AppServices(importedDataDir)
+    try {
+      const result = importedServices.importLearningDecksFromJson(exported)
+      const secondResult = importedServices.importLearningDecksFromJson(exported)
+
+      expect(result).toEqual({ collectionsImported: 1, cardsImported: 1, cardsSkipped: 0 })
+      expect(secondResult).toEqual({ collectionsImported: 0, cardsImported: 0, cardsSkipped: 1 })
+      expect(importedServices.listLearningCollections()).toEqual([
+        expect.objectContaining({ name: 'Strafrecht AT', cardCount: 1, dueCount: 1 })
+      ])
+      expect(importedServices.listLearningCards()).toEqual([
+        expect.objectContaining({
+          title: 'Rücktritt',
+          frontMarkdown: 'Wann ist ein Rücktritt möglich?',
+          backMarkdown: 'Nach § 24 StGB.',
+          tags: ['rücktritt', 'strafrecht']
+        })
+      ])
+    } finally {
+      importedServices.close()
+      await rm(importedDataDir, { recursive: true, force: true })
+    }
   })
 
   it('creates, moves, tags, submits and corrects an exam', async () => {

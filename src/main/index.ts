@@ -239,7 +239,8 @@ function registerIpc(): void {
       services.updateLearningTaskStatus(taskId, status)
   )
   ipcMain.handle('learning:dashboard', () => services.getLearningDashboard())
-  ipcMain.handle('learning:seedDecks', () => services.seedLearningDecks())
+  ipcMain.handle('learning:exportDecksJson', () => services.exportLearningDecks())
+  ipcMain.handle('learning:importDecksJson', (_event, json: string) => services.importLearningDecksFromJson(json))
   ipcMain.handle('learning:collections', () => services.listLearningCollections())
   ipcMain.handle('learning:createCollection', (_event, input: CreateLearningCollectionInput) =>
     services.createLearningCollection(input)
