@@ -10,8 +10,8 @@
 
     <div v-if="loading" class="empty-state">Lade Karten...</div>
     <div v-else-if="!currentCard" class="empty-state">
-      <h2>Keine Karten fällig</h2>
-      <p>Wähle eine Karteikarten-Datei aus oder lege neue Karten in deinen Sammlungen an.</p>
+      <h2>{{ emptyTitle }}</h2>
+      <p>{{ emptyCopy }}</p>
       <RouterLink class="secondary" :to="{ name: 'flashcards-collections' }">Zu den Sammlungen</RouterLink>
     </div>
 
@@ -75,18 +75,34 @@ const againQueue = ref<ReviewCard[]>([])
 const currentIndex = ref(0)
 const showBack = ref(false)
 const feedback = ref('')
+const collectionId = computed(() => (typeof route.query.collection === 'string' ? route.query.collection : null))
+const hasCollectionCards = ref(false)
 
 const currentCard = computed(() => cards.value[currentIndex.value] ?? againQueue.value[0] ?? null)
 const positionLabel = computed(() => `${Math.min(currentIndex.value + 1, cards.value.length)} / ${cards.value.length}`)
+const emptyTitle = computed(() => (collectionId.value && !hasCollectionCards.value ? 'Noch keine Karten' : 'Keine Karten fällig'))
+const emptyCopy = computed(() => {
+  if (collectionId.value && !hasCollectionCards.value) {
+    return 'Erstelle in dieser Sammlung zuerst eine Karteikarte.'
+  }
+  return 'Wähle eine Karteikarten-Datei aus oder lege neue Karten in deinen Sammlungen an.'
+})
 
 onMounted(load)
 
 async function load(): Promise<void> {
   loading.value = true
   cards.value = await api.getReviewBatch({
-    collectionId: typeof route.query.collection === 'string' ? route.query.collection : null,
+    collectionId: collectionId.value,
     limit: 40
   })
+  if (!cards.value.length && collectionId.value) {
+    const collectionCards = await api.listLearningCards(collectionId.value)
+    hasCollectionCards.value = collectionCards.length > 0
+    cards.value = collectionCards.slice(0, 40)
+  } else {
+    hasCollectionCards.value = cards.value.length > 0
+  }
   currentIndex.value = 0
   showBack.value = false
   loading.value = false
