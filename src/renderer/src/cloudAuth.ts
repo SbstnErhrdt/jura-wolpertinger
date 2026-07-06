@@ -1,4 +1,5 @@
 import { createClient, type Session, type SupabaseClient } from '@supabase/supabase-js'
+import { resolveSupabaseUrl } from '@shared/cloudAuthUrl'
 
 export type CloudAuthState =
   | { status: 'not_required'; session: null; error: null }
@@ -21,7 +22,7 @@ export function getSupabaseAuthClient(): SupabaseClient | null {
   if (!requiresCloudAuth()) return null
   if (authClient) return authClient
   const configuredUrl = import.meta.env.VITE_SUPABASE_URL
-  const url = configuredUrl || new URL('/api', window.location.origin).toString()
+  const url = resolveSupabaseUrl(configuredUrl, window.location.origin)
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
   if (!anonKey) return null
   authClient = createClient(url, anonKey, {
