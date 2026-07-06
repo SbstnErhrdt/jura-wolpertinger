@@ -916,15 +916,15 @@ textarea {
 }
 
 .study-card-motion-flip {
-  animation: study-card-flip 240ms ease-out;
+  animation: study-card-flip 360ms ease-out;
 }
 
 .study-card-motion-next {
-  animation: study-card-slide-next 220ms ease-out;
+  animation: study-card-slide-next 320ms ease-out;
 }
 
 .study-card-motion-previous {
-  animation: study-card-slide-previous 220ms ease-out;
+  animation: study-card-slide-previous 320ms ease-out;
 }
 
 .study-card-face-front {
