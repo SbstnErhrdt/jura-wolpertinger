@@ -70,6 +70,9 @@ import type {
   ExamListItem,
   FolderDto,
   GetReviewBatchInput,
+  ListExamsInput,
+  ListLearningCardsInput,
+  PaginatedResult,
   RecordReviewInput,
   RecordReviewResult,
   SaveAiCorrectionDraftInput,
@@ -396,6 +399,79 @@ export class AppServices {
       )
       .all(userId) as Row[]
     return rows.map(examListItemFromRow)
+  }
+
+  listExamsPage(input: ListExamsInput = {}): PaginatedResult<ExamListItem> {
+    const userId = this.getCurrentUserId()
+    const filters = ['e.user_id = ?']
+    const params: unknown[] = [userId]
+    const status = input.status ?? 'all'
+
+    if (status === 'active') {
+      filters.push("e.status != 'archived'")
+    } else if (status === 'archived') {
+      filters.push("e.status = 'archived'")
+    }
+
+    if (Object.prototype.hasOwnProperty.call(input, 'folderId')) {
+      if (input.folderId === null) {
+        filters.push('e.folder_id IS NULL')
+      } else if (input.folderId) {
+        filters.push('e.folder_id = ?')
+        params.push(input.folderId)
+      }
+    }
+
+    const search = input.search?.trim()
+    if (search) {
+      filters.push('(e.title LIKE ? ESCAPE \'\\\' OR e.tags_json LIKE ? ESCAPE \'\\\')')
+      const pattern = `%${escapeSqlLike(search)}%`
+      params.push(pattern, pattern)
+    }
+
+    const whereClause = `WHERE ${filters.join(' AND ')}`
+    const total = Number(
+      (this.db.prepare(`SELECT COUNT(*) AS count FROM exams e ${whereClause}`).get(...params) as { count: number }).count
+    )
+    const pageMeta = normalizePagination(input.page, input.pageSize, total)
+    const orderBy =
+      input.sort === 'title'
+        ? 'e.title COLLATE NOCASE ASC, e.updated_at DESC'
+        : input.sort === 'score'
+          ? 'latest_score IS NULL ASC, latest_score DESC, e.updated_at DESC'
+          : 'e.updated_at DESC'
+    const rows = this.db
+      .prepare(
+        `
+        SELECT
+          e.*,
+          f.name AS folder_name,
+          r.created_at AS last_saved_at,
+          (
+            SELECT c.score_points
+            FROM corrections c
+            JOIN submissions s ON s.id = c.submission_id
+            WHERE s.exam_id = e.id AND c.score_points IS NOT NULL AND c.user_id = e.user_id
+            ORDER BY c.updated_at DESC
+            LIMIT 1
+          ) AS latest_score
+        FROM exams e
+        LEFT JOIN folders f ON f.id = e.folder_id AND f.trashed_at IS NULL
+        LEFT JOIN exam_revisions r ON r.id = e.current_revision_id
+        ${whereClause}
+        ORDER BY ${orderBy}
+        LIMIT ? OFFSET ?
+      `
+      )
+      .all(...params, pageMeta.pageSize, pageMeta.offset) as Row[]
+
+    return {
+      items: rows.map(examListItemFromRow),
+      total,
+      page: pageMeta.page,
+      pageSize: pageMeta.pageSize,
+      pageCount: pageMeta.pageCount
+    }
   }
 
   createExam(input: CreateExamInput): ExamDetails {
@@ -1191,6 +1267,69 @@ export class AppServices {
           )
           .all(userId) as Row[])
     return rows.map((row) => learningCardFromRow(row, this.listTagsForCard(String(row.id))))
+  }
+
+  listLearningCardsPage(input: ListLearningCardsInput = {}): PaginatedResult<LearningCard> {
+    const userId = this.getCurrentUserId()
+    const filters = ['c.user_id = ?', 'c.is_archived = 0']
+    const params: unknown[] = [userId]
+
+    if (input.collectionId) {
+      filters.push('c.collection_id = ?')
+      params.push(input.collectionId)
+    }
+
+    const search = input.search?.trim()
+    if (search) {
+      const pattern = `%${escapeSqlLike(search)}%`
+      filters.push(
+        `(
+          c.title LIKE ? ESCAPE '\\'
+          OR c.front_markdown LIKE ? ESCAPE '\\'
+          OR c.back_markdown LIKE ? ESCAPE '\\'
+          OR EXISTS (
+            SELECT 1
+            FROM learning_card_tags tag
+            WHERE tag.card_id = c.id AND tag.user_id = c.user_id AND tag.tag LIKE ? ESCAPE '\\'
+          )
+        )`
+      )
+      params.push(pattern, pattern, pattern, pattern)
+    }
+
+    const whereClause = `WHERE ${filters.join(' AND ')}`
+    const total = Number(
+      (this.db.prepare(`SELECT COUNT(*) AS count FROM learning_cards c ${whereClause}`).get(...params) as { count: number }).count
+    )
+    const pageMeta = normalizePagination(input.page, input.pageSize, total)
+    const orderBy =
+      input.sort === 'title'
+        ? 'c.title COLLATE NOCASE ASC, c.updated_at DESC'
+        : input.sort === 'due'
+          ? 'due_at ASC, c.updated_at DESC'
+          : input.sort === 'rating'
+            ? 'last_rating IS NULL ASC, last_rating DESC, c.updated_at DESC'
+            : 'c.updated_at DESC'
+    const rows = this.db
+      .prepare(
+        `
+        SELECT c.*, COALESCE(s.due_at, c.created_at) AS due_at, s.last_rating, COALESCE(s.reps, 0) AS reps, COALESCE(s.lapses, 0) AS lapses
+        FROM learning_cards c
+        LEFT JOIN learning_card_schedules s ON s.card_id = c.id AND s.user_id = c.user_id
+        ${whereClause}
+        ORDER BY ${orderBy}
+        LIMIT ? OFFSET ?
+      `
+      )
+      .all(...params, pageMeta.pageSize, pageMeta.offset) as Row[]
+
+    return {
+      items: rows.map((row) => learningCardFromRow(row, this.listTagsForCard(String(row.id)))),
+      total,
+      page: pageMeta.page,
+      pageSize: pageMeta.pageSize,
+      pageCount: pageMeta.pageCount
+    }
   }
 
   createLearningCard(input: CreateLearningCardInput): LearningCard {
@@ -2412,6 +2551,27 @@ function normalizeTags(tags: string[]): string[] {
   return [...new Set(tags.map((tag) => tag.trim()).filter(Boolean))].sort((a, b) =>
     a.localeCompare(b)
   )
+}
+
+function normalizePagination(
+  requestedPage: number | undefined,
+  requestedPageSize: number | undefined,
+  total: number
+): { page: number; pageSize: number; pageCount: number; offset: number } {
+  const allowedPageSizes = [10, 25, 50, 100]
+  const pageSize = allowedPageSizes.includes(Number(requestedPageSize)) ? Number(requestedPageSize) : 25
+  const pageCount = Math.max(1, Math.ceil(total / pageSize))
+  const page = Math.min(Math.max(Number(requestedPage) || 1, 1), pageCount)
+  return {
+    page,
+    pageSize,
+    pageCount,
+    offset: (page - 1) * pageSize
+  }
+}
+
+function escapeSqlLike(value: string): string {
+  return value.replace(/[\\%_]/g, (match) => `\\${match}`)
 }
 
 function learningCollectionFromRow(row: Row): LearningCollection {

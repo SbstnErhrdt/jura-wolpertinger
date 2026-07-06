@@ -90,6 +90,23 @@ export type UpdateExamInput = Omit<CreateExamInput, 'title'> & {
   notes?: string
 }
 
+export type PaginatedResult<T> = {
+  items: T[]
+  total: number
+  page: number
+  pageSize: number
+  pageCount: number
+}
+
+export type ListExamsInput = {
+  page?: number
+  pageSize?: number
+  folderId?: string | null
+  status?: 'active' | 'archived' | 'all'
+  search?: string
+  sort?: 'updated' | 'title' | 'score'
+}
+
 export type SaveRevisionInput = {
   examId: string
   content: Record<string, unknown>
@@ -161,6 +178,14 @@ export type UpdateLearningCardInput = CreateLearningCardInput & {
   id: string
 }
 
+export type ListLearningCardsInput = {
+  collectionId?: string | null
+  page?: number
+  pageSize?: number
+  search?: string
+  sort?: 'updated' | 'title' | 'due' | 'rating'
+}
+
 export type GetReviewBatchInput = {
   collectionId?: string | null
   tag?: string | null
@@ -221,6 +246,7 @@ export type AppApi = {
   trashFolder(input: TrashFolderInput): Promise<FolderDto>
   restoreFolder(folderId: string): Promise<FolderDto>
   listExams(): Promise<ExamListItem[]>
+  listExamsPage(input?: ListExamsInput): Promise<PaginatedResult<ExamListItem>>
   createExam(input: CreateExamInput): Promise<ExamDetails>
   getExam(id: string): Promise<ExamDetails>
   updateExam(input: UpdateExamInput): Promise<ExamDetails>
@@ -246,6 +272,7 @@ export type AppApi = {
   listLearningCollections(): Promise<LearningCollection[]>
   createLearningCollection(input: CreateLearningCollectionInput): Promise<LearningCollection>
   listLearningCards(collectionId?: string | null): Promise<LearningCard[]>
+  listLearningCardsPage(input?: ListLearningCardsInput): Promise<PaginatedResult<LearningCard>>
   createLearningCard(input: CreateLearningCardInput): Promise<LearningCard>
   updateLearningCard(input: UpdateLearningCardInput): Promise<LearningCard>
   getReviewBatch(input?: GetReviewBatchInput): Promise<ReviewCard[]>

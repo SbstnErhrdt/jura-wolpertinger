@@ -17,7 +17,7 @@
     <section class="metric-row">
       <div class="metric">
         <span>Prüfungen</span>
-        <strong>{{ store.exams.length }}</strong>
+        <strong>{{ store.examTotal }}</strong>
       </div>
       <div class="metric">
         <span>Abgegeben</span>
@@ -45,14 +45,14 @@
         <button
           class="folder-row"
           :class="{ active: selectedFolderId === null }"
-          @click="selectedFolderId = null"
+          @click="selectFolder(null)"
         >
           Alle Einträge
         </button>
         <button
           class="folder-row"
           :class="{ active: selectedFolderId === UNASSIGNED_FOLDER_ID, 'drop-target': dropFolderId === null }"
-          @click="selectedFolderId = UNASSIGNED_FOLDER_ID"
+          @click="selectFolder(UNASSIGNED_FOLDER_ID)"
           @dragover.prevent="onFolderDragOver(null)"
           @dragleave="onFolderDragLeave(null)"
           @drop.prevent="dropOnFolder(null)"
@@ -65,7 +65,7 @@
           :key="folder.id"
           class="folder-row"
           :class="{ active: selectedFolderId === folder.id, 'drop-target': dropFolderId === folder.id }"
-          @click="selectedFolderId = folder.id"
+          @click="selectFolder(folder.id)"
           @contextmenu.prevent="openFolderMenu($event, folder.id)"
           @dragover.prevent="onFolderDragOver(folder.id)"
           @dragleave="onFolderDragLeave(folder.id)"
@@ -116,13 +116,27 @@
       <section class="panel">
         <div class="panel-header">
           <h2>Klausuren</h2>
+          <span v-if="store.refreshing" class="list-loading-indicator">
+            <span class="loading-spinner" aria-hidden="true" />
+            <span>Lade Einträge</span>
+          </span>
           <button @click="openCreateExamDialog">
             <Plus :size="17" />
             Neue Klausur
           </button>
         </div>
 
-        <div class="exam-list">
+        <ListSkeleton v-if="store.loading" variant="exam" :count="5" />
+        <p v-else-if="store.error" class="action-notice error">
+          <span>{{ store.error }}</span>
+          <button type="button" class="secondary" @click="reloadExams">Erneut versuchen</button>
+        </p>
+        <div
+          v-else
+          class="exam-list"
+          :class="{ 'paginated-list-refreshing': store.refreshing }"
+          :aria-busy="store.refreshing"
+        >
           <RouterLink
             v-for="exam in filteredExams"
             :key="exam.id"
@@ -150,6 +164,17 @@
           </RouterLink>
           <p v-if="!filteredExams.length" class="empty-state">Noch keine Einträge in dieser Ansicht.</p>
         </div>
+        <AppPagination
+          v-if="!store.loading && !store.error && store.examTotal > 0"
+          label="Klausurseiten"
+          :page="store.examPage"
+          :page-size="store.examPageSize"
+          :page-count="store.examPageCount"
+          :total="store.examTotal"
+          :disabled="store.refreshing"
+          @update:page="setExamPage"
+          @update:page-size="setExamPageSize"
+        />
       </section>
     </section>
 
@@ -313,6 +338,8 @@ import { Download, FileText, FolderPlus, Pencil, Plus, RotateCcw, Trash2, Upload
 import type { ExamStatus } from '@shared/schemas'
 import TagInput from '../components/TagInput.vue'
 import AppBreadcrumb, { type BreadcrumbItem } from '../components/ui/AppBreadcrumb.vue'
+import AppPagination from '../components/ui/AppPagination.vue'
+import ListSkeleton from '../components/ui/ListSkeleton.vue'
 import { useLibraryStore } from '../stores/library'
 
 const store = useLibraryStore()
@@ -341,9 +368,9 @@ onMounted(() => store.load())
 
 const activeFolders = computed(() => store.folders.filter((folder) => !folder.trashedAt))
 const trashedFolders = computed(() => store.folders.filter((folder) => folder.trashedAt))
-const activeExams = computed(() => store.exams.filter((exam) => exam.status !== 'archived'))
-const trashedExams = computed(() => store.exams.filter((exam) => exam.status === 'archived'))
-const trashCount = computed(() => trashedFolders.value.length + trashedExams.value.length)
+const activeExams = computed(() => store.exams)
+const trashedExams = computed(() => store.archivedExams)
+const trashCount = computed(() => trashedFolders.value.length + store.archivedExamTotal)
 const menuFolder = computed(
   () => store.folders.find((folder) => folder.id === folderMenu.value?.folderId) ?? null
 )
@@ -374,13 +401,7 @@ const breadcrumbItems = computed<BreadcrumbItem[]>(() => [
   ...(selectedFolderLabel.value ? [{ label: selectedFolderLabel.value }] : [])
 ])
 
-const filteredExams = computed(() => {
-  if (!selectedFolderId.value) return activeExams.value
-  if (selectedFolderId.value === UNASSIGNED_FOLDER_ID) {
-    return activeExams.value.filter((exam) => !exam.folderId)
-  }
-  return activeExams.value.filter((exam) => exam.folderId === selectedFolderId.value)
-})
+const filteredExams = computed(() => activeExams.value)
 
 const tagSuggestions = computed(() =>
   [...new Set(store.exams.flatMap((exam) => exam.tags.map((tag) => tag.trim())).filter(Boolean))].sort((left, right) =>
@@ -400,6 +421,29 @@ watch(activeFolders, (folders) => {
     examFolderId.value = null
   }
 })
+
+function selectedFolderFilter(): string | null | undefined {
+  if (!selectedFolderId.value) return undefined
+  if (selectedFolderId.value === UNASSIGNED_FOLDER_ID) return null
+  return selectedFolderId.value
+}
+
+async function selectFolder(folderId: string | null): Promise<void> {
+  selectedFolderId.value = folderId
+  await store.loadExamPage({ page: 1, folderId: selectedFolderFilter() })
+}
+
+async function setExamPage(page: number): Promise<void> {
+  await store.loadExamPage({ page, folderId: selectedFolderFilter() })
+}
+
+async function setExamPageSize(pageSize: number): Promise<void> {
+  await store.loadExamPage({ page: 1, pageSize, folderId: selectedFolderFilter() })
+}
+
+async function reloadExams(): Promise<void> {
+  await store.loadExamPage({ folderId: selectedFolderFilter() })
+}
 
 function openCreateFolderDialog(): void {
   folderName.value = ''

@@ -227,6 +227,52 @@ describe('AppServices', () => {
     expect(services.listExams()).toEqual([expect.objectContaining({ id: secondExam.id, userId: secondUser.id })])
   })
 
+  it('returns paginated exam lists after applying folder, status and search filters', () => {
+    const targetFolder = services.createFolder('Zivilrecht')
+    const otherFolder = services.createFolder('Strafrecht')
+    for (const title of [
+      'Alpha Anspruch',
+      'Beta Anspruch',
+      'Gamma Anspruch',
+      'Kappa Anspruch',
+      'Lambda Anspruch',
+      'Mu Anspruch',
+      'Nu Anspruch',
+      'Pi Anspruch',
+      'Rho Anspruch',
+      'Sigma Anspruch',
+      'Tau Anspruch'
+    ]) {
+      services.createExam({ title, folderId: targetFolder.id, tags: ['zivil'] })
+    }
+    const archived = services.createExam({ title: 'Delta Anspruch', folderId: targetFolder.id, tags: ['zivil'] })
+    services.createExam({ title: 'Omega Anspruch', folderId: otherFolder.id, tags: ['straf'] })
+    services.trashExam(archived.id)
+
+    const firstPage = services.listExamsPage({
+      folderId: targetFolder.id,
+      status: 'active',
+      search: 'anspruch',
+      sort: 'title',
+      page: 1,
+      pageSize: 10
+    })
+    const secondPage = services.listExamsPage({
+      folderId: targetFolder.id,
+      status: 'active',
+      search: 'anspruch',
+      sort: 'title',
+      page: 2,
+      pageSize: 10
+    })
+
+    expect(firstPage).toMatchObject({ total: 11, page: 1, pageSize: 10, pageCount: 2 })
+    expect(firstPage.items).toHaveLength(10)
+    expect(firstPage.items[0].title).toBe('Alpha Anspruch')
+    expect(secondPage).toMatchObject({ total: 11, page: 2, pageSize: 10, pageCount: 2 })
+    expect(secondPage.items.map((exam) => exam.title)).toEqual(['Tau Anspruch'])
+  })
+
   it('renames the current user without changing their workspace', () => {
     const user = services.getCurrentUser()
     const exam = services.createExam({ title: 'Nutzername Klausur' })
@@ -275,6 +321,56 @@ describe('AppServices', () => {
     const dashboardAfter = services.getLearningDashboard()
     expect(dashboardAfter.totalCards).toBe(1)
     expect(dashboardAfter.learnedToday).toBe(true)
+  })
+
+  it('returns paginated learning cards after applying collection and search filters', () => {
+    const targetCollection = services.createLearningCollection({
+      name: 'Zivilrecht AT',
+      subject: 'Zivilrecht'
+    })
+    const otherCollection = services.createLearningCollection({
+      name: 'Strafrecht AT',
+      subject: 'Strafrecht'
+    })
+    for (const title of [
+      'Alpha Anspruch',
+      'Beta Anspruch',
+      'Gamma Anspruch',
+      'Kappa Anspruch',
+      'Lambda Anspruch',
+      'Mu Anspruch',
+      'Nu Anspruch',
+      'Pi Anspruch',
+      'Rho Anspruch',
+      'Sigma Anspruch',
+      'Tau Anspruch'
+    ]) {
+      services.createLearningCard({
+        collectionId: targetCollection.id,
+        title,
+        frontMarkdown: 'Anspruchsgrundlage finden',
+        backMarkdown: 'Norm sauber zitieren.',
+        tags: ['zivil']
+      })
+    }
+    services.createLearningCard({
+      collectionId: otherCollection.id,
+      title: 'Omega Anspruch',
+      frontMarkdown: 'Strafrechtliche Prüfung',
+      backMarkdown: 'Nicht Teil der Ziel-Sammlung.',
+      tags: ['straf']
+    })
+
+    const page = services.listLearningCardsPage({
+      collectionId: targetCollection.id,
+      search: 'anspruch',
+      sort: 'title',
+      page: 2,
+      pageSize: 10
+    })
+
+    expect(page).toMatchObject({ total: 11, page: 2, pageSize: 10, pageCount: 2 })
+    expect(page.items.map((card) => card.title)).toEqual(['Tau Anspruch'])
   })
 
   it('exports and imports flashcard collections as portable JSON', async () => {

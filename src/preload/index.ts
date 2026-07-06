@@ -7,6 +7,8 @@ import type {
   GenerateAiCorrectionInput,
   CreateExamInput,
   GetReviewBatchInput,
+  ListExamsInput,
+  ListLearningCardsInput,
   RecordReviewInput,
   SaveRevisionInput,
   SaveAiSettingsInput,
@@ -36,6 +38,7 @@ const api: AppApi = {
   trashFolder: (input: TrashFolderInput) => ipcRenderer.invoke('folders:trash', input),
   restoreFolder: (folderId: string) => ipcRenderer.invoke('folders:restore', folderId),
   listExams: () => ipcRenderer.invoke('exams:list'),
+  listExamsPage: (input?: ListExamsInput) => ipcRenderer.invoke('exams:listPage', input),
   createExam: (input: CreateExamInput) => ipcRenderer.invoke('exams:create', input),
   getExam: (id: string) => ipcRenderer.invoke('exams:get', id),
   updateExam: (input: UpdateExamInput) => ipcRenderer.invoke('exams:update', input),
@@ -67,6 +70,7 @@ const api: AppApi = {
   createLearningCollection: (input: CreateLearningCollectionInput) =>
     ipcRenderer.invoke('learning:createCollection', input),
   listLearningCards: (collectionId?: string | null) => ipcRenderer.invoke('learning:cards', collectionId ?? null),
+  listLearningCardsPage: (input?: ListLearningCardsInput) => ipcRenderer.invoke('learning:cardsPage', input),
   createLearningCard: (input: CreateLearningCardInput) => ipcRenderer.invoke('learning:createCard', input),
   updateLearningCard: (input: CreateLearningCardInput & { id: string }) =>
     ipcRenderer.invoke('learning:updateCard', input),

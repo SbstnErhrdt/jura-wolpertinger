@@ -40,35 +40,52 @@
         <AppBadge v-for="tag in currentCard.tags" :key="tag">{{ tag }}</AppBadge>
       </div>
       <p v-if="feedback" class="review-feedback">{{ feedback }}</p>
+      <div class="review-navigation">
+        <button type="button" class="secondary" :disabled="!canGoPrevious || ratingBusy" @click="previousCard">
+          <span class="key-hint" aria-hidden="true">←</span>
+          Vorherige
+        </button>
+        <button type="button" class="secondary" :disabled="ratingBusy" @click="skipCard">
+          Überspringen
+          <span class="key-hint" aria-hidden="true">→</span>
+        </button>
+      </div>
       <div v-if="showBack" class="rating-row">
-        <button class="rating-option again" @click="rate(1)">
+        <button class="rating-option again" :disabled="ratingBusy" @click="rate(1)">
           <RotateCcw :size="18" aria-hidden="true" />
           <span>Nochmal</span>
+          <kbd class="key-hint">1</kbd>
           <small>nicht sicher</small>
         </button>
-        <button class="rating-option hard" @click="rate(2)">
+        <button class="rating-option hard" :disabled="ratingBusy" @click="rate(2)">
           <TriangleAlert :size="18" aria-hidden="true" />
           <span>Schwer</span>
+          <kbd class="key-hint">2</kbd>
           <small>wackelig</small>
         </button>
-        <button class="rating-option good" @click="rate(3)">
+        <button class="rating-option good" :disabled="ratingBusy" @click="rate(3)">
           <CircleCheck :size="18" aria-hidden="true" />
           <span>Gut</span>
+          <kbd class="key-hint">3</kbd>
           <small>sauber</small>
         </button>
-        <button class="rating-option easy" @click="rate(4)">
+        <button class="rating-option easy" :disabled="ratingBusy" @click="rate(4)">
           <Sparkles :size="18" aria-hidden="true" />
           <span>Leicht</span>
+          <kbd class="key-hint">4</kbd>
           <small>sicher</small>
         </button>
       </div>
-      <button v-else class="secondary reveal-button" @click="showBack = true">Rückseite zeigen</button>
+      <button v-else class="secondary reveal-button" @click="showBack = true">
+        Rückseite zeigen
+        <kbd class="key-hint">Enter</kbd>
+      </button>
     </article>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, defineComponent, h, onMounted, ref } from 'vue'
+import { computed, defineComponent, h, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { CircleCheck, RotateCcw, Sparkles, Trash2, TriangleAlert } from 'lucide-vue-next'
 import type { ReviewCard, ReviewRating } from '@shared/schemas'
@@ -84,12 +101,14 @@ const againQueue = ref<ReviewCard[]>([])
 const currentIndex = ref(0)
 const showBack = ref(false)
 const feedback = ref('')
+const ratingBusy = ref(false)
 const collectionId = computed(() => (typeof route.query.collection === 'string' ? route.query.collection : null))
 const collectionName = ref('')
 const hasPracticeCards = ref(false)
 const sessionCompleted = ref(false)
 
 const currentCard = computed(() => cards.value[currentIndex.value] ?? againQueue.value[0] ?? null)
+const canGoPrevious = computed(() => currentIndex.value > 0 && !sessionCompleted.value)
 const positionLabel = computed(() => `${Math.min(currentIndex.value + 1, cards.value.length)} / ${cards.value.length}`)
 const breadcrumbItems = computed<BreadcrumbItem[]>(() => {
   const items: BreadcrumbItem[] = [
@@ -121,7 +140,14 @@ const reviewActions = computed<ActionMenuItem[]>(() => [
   }
 ])
 
-onMounted(load)
+onMounted(() => {
+  window.addEventListener('keydown', handleReviewKeydown)
+  void load()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleReviewKeydown)
+})
 
 async function load(): Promise<void> {
   loading.value = true
@@ -154,14 +180,21 @@ async function restartPractice(): Promise<void> {
 
 async function rate(rating: ReviewRating): Promise<void> {
   const card = currentCard.value
-  if (!card) return
-  const result = await api.recordReview({ cardId: card.id, rating })
-  feedback.value = result.intervalLabel
-  if (rating === 1) againQueue.value.push(card)
-  window.setTimeout(nextCard, 550)
+  if (!card || ratingBusy.value) return
+  ratingBusy.value = true
+  try {
+    const result = await api.recordReview({ cardId: card.id, rating })
+    feedback.value = result.intervalLabel
+    if (rating === 1) againQueue.value.push(card)
+    window.setTimeout(nextCard, 550)
+  } catch (error) {
+    ratingBusy.value = false
+    throw error
+  }
 }
 
 function nextCard(): void {
+  ratingBusy.value = false
   feedback.value = ''
   showBack.value = false
   if (currentIndex.value < cards.value.length - 1) {
@@ -179,9 +212,56 @@ function nextCard(): void {
   sessionCompleted.value = true
 }
 
+function previousCard(): void {
+  if (!canGoPrevious.value || ratingBusy.value) return
+  currentIndex.value -= 1
+  feedback.value = ''
+  showBack.value = false
+}
+
+function skipCard(): void {
+  if (!currentCard.value || ratingBusy.value) return
+  nextCard()
+}
+
 function removeFromSession(): void {
   cards.value.splice(currentIndex.value, 1)
+  if (currentIndex.value >= cards.value.length && currentIndex.value > 0) currentIndex.value -= 1
   showBack.value = false
+}
+
+function handleReviewKeydown(event: KeyboardEvent): void {
+  if (event.altKey || event.ctrlKey || event.metaKey || isTypingTarget(event.target)) return
+  if (!currentCard.value || loading.value || sessionCompleted.value) return
+
+  if (event.key === 'Enter' && !showBack.value) {
+    event.preventDefault()
+    showBack.value = true
+    return
+  }
+
+  if (event.key === 'ArrowLeft') {
+    event.preventDefault()
+    previousCard()
+    return
+  }
+
+  if (event.key === 'ArrowRight') {
+    event.preventDefault()
+    skipCard()
+    return
+  }
+
+  if (showBack.value && ['1', '2', '3', '4'].includes(event.key)) {
+    event.preventDefault()
+    void rate(Number(event.key) as ReviewRating)
+  }
+}
+
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  if (target.isContentEditable) return true
+  return ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
 }
 
 const MarkdownBlock = defineComponent({

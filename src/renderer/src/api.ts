@@ -11,6 +11,9 @@ import type {
   ExamListItem,
   FolderDto,
   GetReviewBatchInput,
+  ListExamsInput,
+  ListLearningCardsInput,
+  PaginatedResult,
   RecordReviewInput,
   RecordReviewResult,
   SubmissionDetails,
@@ -241,6 +244,42 @@ function createBrowserDevApi(): AppApi {
       const store = readStore()
       const user = ensureBrowserUser(store)
       return store.exams.filter((exam) => exam.userId === user.id).map(withLatestScore)
+    },
+    async listExamsPage(input: ListExamsInput = {}) {
+      const store = readStore()
+      const user = ensureBrowserUser(store)
+      const search = input.search?.trim().toLocaleLowerCase('de-DE') ?? ''
+      let exams = store.exams
+        .filter((exam) => exam.userId === user.id)
+        .map(withLatestScore)
+
+      if ((input.status ?? 'all') === 'active') {
+        exams = exams.filter((exam) => exam.status !== 'archived')
+      } else if (input.status === 'archived') {
+        exams = exams.filter((exam) => exam.status === 'archived')
+      }
+
+      if (Object.prototype.hasOwnProperty.call(input, 'folderId')) {
+        if (input.folderId === null) {
+          exams = exams.filter((exam) => !exam.folderId)
+        } else if (input.folderId) {
+          exams = exams.filter((exam) => exam.folderId === input.folderId)
+        }
+      }
+
+      if (search) {
+        exams = exams.filter((exam) =>
+          [exam.title, ...exam.tags].join(' ').toLocaleLowerCase('de-DE').includes(search)
+        )
+      }
+
+      exams = [...exams].sort((left, right) => {
+        if (input.sort === 'title') return left.title.localeCompare(right.title, 'de-DE')
+        if (input.sort === 'score') return (right.latestScore ?? -1) - (left.latestScore ?? -1)
+        return right.updatedAt.localeCompare(left.updatedAt)
+      })
+
+      return paginateBrowserItems(exams, input)
     },
     async createExam(input: CreateExamInput) {
       const store = readStore()
@@ -678,6 +717,42 @@ function createBrowserDevApi(): AppApi {
           lapses: schedule.lapses
         }
       })
+    },
+    async listLearningCardsPage(input: ListLearningCardsInput = {}) {
+      const store = readStore()
+      const user = ensureBrowserUser(store)
+      const search = input.search?.trim().toLocaleLowerCase('de-DE') ?? ''
+      let cards = store.learningCards
+        .filter((card) => card.userId === user.id && !card.isArchived)
+        .filter((card) => !input.collectionId || card.collectionId === input.collectionId)
+        .map((card) => {
+          const schedule = browserScheduleFor(store, user.id, card.id)
+          return {
+            ...card,
+            dueAt: schedule.dueAt,
+            lastRating: schedule.lastRating,
+            reps: schedule.reps,
+            lapses: schedule.lapses
+          }
+        })
+
+      if (search) {
+        cards = cards.filter((card) =>
+          [card.title, card.frontMarkdown, card.backMarkdown, ...card.tags]
+            .join(' ')
+            .toLocaleLowerCase('de-DE')
+            .includes(search)
+        )
+      }
+
+      cards = [...cards].sort((left, right) => {
+        if (input.sort === 'title') return left.title.localeCompare(right.title, 'de-DE')
+        if (input.sort === 'due') return left.dueAt.localeCompare(right.dueAt)
+        if (input.sort === 'rating') return (right.lastRating ?? 0) - (left.lastRating ?? 0)
+        return right.updatedAt.localeCompare(left.updatedAt)
+      })
+
+      return paginateBrowserItems(cards, input)
     },
     async createLearningCard(input: CreateLearningCardInput) {
       const store = readStore()
@@ -1219,6 +1294,24 @@ function folderName(store: BrowserStore, folderId: string | null | undefined): s
 
 function normalizeTags(tags: string[]): string[] {
   return [...new Set(tags.map((tag) => tag.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b))
+}
+
+function paginateBrowserItems<T>(
+  items: T[],
+  input: { page?: number; pageSize?: number }
+): PaginatedResult<T> {
+  const allowedPageSizes = [10, 25, 50, 100]
+  const pageSize = allowedPageSizes.includes(Number(input.pageSize)) ? Number(input.pageSize) : 25
+  const pageCount = Math.max(1, Math.ceil(items.length / pageSize))
+  const page = Math.min(Math.max(Number(input.page) || 1, 1), pageCount)
+  const start = (page - 1) * pageSize
+  return {
+    items: items.slice(start, start + pageSize),
+    total: items.length,
+    page,
+    pageSize,
+    pageCount
+  }
 }
 
 function createBrowserCollection(

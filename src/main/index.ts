@@ -19,6 +19,8 @@ import type {
   CreateExamInput,
   GenerateAiCorrectionInput,
   GetReviewBatchInput,
+  ListExamsInput,
+  ListLearningCardsInput,
   RecordReviewInput,
   SaveRevisionInput,
   SaveAiSettingsInput,
@@ -199,6 +201,7 @@ function registerIpc(): void {
   ipcMain.handle('folders:restore', (_event, folderId: string) => services.restoreFolder(folderId))
 
   ipcMain.handle('exams:list', () => services.listExams())
+  ipcMain.handle('exams:listPage', (_event, input?: ListExamsInput) => services.listExamsPage(input))
   ipcMain.handle('exams:create', (_event, input: CreateExamInput) => services.createExam(input))
   ipcMain.handle('exams:get', (_event, id: string) => services.getExam(id))
   ipcMain.handle('exams:update', (_event, input: UpdateExamInput) => services.updateExam(input))
@@ -249,6 +252,9 @@ function registerIpc(): void {
   )
   ipcMain.handle('learning:cards', (_event, collectionId?: string | null) =>
     services.listLearningCards(collectionId ?? null)
+  )
+  ipcMain.handle('learning:cardsPage', (_event, input?: ListLearningCardsInput) =>
+    services.listLearningCardsPage(input)
   )
   ipcMain.handle('learning:createCard', (_event, input: CreateLearningCardInput) =>
     services.createLearningCard(input)

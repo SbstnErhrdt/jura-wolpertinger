@@ -4,6 +4,8 @@ import type {
   CreateLearningCardInput,
   CreateLearningCollectionInput,
   GetReviewBatchInput,
+  ListLearningCardsInput,
+  PaginatedResult,
   RecordReviewInput,
   RecordReviewResult,
   UpdateLearningCardInput
@@ -212,6 +214,9 @@ export function createCloudLearningApi(localApi: AppApi): AppApi {
     },
     async listLearningCards(collectionId?: string | null) {
       return listCloudCards(collectionId ?? null)
+    },
+    async listLearningCardsPage(input: ListLearningCardsInput = {}) {
+      return listCloudCardsPage(input)
     },
     async createLearningCard(input: CreateLearningCardInput) {
       return createCloudCard(input, null)
@@ -459,6 +464,118 @@ async function listCloudCards(collectionId: string | null): Promise<LearningCard
       } satisfies LearningCard
     })
     .filter((card): card is LearningCard => Boolean(card))
+}
+
+async function listCloudCardsPage(
+  input: ListLearningCardsInput = {}
+): Promise<PaginatedResult<LearningCard>> {
+  const { client, user } = await requireCloudContext()
+  const requestedPageSize = normalizeCloudPagination(1, input.pageSize, 0).pageSize
+  const requestedPage = Math.max(Number(input.page) || 1, 1)
+  const requestedOffset = (requestedPage - 1) * requestedPageSize
+  let itemQuery = client
+    .from('learning_items')
+    .select('id, primary_collection_id, owner_user_id, title, external_id, is_archived, created_at, updated_at', {
+      count: 'exact'
+    })
+    .eq('owner_user_id', user.id)
+    .eq('is_archived', false)
+  if (input.collectionId) itemQuery = itemQuery.eq('primary_collection_id', input.collectionId)
+  const search = input.search?.trim()
+  if (search) {
+    itemQuery = itemQuery.ilike('title', `%${escapePostgrestLike(search)}%`)
+  }
+  const itemOrder = input.sort === 'title' ? 'title' : 'updated_at'
+  const { data: items, error: itemsError, count } = await itemQuery
+    .order(itemOrder, { ascending: input.sort === 'title' })
+    .range(requestedOffset, requestedOffset + requestedPageSize - 1)
+    .returns<CloudItemRow[]>()
+  if (itemsError) throw itemsError
+
+  const total = count ?? 0
+  const normalized = normalizeCloudPagination(input.page, input.pageSize, total)
+  if (!items?.length) {
+    return {
+      items: [],
+      total,
+      page: normalized.page,
+      pageSize: normalized.pageSize,
+      pageCount: normalized.pageCount
+    }
+  }
+
+  const itemIds = items.map((item) => item.id)
+  const prompts = await selectInChunks(itemIds, async (chunk) => {
+    const { data, error } = await client
+      .from('learning_prompts')
+      .select('id, item_id, front_markdown, back_markdown, is_archived, created_at, updated_at')
+      .in('item_id', chunk)
+      .eq('is_archived', false)
+      .order('sort_index', { ascending: true })
+      .returns<CloudPromptRow[]>()
+    if (error) throw error
+    return data ?? []
+  })
+
+  const promptIds = prompts.map((prompt) => prompt.id)
+  const [schedules, tagRows] = await Promise.all([
+    selectInChunks(promptIds, async (chunk) => {
+      const { data, error } = await client
+        .from('learning_prompt_schedules')
+        .select('prompt_id, due_at, reps, lapses, last_rating')
+        .eq('user_id', user.id)
+        .in('prompt_id', chunk)
+        .returns<CloudScheduleRow[]>()
+      if (error) throw error
+      return data ?? []
+    }),
+    selectInChunks(itemIds, async (chunk) => {
+      const { data, error } = await client
+        .from('learning_item_tags')
+        .select('item_id, learning_tags(name)')
+        .in('item_id', chunk)
+        .returns<CloudTagRow[]>()
+      if (error) throw error
+      return data ?? []
+    })
+  ])
+
+  const itemsById = new Map(items.map((item) => [item.id, item]))
+  const schedulesByPromptId = new Map(schedules.map((schedule) => [schedule.prompt_id, schedule]))
+  const tagsByItemId = groupCloudTags(tagRows)
+  const cards = prompts
+    .map((prompt) => {
+      const item = itemsById.get(prompt.item_id)
+      if (!item) return null
+      const schedule = schedulesByPromptId.get(prompt.id)
+      return {
+        schemaVersion: 1,
+        id: prompt.id,
+        userId: item.owner_user_id,
+        collectionId: item.primary_collection_id,
+        externalId: item.external_id,
+        title: item.title,
+        frontMarkdown: prompt.front_markdown,
+        backMarkdown: prompt.back_markdown,
+        tags: tagsByItemId.get(item.id) ?? [],
+        isArchived: item.is_archived || prompt.is_archived,
+        dueAt: schedule?.due_at ?? prompt.created_at,
+        lastRating: schedule?.last_rating ?? null,
+        reps: schedule?.reps ?? 0,
+        lapses: schedule?.lapses ?? 0,
+        createdAt: prompt.created_at,
+        updatedAt: prompt.updated_at > item.updated_at ? prompt.updated_at : item.updated_at
+      } satisfies LearningCard
+    })
+    .filter((card): card is LearningCard => Boolean(card))
+
+  return {
+    items: sortCloudCardsPage(cards, input.sort),
+    total,
+    page: normalized.page,
+    pageSize: normalized.pageSize,
+    pageCount: normalized.pageCount
+  }
 }
 
 async function listCloudReviewBatch(input: GetReviewBatchInput = {}): Promise<ReviewCard[]> {
@@ -734,6 +851,36 @@ function groupCloudTags(rows: CloudTagRow[]): Map<string, string[]> {
     tagsByItemId.set(itemId, normalizeTags(tags))
   }
   return tagsByItemId
+}
+
+function normalizeCloudPagination(
+  requestedPage: number | undefined,
+  requestedPageSize: number | undefined,
+  total: number
+): { page: number; pageSize: number; pageCount: number; offset: number } {
+  const allowedPageSizes = [10, 25, 50, 100]
+  const pageSize = allowedPageSizes.includes(Number(requestedPageSize)) ? Number(requestedPageSize) : 25
+  const pageCount = Math.max(1, Math.ceil(total / pageSize))
+  const page = Math.min(Math.max(Number(requestedPage) || 1, 1), pageCount)
+  return {
+    page,
+    pageSize,
+    pageCount,
+    offset: (page - 1) * pageSize
+  }
+}
+
+function escapePostgrestLike(value: string): string {
+  return value.replace(/[\\%_]/g, (match) => `\\${match}`)
+}
+
+function sortCloudCardsPage(cards: LearningCard[], sort: ListLearningCardsInput['sort']): LearningCard[] {
+  return [...cards].sort((left, right) => {
+    if (sort === 'title') return left.title.localeCompare(right.title, 'de-DE')
+    if (sort === 'due') return left.dueAt.localeCompare(right.dueAt)
+    if (sort === 'rating') return (right.lastRating ?? 0) - (left.lastRating ?? 0)
+    return right.updatedAt.localeCompare(left.updatedAt)
+  })
 }
 
 async function listCloudReviewDays(): Promise<string[]> {

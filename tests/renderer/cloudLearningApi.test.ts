@@ -3,9 +3,11 @@ import type { AppApi } from '../../src/shared/ipc'
 
 type QueryCall = {
   table: string
-  operation: 'select' | 'eq' | 'in' | 'order'
+  operation: 'select' | 'eq' | 'in' | 'order' | 'range'
   column?: string
   value?: unknown
+  from?: number
+  to?: number
 }
 
 type RpcCall = {
@@ -136,6 +138,64 @@ describe('cloud learning API', () => {
     expect(queryCalls.some((call) => call.table === 'learning_items')).toBe(false)
     expect(queryCalls.some((call) => call.table === 'learning_prompts')).toBe(false)
   })
+
+  it('loads cloud card pages with ranged item queries and page-local details', async () => {
+    const total = 30
+    const items = Array.from({ length: total }, (_, index) => ({
+      id: uuidFor(index, 'item'),
+      primary_collection_id: collectionId,
+      owner_user_id: userId,
+      title: `Karte ${String(index + 1).padStart(2, '0')}`,
+      external_id: `card-${index + 1}`,
+      is_archived: false,
+      created_at: now,
+      updated_at: now
+    }))
+    tableData = {
+      learning_items: items,
+      learning_prompts: items.map((item, index) => ({
+        id: uuidFor(index, 'prompt'),
+        item_id: item.id,
+        front_markdown: `Vorderseite ${index + 1}`,
+        back_markdown: `Rueckseite ${index + 1}`,
+        is_archived: false,
+        created_at: now,
+        updated_at: now
+      })),
+      learning_prompt_schedules: items.map((_item, index) => ({
+        prompt_id: uuidFor(index, 'prompt'),
+        due_at: now,
+        reps: 0,
+        lapses: 0,
+        last_rating: null
+      })),
+      learning_item_tags: []
+    }
+
+    const authModulePath = '../../src/renderer/src/cloudAuth'
+    vi.doMock(authModulePath, () => ({
+      getSupabaseAuthClient: () => createSupabaseClientMock()
+    }))
+    const apiModulePath = '../../src/renderer/src/cloudLearningApi'
+    const { createCloudLearningApi } = (await import(/* @vite-ignore */ apiModulePath)) as {
+      createCloudLearningApi: (localApi: AppApi) => AppApi
+    }
+    const api = createCloudLearningApi(createLocalApiStub())
+    const page = await api.listLearningCardsPage({ collectionId, page: 2, pageSize: 10 })
+
+    expect(page).toMatchObject({ total, page: 2, pageSize: 10, pageCount: 3 })
+    expect(page.items).toHaveLength(10)
+    expect(page.items[0].title).toBe('Karte 11')
+    expect(queryCalls).toContainEqual({
+      table: 'learning_items',
+      operation: 'range',
+      from: 10,
+      to: 19
+    })
+    const promptIdCalls = queryCalls.filter((call) => call.table === 'learning_prompts' && call.operation === 'in')
+    expect(promptIdCalls).toHaveLength(1)
+    expect(promptIdCalls[0].value).toHaveLength(10)
+  })
 })
 
 function createSupabaseClientMock() {
@@ -211,7 +271,7 @@ function createSupabaseClientMock() {
 function createQueryBuilder(table: string) {
   let rows = [...(tableData[table] ?? [])]
   const builder = {
-    select(_columns: string) {
+    select(_columns: string, _options?: { count?: string }) {
       queryCalls.push({ table, operation: 'select' })
       return builder
     },
@@ -230,8 +290,13 @@ function createQueryBuilder(table: string) {
       queryCalls.push({ table, operation: 'order', column })
       return builder
     },
+    range(from: number, to: number) {
+      queryCalls.push({ table, operation: 'range', from, to })
+      rows = rows.slice(from, to + 1)
+      return builder
+    },
     async returns<T>() {
-      return { data: rows as T, error: null }
+      return { data: rows as T, error: null, count: tableData[table]?.length ?? rows.length }
     }
   }
   return builder
@@ -253,6 +318,7 @@ function createLocalApiStub(): AppApi {
     trashFolder: unimplemented,
     restoreFolder: unimplemented,
     listExams: unimplemented,
+    listExamsPage: unimplemented,
     createExam: unimplemented,
     getExam: unimplemented,
     updateExam: unimplemented,
@@ -278,6 +344,7 @@ function createLocalApiStub(): AppApi {
     listLearningCollections: unimplemented,
     createLearningCollection: unimplemented,
     listLearningCards: unimplemented,
+    listLearningCardsPage: unimplemented,
     createLearningCard: unimplemented,
     updateLearningCard: unimplemented,
     getReviewBatch: unimplemented,
