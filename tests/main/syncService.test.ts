@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AppServices } from '@main/services/services'
 import { createWorkspaceSnapshot, restoreWorkspaceSnapshot } from '@main/services/syncService'
+import type { CloudLearningSyncState } from '@main/services/learningSyncService'
 import { EDITOR_SCHEMA_VERSION } from '@shared/constants'
 
 let dataDir: string
@@ -129,5 +130,91 @@ describe('workspace sync snapshots', () => {
       restoredServices.close()
       await rm(restoreDir, { recursive: true, force: true })
     }
+  })
+
+  it('merges cloud flashcards during the normal all-data sync flow', async () => {
+    const user = services.getCurrentUser()
+    const collection = services.createLearningCollection({ name: 'BGB AT' })
+    const card = services.createLearningCard({
+      collectionId: collection.id,
+      title: 'Lokal',
+      frontMarkdown: 'Alt?',
+      backMarkdown: 'Alt.',
+      tags: ['lokal']
+    })
+    services.db.prepare('UPDATE learning_collections SET updated_at = ? WHERE id = ?').run(
+      '2026-01-01T00:00:00.000Z',
+      collection.id
+    )
+    services.db.prepare('UPDATE learning_cards SET updated_at = ? WHERE id = ?').run(
+      '2026-01-01T00:00:00.000Z',
+      card.id
+    )
+    services.db
+      .prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)')
+      .run('sync_remote_user_id', '00000000-0000-4000-8000-0000000000a1')
+
+    const uploadedLearningStates: CloudLearningSyncState[] = []
+    const fakeClient = {
+      async downloadLatestSnapshot() {
+        return null
+      },
+      async downloadLearningState(): Promise<CloudLearningSyncState> {
+        return {
+          collections: [
+            {
+              id: collection.id,
+              ownerUserId: '00000000-0000-4000-8000-0000000000a1',
+              name: 'BGB Allgemeiner Teil',
+              description: '',
+              subject: null,
+              source: null,
+              isArchived: false,
+              createdAt: '2026-01-01T00:00:00.000Z',
+              updatedAt: '2026-02-01T00:00:00.000Z'
+            }
+          ],
+          cards: [
+            {
+              id: card.id,
+              itemId: '10000000-0000-4000-8000-000000000001',
+              collectionId: collection.id,
+              ownerUserId: '00000000-0000-4000-8000-0000000000a1',
+              title: 'Online',
+              externalId: card.id,
+              frontMarkdown: 'Neu?',
+              backMarkdown: 'Neu.',
+              tags: ['cloud'],
+              isArchived: false,
+              createdAt: '2026-01-01T00:00:00.000Z',
+              updatedAt: '2026-02-01T00:00:00.000Z'
+            }
+          ],
+          schedules: [],
+          reviewEvents: []
+        }
+      },
+      async uploadLearningState(state: CloudLearningSyncState) {
+        uploadedLearningStates.push(state)
+      },
+      async uploadSnapshot() {},
+      async uploadFile() {}
+    }
+    ;(services as unknown as { syncClient: typeof fakeClient }).syncClient = fakeClient
+
+    const result = await services.runSync({ action: 'merge' })
+
+    expect(result.summary).toContain('abgeglichen')
+    expect(services.listLearningCollections().find((candidate) => candidate.id === collection.id)?.name).toBe(
+      'BGB Allgemeiner Teil'
+    )
+    expect(services.listLearningCards().find((candidate) => candidate.id === card.id)).toEqual(
+      expect.objectContaining({ title: 'Online', frontMarkdown: 'Neu?', tags: ['cloud'] })
+    )
+    expect(uploadedLearningStates).toHaveLength(1)
+    expect(uploadedLearningStates[0].cards).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: card.id, title: 'Online' })])
+    )
+    expect(user.id).toBe(services.getCurrentUser().id)
   })
 })

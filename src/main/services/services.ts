@@ -103,6 +103,10 @@ import {
   type WorkspaceSnapshot
 } from './syncService'
 import { SupabaseSyncClient } from './supabaseSyncClient'
+import {
+  buildCloudLearningStateFromLocal,
+  mergeCloudLearningStateIntoLocal
+} from './learningSyncService'
 
 type Row = Record<string, unknown>
 type AiCredentialSource = 'stored' | 'environment'
@@ -192,11 +196,15 @@ export class AppServices {
       const filePayloads = await this.downloadSnapshotFiles(remoteSnapshot)
       await writeSnapshotFiles({ filesDir: this.filesDir, snapshot: remoteSnapshot, filePayloads })
       const result = restoreWorkspaceSnapshot({ db: this.db, snapshot: remoteSnapshot, targetUserId: localUserId })
+      const cloudLearningState = await this.syncClient.downloadLearningState()
+      mergeCloudLearningStateIntoLocal({ db: this.db, localUserId, cloudState: cloudLearningState })
       this.rememberSyncResult(result)
       return result
     }
 
     if (input.action === 'merge') {
+      const cloudLearningState = await this.syncClient.downloadLearningState()
+      mergeCloudLearningStateIntoLocal({ db: this.db, localUserId, cloudState: cloudLearningState })
       const remoteSnapshot = await this.syncClient.downloadLatestSnapshot(localUserId)
       if (remoteSnapshot) {
         const localSnapshot = this.createSnapshot(remoteUserId)
@@ -204,6 +212,13 @@ export class AppServices {
       }
     }
 
+    await this.syncClient.uploadLearningState(
+      buildCloudLearningStateFromLocal({
+        db: this.db,
+        localUserId,
+        remoteUserId
+      })
+    )
     const snapshot = this.createSnapshot(remoteUserId)
     const filePayloads = await readExistingSnapshotFiles(snapshot)
     for (const payload of filePayloads) {
