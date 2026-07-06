@@ -22,6 +22,8 @@ import type {
   RecordReviewInput,
   SaveRevisionInput,
   SaveAiSettingsInput,
+  SyncAuthInput,
+  SyncRunInput,
   TestAiConnectionInput,
   TrashFolderInput,
   UpdateCorrectionInput,
@@ -320,6 +322,10 @@ function registerIpc(): void {
   ipcMain.handle('comments:add', (_event, input: AddInlineCommentInput) =>
     services.addInlineComment(input)
   )
+  ipcMain.handle('sync:status', () => services.getSyncStatus())
+  ipcMain.handle('sync:connect', (_event, input: SyncAuthInput) => services.connectSyncAccount(input))
+  ipcMain.handle('sync:disconnect', () => services.disconnectSyncAccount())
+  ipcMain.handle('sync:run', (_event, input: SyncRunInput) => services.runSync(input))
 }
 
 app.whenReady().then(() => {

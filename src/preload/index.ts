@@ -10,6 +10,8 @@ import type {
   RecordReviewInput,
   SaveRevisionInput,
   SaveAiSettingsInput,
+  SyncAuthInput,
+  SyncRunInput,
   TestAiConnectionInput,
   TrashFolderInput,
   UpdateCorrectionInput,
@@ -78,7 +80,11 @@ const api: AppApi = {
   exportExamPdf: (examId: string) => ipcRenderer.invoke('pdf:export', examId),
   createCorrection: (submissionId: string) => ipcRenderer.invoke('corrections:create', submissionId),
   updateCorrection: (input: UpdateCorrectionInput) => ipcRenderer.invoke('corrections:update', input),
-  addInlineComment: (input: AddInlineCommentInput) => ipcRenderer.invoke('comments:add', input)
+  addInlineComment: (input: AddInlineCommentInput) => ipcRenderer.invoke('comments:add', input),
+  getSyncStatus: () => ipcRenderer.invoke('sync:status'),
+  connectSyncAccount: (input: SyncAuthInput) => ipcRenderer.invoke('sync:connect', input),
+  disconnectSyncAccount: () => ipcRenderer.invoke('sync:disconnect'),
+  runSync: (input: SyncRunInput) => ipcRenderer.invoke('sync:run', input)
 }
 
 contextBridge.exposeInMainWorld('juraApi', api)

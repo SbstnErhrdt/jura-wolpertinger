@@ -836,6 +836,46 @@ function createBrowserDevApi(): AppApi {
       correction.updatedAt = comment.createdAt
       writeStore(store)
       return comment
+    },
+    async getSyncStatus() {
+      return {
+        connected: requiresCloudAuth(),
+        remoteUserId: null,
+        remoteEmail: null,
+        lastSyncedAt: null,
+        lastSyncSummary: requiresCloudAuth() ? 'Online-Version aktiv.' : null
+      }
+    },
+    async connectSyncAccount() {
+      return {
+        connected: requiresCloudAuth(),
+        remoteUserId: null,
+        remoteEmail: null,
+        lastSyncedAt: null,
+        lastSyncSummary: requiresCloudAuth() ? 'Online-Version aktiv.' : null
+      }
+    },
+    async disconnectSyncAccount() {
+      return {
+        connected: false,
+        remoteUserId: null,
+        remoteEmail: null,
+        lastSyncedAt: null,
+        lastSyncSummary: null
+      }
+    },
+    async runSync(input) {
+      const syncedAt = nowIso()
+      return {
+        action: input.action,
+        syncedAt,
+        summary: requiresCloudAuth()
+          ? 'Die Web-App ist bereits online.'
+          : 'Online-Abgleich ist in der Desktop-App verfügbar.',
+        uploadedFiles: 0,
+        downloadedFiles: 0,
+        tableCounts: {}
+      }
     }
   }
 }

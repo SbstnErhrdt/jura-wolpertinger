@@ -289,7 +289,11 @@ function createLocalApiStub(): AppApi {
     exportExamPdf: unimplemented,
     createCorrection: unimplemented,
     updateCorrection: unimplemented,
-    addInlineComment: unimplemented
+    addInlineComment: unimplemented,
+    getSyncStatus: unimplemented,
+    connectSyncAccount: unimplemented,
+    disconnectSyncAccount: unimplemented,
+    runSync: unimplemented
   }
 }
 

@@ -6,14 +6,36 @@ Diese Datei beschreibt die wichtigsten Nutzerbedürfnisse für Jura Wolpertinger
 
 - Examenskandidat:in: schreibt regelmäßig Übungsklausuren und möchte Fortschritt, Schwächen und Bewertungen nachvollziehen.
 - Examenskandidat:in mit Smartphone: wiederholt Karteikarten unterwegs und möchte schnell in eine kurze Lerneinheit starten.
-- Lerngruppe: nutzt dieselbe App auf einem Rechner oder tauscht `.jura` Dateien aus.
+- Lerngruppe: nutzt dieselbe App auf einem Rechner oder tauscht Prüfungs- und Karteikarten-Dateien aus.
 - Korrektor:in oder Lernpartner:in: bewertet abgegebene Klausuren und setzt konkrete Hinweise am Text.
+
+## Übergreifende UI-Regeln
+
+### Inhalte sicher erstellen und bearbeiten
+
+Als Nutzer:in möchte ich Inhalte in klaren Dialogen oder Detailseiten erstellen und bearbeiten, damit ich nicht versehentlich Listen oder Übersichten verändere.
+
+Akzeptanz:
+
+- Erstellen und Bearbeiten passiert in Modals oder eigenen Detailseiten, nicht als Inline-Formular in Übersichten.
+- Untergeordnete Inhalte entstehen im richtigen Kontext, z. B. Karteikarten innerhalb einer geöffneten Sammlung.
+- Speichern, Abbrechen und Pflichtfelder sind eindeutig erkennbar.
+
+### Kritische Aktionen bestätigen
+
+Als Nutzer:in möchte ich vor Löschen, Archivieren oder Entfernen eine verständliche Rückfrage sehen, damit ich keine Daten aus Versehen verliere.
+
+Akzeptanz:
+
+- Destruktive Aktionen öffnen ein Confirm-Modal.
+- Das Modal beschreibt konkret, was passiert und ob Inhalte wiederherstellbar sind.
+- Primäre und sekundäre Aktion sind klar unterscheidbar.
 
 ## Home und Motivation
 
 ### Motivierend starten
 
-Als Examenskandidat:in möchte ich nach dem Login einen knappen Home Screen sehen, damit ich sofort weiß, was als nächstes zu tun ist.
+Als Examenskandidat:in möchte ich beim App-Start beziehungsweise nach der Anmeldung einen knappen Home Screen sehen, damit ich sofort weiß, was als nächstes zu tun ist.
 
 Akzeptanz:
 
@@ -37,14 +59,14 @@ Akzeptanz:
 
 ### Karteikarten organisieren
 
-Als Examenskandidat:in möchte ich Karteikarten in Collections, Ordnern und Tags organisieren, damit ich Rechtsgebiete und Lernstände sauber trennen kann.
+Als Examenskandidat:in möchte ich Karteikarten in Sammlungen, Ordnern und Schlagwörtern organisieren, damit ich Rechtsgebiete und Lernstände sauber trennen kann.
 
 Akzeptanz:
 
-- Collections sind fachliche Kartensätze.
+- Sammlungen sind fachliche Kartensätze.
 - Ordner dienen der persönlichen Ablage.
-- Tags filtern Karten über Collections und Ordner hinweg.
-- Eine Karte gehört genau zu einer Collection.
+- Schlagwörter filtern Karten über Sammlungen und Ordner hinweg.
+- Eine Karte gehört genau zu einer Sammlung.
 
 ### Karteikarten selbst erstellen
 
@@ -68,7 +90,7 @@ Akzeptanz:
 - Der Wiederholen-Flow zeigt Vorderseite und Rückseite.
 - Die Bewertung nutzt die vier Optionen Nochmal, Schwer, Gut und Leicht.
 - Nach der Bewertung erscheint kurz das nächste Intervall und dann automatisch die nächste Karte.
-- Nochmal-Karten erscheinen innerhalb derselben Session erneut.
+- Nochmal-Karten erscheinen innerhalb derselben Lerneinheit erneut.
 - Der Flow ist mobil mit großen, gut tappbaren Flächen nutzbar.
 
 ### Karten beim Lernen korrigieren
@@ -77,20 +99,21 @@ Als Nutzer:in möchte ich fehlerhafte Karten direkt aus dem Lernfluss heraus kor
 
 Akzeptanz:
 
-- Ein kleines Aktionsmenü bietet Bearbeiten, Tags ändern und Aus aktueller Session entfernen.
+- Ein kleines Aktionsmenü bietet Bearbeiten, Schlagwörter ändern und Aus aktueller Lerneinheit entfernen.
 - Das Menü unterbricht den Lernfluss nicht prominent.
 - Änderungen werden in der normalen Kartenverwaltung sichtbar.
 
-### Collections kopieren
+### Sammlungen übernehmen
 
-Als Nutzer:in möchte ich geteilte oder öffentliche Collections als eigene Kopie übernehmen, damit ich sie bearbeiten kann, ohne das Original zu verändern.
+Als Nutzer:in möchte ich Karteikarten-Dateien oder später geteilte Sammlungen als eigene Kopie übernehmen, damit ich sie bearbeiten kann, ohne das Original zu verändern.
 
 Akzeptanz:
 
-- Beim Import entsteht eine eigene Collection.
-- Tags werden in die eigene Kopie übernommen.
+- Beim Übernehmen entsteht eine eigene Sammlung.
+- Schlagwörter werden in die eigene Kopie übernommen.
 - Review-Historie, private Notizen, Mitglieder und Rechte werden nicht übernommen.
 - Der Nutzer wählt einen Zielordner; Default ist Unsortiert.
+- Die Oberfläche spricht von Karteikarten-Dateien auswählen oder sichern, nicht vom technischen Dateiformat.
 
 ## Bibliothek und Organisation
 
@@ -100,7 +123,7 @@ Als Examenskandidat:in möchte ich schnell eine neue Klausur anlegen, damit ich 
 
 Akzeptanz:
 
-- Titel, Ordner und Tags können beim Anlegen gesetzt werden.
+- Titel, Ordner und Schlagwörter können beim Anlegen gesetzt werden.
 - Die Klausur erscheint sofort in der Bibliothek.
 - Ohne Ordner bleibt die Klausur auffindbar.
 
@@ -120,7 +143,7 @@ Als Nutzer:in möchte ich auf Klausuren ein Kontextmenü öffnen, damit wichtige
 
 Akzeptanz:
 
-- Kontextmenü bietet Anzeigen, Bearbeiten, Umbenennen, Löschen/Archivieren, Export und Download.
+- Kontextmenü bietet Anzeigen, Bearbeiten, Umbenennen, Archivieren, Datei sichern und PDF sichern.
 - Aktionen sind klar benannt und beschädigen keine Daten.
 
 ## Schreiben und Abgeben
@@ -133,7 +156,7 @@ Akzeptanz:
 
 - Der Prüfungsmodus hat eine reduzierte, stabile Oberfläche.
 - Heller und dunkler Modus funktionieren.
-- Der Text wird automatisch lokal gespeichert.
+- Der Text wird automatisch im aktuellen Arbeitsbereich gespeichert: lokal in der Desktop-App, online in der Web-App.
 
 ### Arbeit wiederherstellen
 
@@ -153,7 +176,7 @@ Akzeptanz:
 
 - Rechtsgebiet, Klausurtyp, Quelle und optionale URL können an der Prüfung gespeichert werden.
 - Uploads erhalten Rollen wie Aufgabenstellung, Bearbeitervermerk oder Musterlösung.
-- Fremde Klausurentexte werden nicht mitgeliefert, sondern nur durch Nutzer:innen importiert.
+- Fremde Klausurentexte werden nicht mitgeliefert, sondern nur durch Nutzer:innen hochgeladen oder zugeordnet.
 
 ### Klausur abgeben
 
@@ -197,56 +220,56 @@ Akzeptanz:
 - Kommentare werden in der Randspalte ungefähr auf Höhe der Textstelle angezeigt.
 - Hover über einen Kommentar hebt die zugehörige Textstelle hervor.
 
-### KI-Korrektur prüfen
+### KI-Korrektur im Desktop prüfen
 
-Als Examenskandidat:in möchte ich für eine abgegebene Prüfung einen KI-Korrekturvorschlag anfordern und vor der Übernahme prüfen, damit automatisches Feedback nicht ungeprüft meine Bewertung verändert.
+Als Examenskandidat:in möchte ich in der Desktop-App für eine abgegebene Prüfung einen KI-Korrekturvorschlag anfordern und vor der Übernahme prüfen, damit automatisches Feedback nicht ungeprüft meine Bewertung verändert.
 
 Akzeptanz:
 
-- Die Anfrage wird nur bewusst gestartet und nutzt den lokal hinterlegten eigenen OpenAI-Schlüssel.
+- Die Anfrage wird nur bewusst gestartet und nutzt den lokal hinterlegten eigenen KI-Schlüssel.
 - `gpt-5.5` ist das empfohlene Standardmodell für die komplexe Korrektur.
 - Die KI-Korrektur nutzt Aufgabenstellung, Musterlösung und Bearbeitung, sofern diese als Anhänge vorliegen.
 - Der Vorschlag wird durch eine zweite KI-Prüfer-Runde auf Punktplausibilität, Halluzinationen, Textanker und konkrete Verbesserungshinweise geprüft.
-- Die Einstellungen zeigen klar, ob kein Key, ein gespeicherter App-Key oder ein Entwicklungs-Key aus `.env` aktiv ist.
-- Wenn ein gespeicherter App-Key einen vorhandenen `.env`-Key übersteuert, wird das sichtbar und der `.env`-Key kann separat getestet werden.
-- Nach dem Speichern zeigt die App eine kurze Key-Endung und den Speicherzeitpunkt, damit der Zustand sichtbar ist.
-- Der OpenAI-Key wird nur in einem bewussten Einrichten- oder Ändern-Flow eingegeben; die normale Ansicht zeigt kein leeres Passwortfeld.
+- Die Einstellungen zeigen für normale Nutzer:innen klar, ob KI-Korrektur eingerichtet ist oder noch eingerichtet werden muss.
+- Hinweise zu Entwicklungszugängen erscheinen nur in lokalen Entwicklungsumgebungen und nicht in der Web-App.
+- Nach dem Speichern zeigt die App eine kurze Endung des Schlüssels und den Speicherzeitpunkt, damit der Zustand sichtbar ist.
+- Der KI-Schlüssel wird nur in einem bewussten Einrichten- oder Ändern-Flow eingegeben; die normale Ansicht zeigt kein leeres Passwortfeld.
 - Eine Verbindung kann aus der App heraus getestet werden; laufender Test, Erfolg und Fehler erscheinen direkt in der KI-Karte.
-- Der Vorschlag zeigt Punkte, Gesamthinweis, Tags, Inline-Kommentare und Lernhinweise als Entwurf.
+- Der Vorschlag zeigt Punkte, Gesamthinweis, Schlagwörter, Inline-Kommentare und Lernhinweise als Entwurf.
 - Annehmen überführt den Entwurf in normale Korrektur, Inline-Kommentare und Lernaufgaben.
 - Ablehnen verwirft den Vorschlag für den Arbeitsfluss, ohne Abgabe oder bestehende Korrektur zu verändern.
-- Rohentwürfe, API-Schlüssel und KI-Einstellungen werden nicht in `.jura` Pakete exportiert.
+- Rohentwürfe, KI-Schlüssel und KI-Einstellungen werden nicht in Prüfungsdateien übernommen.
 
-### Cloud-KI-Grenze verstehen
+### Online-KI-Grenze verstehen
 
 Als Nutzer:in möchte ich in der Web-App erkennen, warum KI-Korrektur nicht verfügbar ist, damit die Funktion nicht kaputt wirkt.
 
 Akzeptanz:
 
 - KI-Korrektur bleibt in Navigation und Prüfungskontext sichtbar.
-- In der Cloud-Version ist die Aktion deaktiviert.
-- Die UI erklärt kurz, dass KI-Korrektur in der Cloud noch nicht freigeschaltet ist.
-- Die Desktop-Version kann weiterhin den eigenen OpenAI-Key nutzen.
+- In der Online-Version ist die Aktion deaktiviert.
+- Die UI erklärt kurz, dass KI-Korrektur online noch nicht freigeschaltet ist.
+- Die Desktop-Version kann weiterhin den eigenen KI-Schlüssel nutzen.
 
-## Tags und Auswertung
+## Schlagwörter und Auswertung
 
-### Tags konsequent nutzen
+### Schlagwörter konsequent nutzen
 
-Als Examenskandidat:in möchte ich Klausuren und Korrekturen taggen, damit spätere Auswertungen aussagekräftig sind.
+Als Examenskandidat:in möchte ich Klausuren und Korrekturen verschlagworten, damit spätere Auswertungen aussagekräftig sind.
 
 Akzeptanz:
 
-- Tags können schnell als Chips eingegeben werden.
+- Schlagwörter können schnell als Chips eingegeben werden.
 - Sinnvolle Vorschläge unterstützen Rechtsgebiet, Prüfungsgebiet, Klausurtyp und Fehlergruppe.
-- Die Tour erklärt Tagging ohne technische Begriffe.
+- Die Tour erklärt Schlagwörter ohne technische Begriffe.
 
 ### Fortschritt auswerten
 
-Als Nutzer:in möchte ich Punkte und Tags auswerten, damit ich erkenne, wo ich besser werde und wo ich wiederholen sollte.
+Als Nutzer:in möchte ich Punkte und Schlagwörter auswerten, damit ich erkenne, wo ich besser werde und wo ich wiederholen sollte.
 
 Akzeptanz:
 
-- Zeitraumfilter und Tag-Filter bleiben nach Reload erhalten.
+- Zeitraumfilter und Schlagwort-Filter bleiben nach erneutem Öffnen erhalten.
 - Durchschnitt, Verlauf und Tabellenansicht sind sichtbar.
 - Auswertungen funktionieren offline.
 
@@ -259,20 +282,22 @@ Akzeptanz:
 - Offene Lernaufgaben erscheinen lokal in der Auswertung.
 - Lernaufgaben haben Kategorie, Priorität und Status.
 - Statusänderungen bleiben lokal erhalten.
-- Lernaufgaben werden vorerst nicht in `.jura` Pakete exportiert.
+- Lernaufgaben werden vorerst nicht in Prüfungsdateien übernommen.
 
-## Datenschutz und Cloud-Grenze
+## Datenschutz und Online-Grenze
 
-### Lokale Daten schützen
+### Lokale Daten schützen und Online-Nutzung verstehen
 
-Als Nutzer:in möchte ich klar kontrollieren, wann Prüfungsdaten die App verlassen, damit lokale Übungsdaten nicht unbeabsichtigt in eine Cloud übertragen werden.
+Als Nutzer:in möchte ich klar verstehen, welche Daten lokal bleiben und welche Daten ich bewusst online nutze, damit ich Prüfungsdaten kontrolliert verwalte.
 
 Akzeptanz:
 
-- Schreiben, Speichern, Bewerten, Auswerten, PDF-Export und `.jura` Import/Export funktionieren lokal.
-- Eine Cloud-Anfrage passiert nur bei ausdrücklicher KI-Korrektur.
-- Die App nutzt im MVP nur einen selbst hinterlegten OpenAI-Schlüssel und keinen gebündelten Providerzugang.
-- `.jura` Pakete enthalten Prüfungsdaten wie Metadaten, Abgaben, Korrekturen und Attachment-Rollen, aber keine API-Schlüssel, KI-Einstellungen, rohe KI-Entwürfe oder lokale Lernaufgaben.
+- Die Desktop-App funktioniert ohne Account und speichert lokal.
+- Die Web-App speichert Daten nach der Anmeldung online auf dem Betreiber-Server.
+- Ohne Anmeldung werden in der Web-App keine App-Daten geladen.
+- Eine Verbindung zwischen Desktop und Online-Konto wird bewusst gestartet; lokale Daten gehen dabei nicht verloren.
+- Daten an einen KI-Anbieter werden nur bei ausdrücklicher KI-Korrektur übertragen.
+- Prüfungsdateien enthalten Prüfungsdaten wie Metadaten, Abgaben, Korrekturen und Attachment-Rollen, aber keine KI-Schlüssel, KI-Einstellungen, rohe KI-Entwürfe oder lokale Lernaufgaben.
 
 ## Nutzer und Onboarding
 
@@ -282,43 +307,44 @@ Als Nutzer:in möchte ich mich in der Web-App selbst registrieren und anmelden, 
 
 Akzeptanz:
 
-- `app.jura-wolpi.de` zeigt ohne gültige Session nur Login/Registrierung.
-- Ohne Login werden keine App-Daten, Demo-Daten oder lokalen Browser-Daten geladen.
-- Nach Login wird das User-Acknowledgement geprüft, bevor die App-Shell erscheint.
-- Bei abgelaufener Session kehrt die Web-App in den Auth-Zustand zurück.
+- `app.jura-wolpi.de` zeigt ohne gültige Anmeldung nur Anmeldung und Account-Erstellung.
+- Ohne Anmeldung werden keine App-Daten, Demo-Daten oder zwischengespeicherten Browserdaten geladen.
+- Nach der Anmeldung wird eine notwendige Hinweisbestätigung geprüft, bevor die App-Shell erscheint.
+- Wenn die Anmeldung abläuft, kehrt die Web-App zur Anmeldeseite zurück.
 
-### Lokale App mit Remote verbinden
+### Lokale App mit Online-Konto verbinden
 
-Als Desktop-Nutzer:in möchte ich mein lokales Profil mit einem Remote-Konto verbinden, damit ich später Daten synchronisieren kann.
+Als Desktop-Nutzer:in möchte ich mein lokales Profil mit einem Online-Konto verbinden, damit ich später Daten synchronisieren kann.
 
 Akzeptanz:
 
 - Die Desktop-App funktioniert weiterhin ohne Account.
 - Lokale Daten gehen beim Verbinden nicht verloren.
 - Konflikte werden nicht still überschrieben.
-- Lokale und Remote-Identität bleiben nachvollziehbar verknüpft.
+- Lokale und Online-Identität bleiben nachvollziehbar verknüpft.
 
 ### Einstellungen zentral verwalten
 
-Als Nutzer:in möchte ich Nutzer, KI-Korrektur und Oberfläche an einer Stelle einstellen, damit ich die App nicht in einzelnen Arbeitsansichten konfigurieren muss.
+Als Nutzer:in möchte ich Nutzer, Online-Verbindung, KI-Korrektur und Oberfläche an einer Stelle einstellen, damit ich die App nicht in einzelnen Arbeitsansichten konfigurieren muss.
 
 Akzeptanz:
 
 - Die linke Navigation enthält eine Einstellungsseite.
 - Nutzerwechsel, Nutzername, neuer lokaler Nutzer und Tour-Aktionen sind dort erreichbar.
-- OpenAI-Key und Modell können dort für KI-Korrekturen gespeichert werden.
-- Gespeicherter App-Key und Entwicklungs-Key aus `.env` werden als getrennte Quellen erklärt, damit ein fehlerhafter App-Key nicht mit einem funktionierenden `.env`-Key verwechselt wird.
-- Die Seite erklärt, dass KI-Korrekturen Daten nur auf ausdrückliche Anfrage an den konfigurierten Anbieter übertragen.
+- In der Desktop-App können KI-Zugang und Modell für KI-Korrekturen gespeichert werden.
+- In der Web-App ist klar sichtbar, dass KI-Korrektur online noch nicht freigeschaltet ist.
+- Die Seite erklärt, dass KI-Korrekturen Daten nur auf ausdrückliche Anfrage an den konfigurierten KI-Anbieter übertragen.
 
 ### Arbeitsbereich wechseln
 
-Als Nutzer:in möchte ich zwischen meinem Arbeitsbereich und Demo-Daten wechseln, damit ich die App ausprobieren kann, ohne eigene Daten zu vermischen.
+Als Desktop-Nutzer:in möchte ich zwischen meinem Arbeitsbereich und Demo-Daten wechseln, damit ich die App ausprobieren kann, ohne eigene Daten zu vermischen.
 
 Akzeptanz:
 
 - Nutzerwechsel ist in der Sidebar erreichbar.
 - Daten bleiben pro Arbeitsbereich getrennt.
 - Der Wechsel ist schnell und nachvollziehbar.
+- Die Web-App zeigt Demo- oder zwischengespeicherte Browserdaten nicht vor der Anmeldung.
 
 ### Einstiegstour nutzen
 
@@ -329,7 +355,7 @@ Akzeptanz:
 - Der Welcome-Screen zeigt das Welcome-Bild.
 - Die Tour kann gestartet oder übersprungen werden.
 - Die Tour kann später über Sidebar oder Hilfe erneut gestartet werden.
-- Technische Begriffe wie UUID oder Sync erscheinen nicht in der Tour.
+- Technische Begriffe erscheinen nicht in der Tour.
 
 ### Hilfe finden
 
@@ -337,6 +363,6 @@ Als Nutzer:in möchte ich eine Hilfeseite mit kurzen Antworten, damit ich bei ty
 
 Akzeptanz:
 
-- FAQ beantwortet Offline-Speicherung, Nutzerwechsel, Tags, Bewertung und Papierkorb.
+- FAQ beantwortet Offline-Speicherung, Nutzerwechsel, Schlagwörter, Bewertung und Papierkorb.
 - Die Tour ist von der Hilfeseite aus erneut startbar.
 - Texte sind nutzerfreundlich und nicht technisch formuliert.

@@ -14,7 +14,10 @@ import {
   reviewCardSchema,
   reviewRatingSchema,
   scoreSchema,
-  submissionSchema
+  submissionSchema,
+  syncAuthInputSchema,
+  syncRunResultSchema,
+  syncStatusSchema
 } from '@shared/schemas'
 import {
   APP_VERSION,
@@ -181,6 +184,38 @@ describe('shared schemas', () => {
         createdAt: new Date().toISOString()
       }).role
     ).toBe('other')
+  })
+
+  it('validates sync status and results', () => {
+    const syncedAt = new Date().toISOString()
+
+    expect(
+      syncStatusSchema.parse({
+        connected: true,
+        remoteUserId: crypto.randomUUID(),
+        remoteEmail: 'lerner@example.test',
+        lastSyncedAt: syncedAt,
+        lastSyncSummary: 'Alles aktuell.'
+      }).connected
+    ).toBe(true)
+
+    expect(
+      syncAuthInputSchema.parse({
+        email: 'lerner@example.test',
+        password: 'secret'
+      }).email
+    ).toBe('lerner@example.test')
+
+    expect(
+      syncRunResultSchema.parse({
+        action: 'upload',
+        syncedAt,
+        summary: 'Lokale Daten online gesichert.',
+        uploadedFiles: 1,
+        downloadedFiles: 0,
+        tableCounts: { exams: 2, attachments: 1 }
+      }).tableCounts.exams
+    ).toBe(2)
   })
 
   it('validates AI correction drafts and learning tasks', () => {

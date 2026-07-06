@@ -75,6 +75,10 @@ import type {
   SaveAiCorrectionDraftInput,
   SaveAiSettingsInput,
   SubmissionDetails,
+  SyncAuthInput,
+  SyncRunInput,
+  SyncRunResult,
+  SyncStatus,
   TestAiConnectionInput,
   TrashFolderInput,
   UpdateCorrectionInput,
@@ -90,6 +94,15 @@ import {
   type AiCorrectionRequestAttachment
 } from './aiCorrection'
 import { ensureParentDir, hashJson, newId, nowIso, parseJson, stringifyJson } from './utils'
+import {
+  createSyncResult,
+  createWorkspaceSnapshot,
+  readExistingSnapshotFiles,
+  restoreWorkspaceSnapshot,
+  writeSnapshotFiles,
+  type WorkspaceSnapshot
+} from './syncService'
+import { SupabaseSyncClient } from './supabaseSyncClient'
 
 type Row = Record<string, unknown>
 type AiCredentialSource = 'stored' | 'environment'
@@ -109,6 +122,7 @@ let localEnvCache: Record<string, string> | null = null
 export class AppServices {
   readonly db: SqliteDatabase
   readonly filesDir: string
+  private syncClient: SupabaseSyncClient | null = null
 
   constructor(
     readonly dataDir: string,
@@ -121,6 +135,90 @@ export class AppServices {
 
   close(): void {
     this.db.close()
+  }
+
+  getSyncStatus(): SyncStatus {
+    return {
+      connected: Boolean(this.syncClient && this.getMetaValue('sync_remote_user_id')),
+      remoteUserId: this.getMetaValue('sync_remote_user_id'),
+      remoteEmail: this.getMetaValue('sync_remote_email'),
+      lastSyncedAt: this.getMetaValue('sync_last_synced_at'),
+      lastSyncSummary: this.getMetaValue('sync_last_summary')
+    }
+  }
+
+  async connectSyncAccount(input: SyncAuthInput): Promise<SyncStatus> {
+    const client = new SupabaseSyncClient()
+    const account = await client.signIn(input)
+    this.syncClient = client
+    const now = nowIso()
+    const currentUserId = this.getCurrentUserId()
+    this.db.transaction(() => {
+      this.setMetaValue('sync_remote_user_id', account.remoteUserId)
+      if (account.email) this.setMetaValue('sync_remote_email', account.email)
+      this.db
+        .prepare('UPDATE users SET remote_user_id = ?, kind = ?, updated_at = ? WHERE id = ?')
+        .run(account.remoteUserId, 'remote', now, currentUserId)
+    })()
+    return this.getSyncStatus()
+  }
+
+  disconnectSyncAccount(): SyncStatus {
+    const currentUserId = this.getCurrentUserId()
+    const now = nowIso()
+    this.syncClient = null
+    this.db.transaction(() => {
+      for (const key of ['sync_remote_user_id', 'sync_remote_email', 'sync_last_synced_at', 'sync_last_summary']) {
+        this.deleteMetaValue(key)
+      }
+      this.db
+        .prepare('UPDATE users SET remote_user_id = NULL, kind = ?, updated_at = ? WHERE id = ?')
+        .run('local', now, currentUserId)
+    })()
+    return this.getSyncStatus()
+  }
+
+  async runSync(input: SyncRunInput): Promise<SyncRunResult> {
+    if (!this.syncClient) {
+      throw new Error('Bitte verbinde dich erneut mit der Online-Version.')
+    }
+    const remoteUserId = this.getMetaValue('sync_remote_user_id')
+    if (!remoteUserId) throw new Error('Bitte verbinde dich zuerst mit der Online-Version.')
+    const localUserId = this.getCurrentUserId()
+
+    if (input.action === 'download') {
+      const remoteSnapshot = await this.syncClient.downloadLatestSnapshot(localUserId)
+      if (!remoteSnapshot) throw new Error('Online wurden noch keine Daten für diesen Arbeitsbereich gefunden.')
+      const filePayloads = await this.downloadSnapshotFiles(remoteSnapshot)
+      await writeSnapshotFiles({ filesDir: this.filesDir, snapshot: remoteSnapshot, filePayloads })
+      const result = restoreWorkspaceSnapshot({ db: this.db, snapshot: remoteSnapshot, targetUserId: localUserId })
+      this.rememberSyncResult(result)
+      return result
+    }
+
+    if (input.action === 'merge') {
+      const remoteSnapshot = await this.syncClient.downloadLatestSnapshot(localUserId)
+      if (remoteSnapshot) {
+        const localSnapshot = this.createSnapshot(remoteUserId)
+        assertSnapshotsCanMerge(localSnapshot, remoteSnapshot)
+      }
+    }
+
+    const snapshot = this.createSnapshot(remoteUserId)
+    const filePayloads = await readExistingSnapshotFiles(snapshot)
+    for (const payload of filePayloads) {
+      await this.syncClient.uploadFile(payload.file.storagePath, payload.bytes)
+    }
+    await this.syncClient.uploadSnapshot(snapshot)
+    const result = createSyncResult({
+      action: input.action,
+      summary: input.action === 'merge' ? 'Alles wurde abgeglichen.' : 'Lokale Daten wurden online gesichert.',
+      uploadedFiles: filePayloads.length,
+      downloadedFiles: 0,
+      snapshot
+    })
+    this.rememberSyncResult(result)
+    return result
   }
 
   getCurrentUser(): User {
@@ -1995,6 +2093,14 @@ export class AppServices {
     this.db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run('current_user_id', userId)
   }
 
+  private setMetaValue(key: string, value: string): void {
+    this.db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run(key, value)
+  }
+
+  private deleteMetaValue(key: string): void {
+    this.db.prepare('DELETE FROM meta WHERE key = ?').run(key)
+  }
+
   private getMetaValue(key: string): string | null {
     const row = this.db.prepare('SELECT value FROM meta WHERE key = ?').get(key) as
       | { value: string }
@@ -2006,6 +2112,45 @@ export class AppServices {
     const now = nowIso()
     this.db.prepare(`UPDATE users SET ${column} = ?, updated_at = ? WHERE id = ?`).run(now, now, userId)
     return this.switchUser(userId)
+  }
+
+  private createSnapshot(remoteUserId: string): WorkspaceSnapshot {
+    return createWorkspaceSnapshot({
+      db: this.db,
+      filesDir: this.filesDir,
+      localUserId: this.getCurrentUserId(),
+      remoteUserId
+    })
+  }
+
+  private async downloadSnapshotFiles(snapshot: WorkspaceSnapshot): Promise<Array<{ relativePath: string; bytes: Uint8Array }>> {
+    if (!this.syncClient) return []
+    const payloads: Array<{ relativePath: string; bytes: Uint8Array }> = []
+    for (const file of snapshot.files) {
+      payloads.push({
+        relativePath: file.relativePath,
+        bytes: await this.syncClient.downloadFile(file.storagePath)
+      })
+    }
+    return payloads
+  }
+
+  private rememberSyncResult(result: SyncRunResult): void {
+    this.setMetaValue('sync_last_synced_at', result.syncedAt)
+    this.setMetaValue('sync_last_summary', result.summary)
+  }
+}
+
+function assertSnapshotsCanMerge(localSnapshot: WorkspaceSnapshot, remoteSnapshot: WorkspaceSnapshot): void {
+  for (const [table, localRows] of Object.entries(localSnapshot.tables)) {
+    const remoteById = new Map((remoteSnapshot.tables[table] ?? []).map((row) => [String(row.id), row]))
+    for (const localRow of localRows) {
+      const remoteRow = remoteById.get(String(localRow.id))
+      if (!remoteRow) continue
+      if (hashJson(localRow) !== hashJson(remoteRow)) {
+        throw new Error('Einige Daten wurden lokal und online unterschiedlich geändert. Bitte wähle eine Richtung für die Übertragung.')
+      }
+    }
   }
 }
 

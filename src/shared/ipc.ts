@@ -19,9 +19,20 @@ import type {
   LegalArea,
   ReviewCard,
   ReviewRating,
+  SyncAuthInput,
+  SyncRunInput,
+  SyncRunResult,
+  SyncStatus,
   Submission
 } from './schemas'
 import type { User } from './schemas'
+
+export type {
+  SyncAuthInput,
+  SyncRunInput,
+  SyncRunResult,
+  SyncStatus
+} from './schemas'
 
 export type FolderDto = SchemaFolder
 export type ExamListItem = SchemaExamListItem
@@ -247,4 +258,8 @@ export type AppApi = {
   createCorrection(submissionId: string): Promise<Correction>
   updateCorrection(input: UpdateCorrectionInput): Promise<Correction>
   addInlineComment(input: AddInlineCommentInput): Promise<InlineComment>
+  getSyncStatus(): Promise<SyncStatus>
+  connectSyncAccount(input: SyncAuthInput): Promise<SyncStatus>
+  disconnectSyncAccount(): Promise<SyncStatus>
+  runSync(input: SyncRunInput): Promise<SyncRunResult>
 }

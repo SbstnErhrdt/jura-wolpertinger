@@ -342,6 +342,34 @@ export const learningDashboardSchema = z.object({
   learnedToday: z.boolean()
 })
 
+export const syncStatusSchema = z.object({
+  connected: z.boolean(),
+  remoteUserId: z.string().nullable(),
+  remoteEmail: z.string().nullable(),
+  lastSyncedAt: isoDateSchema.nullable(),
+  lastSyncSummary: z.string().nullable()
+})
+
+export const syncAuthInputSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(1)
+})
+
+export const syncRunActionSchema = z.enum(['upload', 'download', 'merge'])
+
+export const syncRunInputSchema = z.object({
+  action: syncRunActionSchema
+})
+
+export const syncRunResultSchema = z.object({
+  action: syncRunActionSchema,
+  syncedAt: isoDateSchema,
+  summary: z.string(),
+  uploadedFiles: z.number().int().nonnegative(),
+  downloadedFiles: z.number().int().nonnegative(),
+  tableCounts: z.record(z.number().int().nonnegative())
+})
+
 export const attachmentSchema = z.object({
   schemaVersion: z.literal(1),
   id: uuidSchema,
@@ -386,6 +414,11 @@ export type LearningExportFile = z.infer<typeof learningExportFileSchema>
 export type LearningImportResult = z.infer<typeof learningImportResultSchema>
 export type LearningReviewEvent = z.infer<typeof learningReviewEventSchema>
 export type LearningDashboard = z.infer<typeof learningDashboardSchema>
+export type SyncStatus = z.infer<typeof syncStatusSchema>
+export type SyncAuthInput = z.infer<typeof syncAuthInputSchema>
+export type SyncRunAction = z.infer<typeof syncRunActionSchema>
+export type SyncRunInput = z.infer<typeof syncRunInputSchema>
+export type SyncRunResult = z.infer<typeof syncRunResultSchema>
 export type ImprovementSuggestion = z.infer<typeof improvementSuggestionSchema>
 export type AiInlineCommentSuggestion = z.infer<typeof aiInlineCommentSuggestionSchema>
 export type Attachment = z.infer<typeof attachmentSchema>

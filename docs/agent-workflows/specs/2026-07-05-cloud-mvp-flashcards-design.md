@@ -80,7 +80,7 @@ Der MVP enthaelt:
 - Selbstbewertung
 - Review-Historie
 - Scheduler mit faelligen Karten
-- Seed-Import vorhandener Decks aus `/Users/sbstn/Documents/sabine/Karteikarten/decks`
+- Karteikarten-Dateien sichern und auswaehlen
 
 Nicht im MVP:
 
@@ -88,7 +88,7 @@ Nicht im MVP:
 - Aufbau-Typ mit KI-Abgleich
 - automatisierte Erstellung aus Dokumenten
 - Teilen, Freigeben und Kollaboration
-- allgemeiner Nutzer-Importer
+- automatischer Import aus beliebigen Nutzerdateien
 
 ## Collections, Ordner und Tags
 
@@ -105,7 +105,7 @@ Regeln:
 - Public oder geteilte Collections werden beim Import als eigene Kopie uebernommen.
 - Tags werden beim Kopieren mitgenommen, aber als Tags der eigenen Kopie gespeichert.
 - Ordner werden beim Import nicht uebernommen. Der Nutzer waehlt einen Zielordner; Default ist `Unsortiert`.
-- Seed-Karten bleiben zunaechst private Testdaten und werden erst nach fachlicher Pruefung public.
+- Vorhandene Testkarten bleiben Entwicklungsdaten und werden nicht als sichtbarer Nutzerflow angeboten.
 
 ## Wiederholen und Bewertung
 
@@ -200,7 +200,7 @@ Der MVP ist erfolgreich, wenn:
 
 ## Offene Nicht-MVP-Themen
 
-- allgemeiner Importer fuer Nutzerdateien
+- automatischer Import aus beliebigen Nutzerdateien
 - Bilder und Medien in Karteikarten
 - Aufbau-Karten mit KI-Abgleich
 - Public Collections und Kollaboration
