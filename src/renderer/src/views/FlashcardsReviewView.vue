@@ -33,7 +33,20 @@
         <span>{{ positionLabel }}</span>
         <ActionMenu label="Kartenaktionen" :items="reviewActions" />
       </div>
-      <button class="study-card-face" type="button" @click="showBack = true">
+      <button
+        :key="`${currentCard.id}-${showBack ? 'back' : 'front'}`"
+        :class="[
+          'study-card-face',
+          showBack ? 'study-card-face-back' : 'study-card-face-front',
+          {
+            'study-card-motion-flip': cardMotion === 'flip',
+            'study-card-motion-next': cardMotion === 'next',
+            'study-card-motion-previous': cardMotion === 'previous'
+          }
+        ]"
+        type="button"
+        @click="revealBack"
+      >
         <MarkdownBlock :markdown="showBack ? currentCard.backMarkdown : currentCard.frontMarkdown" />
       </button>
       <div v-if="currentCard.tags.length" class="study-card-tags" aria-label="Tags">
@@ -42,12 +55,12 @@
       <p v-if="feedback" class="review-feedback">{{ feedback }}</p>
       <div class="review-navigation">
         <button type="button" class="secondary" :disabled="!canGoPrevious || ratingBusy" @click="previousCard">
-          <span class="key-hint" aria-hidden="true">←</span>
+          <kbd class="key-hint" aria-hidden="true">←</kbd>
           Vorherige
         </button>
         <button type="button" class="secondary" :disabled="ratingBusy" @click="skipCard">
           Überspringen
-          <span class="key-hint" aria-hidden="true">→</span>
+          <kbd class="key-hint" aria-hidden="true">→</kbd>
         </button>
       </div>
       <div v-if="showBack" class="rating-row">
@@ -76,7 +89,7 @@
           <small>sicher</small>
         </button>
       </div>
-      <button v-else class="secondary reveal-button" @click="showBack = true">
+      <button v-else class="secondary reveal-button" @click="revealBack">
         Rückseite zeigen
         <kbd class="key-hint">Enter</kbd>
       </button>
@@ -100,6 +113,7 @@ const cards = ref<ReviewCard[]>([])
 const againQueue = ref<ReviewCard[]>([])
 const currentIndex = ref(0)
 const showBack = ref(false)
+const cardMotion = ref<'flip' | 'next' | 'previous'>('flip')
 const feedback = ref('')
 const ratingBusy = ref(false)
 const collectionId = computed(() => (typeof route.query.collection === 'string' ? route.query.collection : null))
@@ -171,6 +185,7 @@ async function load(): Promise<void> {
   }
   currentIndex.value = 0
   showBack.value = false
+  cardMotion.value = 'flip'
   loading.value = false
 }
 
@@ -196,6 +211,7 @@ async function rate(rating: ReviewRating): Promise<void> {
 function nextCard(): void {
   ratingBusy.value = false
   feedback.value = ''
+  cardMotion.value = 'next'
   showBack.value = false
   if (currentIndex.value < cards.value.length - 1) {
     currentIndex.value += 1
@@ -214,6 +230,7 @@ function nextCard(): void {
 
 function previousCard(): void {
   if (!canGoPrevious.value || ratingBusy.value) return
+  cardMotion.value = 'previous'
   currentIndex.value -= 1
   feedback.value = ''
   showBack.value = false
@@ -225,9 +242,15 @@ function skipCard(): void {
 }
 
 function removeFromSession(): void {
+  cardMotion.value = 'next'
   cards.value.splice(currentIndex.value, 1)
   if (currentIndex.value >= cards.value.length && currentIndex.value > 0) currentIndex.value -= 1
   showBack.value = false
+}
+
+function revealBack(): void {
+  cardMotion.value = 'flip'
+  showBack.value = true
 }
 
 function handleReviewKeydown(event: KeyboardEvent): void {
@@ -236,7 +259,7 @@ function handleReviewKeydown(event: KeyboardEvent): void {
 
   if (event.key === 'Enter' && !showBack.value) {
     event.preventDefault()
-    showBack.value = true
+    revealBack()
     return
   }
 

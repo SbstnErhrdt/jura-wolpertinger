@@ -10,6 +10,11 @@
   --color-primary-strong: #006ea8;
   --color-danger: #a72d2d;
   --color-warning: #c56b00;
+  --keycap-bg: #ffffff;
+  --keycap-bg-top: #f9fbfc;
+  --keycap-border: #b9cbd5;
+  --keycap-shadow: #90a8b5;
+  --keycap-text: #1e3440;
   --radius-control: 6px;
   --radius-card: 8px;
   --shadow-panel: 0 18px 60px rgba(0, 79, 128, 0.12);
@@ -861,6 +866,7 @@ textarea {
   display: grid;
   gap: 18px;
   min-height: min(620px, calc(100vh - 160px));
+  perspective: 1400px;
 }
 
 .study-card-toolbar {
@@ -895,6 +901,7 @@ textarea {
 
 .study-card-face {
   align-items: center;
+  backface-visibility: hidden;
   background: var(--color-surface-muted);
   border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-card);
@@ -902,12 +909,76 @@ textarea {
   display: grid;
   min-height: 340px;
   padding: 32px;
+  transform-origin: center;
+  transform-style: preserve-3d;
   text-align: left;
   width: 100%;
 }
 
+.study-card-motion-flip {
+  animation: study-card-flip 240ms ease-out;
+}
+
+.study-card-motion-next {
+  animation: study-card-slide-next 220ms ease-out;
+}
+
+.study-card-motion-previous {
+  animation: study-card-slide-previous 220ms ease-out;
+}
+
+.study-card-face-front {
+  --study-card-flip-start: rotateY(-10deg) translateY(6px) scale(0.985);
+}
+
+.study-card-face-back {
+  --study-card-flip-start: rotateY(10deg) translateY(6px) scale(0.985);
+}
+
 .study-card-face:hover {
   filter: none;
+}
+
+@keyframes study-card-flip {
+  0% {
+    opacity: 0;
+    transform: var(--study-card-flip-start);
+  }
+
+  100% {
+    opacity: 1;
+    transform: rotateY(0) translateY(0) scale(1);
+  }
+}
+
+@keyframes study-card-slide-next {
+  0% {
+    opacity: 0;
+    transform: translateX(26px) scale(0.99);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes study-card-slide-previous {
+  0% {
+    opacity: 0;
+    transform: translateX(-26px) scale(0.99);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .study-card-face {
+    animation: none;
+  }
 }
 
 .markdown-block {
@@ -941,12 +1012,16 @@ textarea {
 
 .key-hint {
   align-items: center;
-  background: rgba(255, 255, 255, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.32);
+  background: linear-gradient(180deg, var(--keycap-bg-top), var(--keycap-bg));
+  border: 1px solid var(--keycap-border);
   border-radius: 5px;
-  color: inherit;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    0 2px 0 var(--keycap-shadow),
+    0 6px 12px rgba(30, 52, 64, 0.12);
+  color: var(--keycap-text);
   display: inline-flex;
-  font-family: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 12px;
   font-weight: 850;
   justify-content: center;
@@ -954,12 +1029,47 @@ textarea {
   min-height: 22px;
   min-width: 24px;
   padding: 0 6px;
+  position: relative;
+  text-transform: none;
+  transform: translateY(-1px);
+  transition:
+    box-shadow 140ms ease,
+    transform 140ms ease;
+}
+
+.key-hint::after {
+  background: rgba(255, 255, 255, 0.56);
+  border-radius: 999px;
+  content: "";
+  height: 1px;
+  left: 5px;
+  pointer-events: none;
+  position: absolute;
+  right: 5px;
+  top: 3px;
 }
 
 .secondary .key-hint {
-  background: var(--color-surface-muted);
-  border-color: var(--color-border);
-  color: var(--color-primary-strong);
+  color: var(--keycap-text);
+}
+
+button:hover .key-hint,
+.secondary:hover .key-hint {
+  transform: translateY(0);
+}
+
+.key-hint:active,
+button:active .key-hint,
+.secondary:active .key-hint {
+  box-shadow:
+    inset 0 1px 1px rgba(30, 52, 64, 0.1),
+    0 1px 0 var(--keycap-shadow),
+    0 3px 8px rgba(30, 52, 64, 0.1);
+  transform: translateY(1px);
+}
+
+.rating-option .key-hint {
+  margin: 2px 0;
 }
 
 .rating-option {
@@ -993,6 +1103,11 @@ textarea {
 .review-navigation button:disabled {
   cursor: not-allowed;
   opacity: 0.62;
+}
+
+.rating-option:disabled .key-hint,
+.review-navigation button:disabled .key-hint {
+  transform: translateY(0);
 }
 
 .rating-option.again {
@@ -3235,6 +3350,11 @@ textarea {
   --color-text-muted: #afc0c7;
   --color-primary: #168fd1;
   --color-primary-strong: #7fcaf0;
+  --keycap-bg: #20323a;
+  --keycap-bg-top: #2b414b;
+  --keycap-border: #4a6571;
+  --keycap-shadow: #0a171d;
+  --keycap-text: #eef7fb;
   --shadow-panel: none;
   background: var(--color-bg);
   color: var(--color-text);
@@ -3297,6 +3417,17 @@ textarea {
   background: var(--color-surface-muted);
   border-color: var(--color-border-strong);
   color: var(--color-text);
+}
+
+:root[data-theme='dark'] .key-hint {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 2px 0 var(--keycap-shadow),
+    0 7px 14px rgba(0, 0, 0, 0.28);
+}
+
+:root[data-theme='dark'] .key-hint::after {
+  background: rgba(255, 255, 255, 0.18);
 }
 
 :root[data-theme='dark'] .rating-option.again {
