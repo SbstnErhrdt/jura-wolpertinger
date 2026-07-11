@@ -45,8 +45,8 @@ describe('paginated list UI affordances', () => {
   it('wires collection cards through pagination and loading affordances', async () => {
     const source = await readFile(resolve(rendererRoot, 'views/FlashcardsCollectionDetailView.vue'), 'utf8')
 
-    expect(source).toContain('AppPagination')
-    expect(source).toContain('ListSkeleton')
+    expect(source).toContain('<UPagination')
+    expect(source).toContain('<USkeleton')
     expect(source).toContain('listLearningCardsPage')
     expect(source).toContain('collection?.cardCount')
     expect(source).toContain('aria-busy')

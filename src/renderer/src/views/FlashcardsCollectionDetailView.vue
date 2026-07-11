@@ -2,51 +2,41 @@
   <section class="page flashcards-page">
     <header class="page-header">
       <div>
-        <AppBreadcrumb :items="breadcrumbItems" />
+        <UBreadcrumb class="app-breadcrumb" :items="withHomeIcon(breadcrumbItems)" />
         <p class="eyebrow">Sammlung</p>
         <h1>{{ collection?.name || 'Sammlung' }}</h1>
         <p>{{ collection?.subject || 'Allgemein' }} · {{ collection?.cardCount ?? cardsTotal }} Karten · {{ collection?.dueCount ?? 0 }} fällig</p>
       </div>
       <div class="header-actions">
-        <RouterLink class="secondary" :to="{ name: 'flashcards-collections' }">Zurück</RouterLink>
-        <RouterLink class="secondary" :to="{ name: 'flashcards-review', query: { collection: collectionId } }">
+        <UButton color="neutral" variant="outline" :to="{ name: 'flashcards-collections' }">Zurück</UButton>
+        <UButton color="neutral" variant="outline" :to="{ name: 'flashcards-review', query: { collection: collectionId } }">
           Wiederholen
-        </RouterLink>
-        <button type="button" @click="openCreateCardDialog">
+        </UButton>
+        <UButton type="button" @click="openCreateCardDialog">
           <Plus :size="17" aria-hidden="true" />
           Neue Karteikarte
-        </button>
+        </UButton>
       </div>
     </header>
 
-    <p v-if="transferMessage" class="action-notice">{{ transferMessage }}</p>
+    <UAlert v-if="transferMessage" class="action-notice" color="success" :description="transferMessage" />
 
     <div class="collection-toolbar">
-      <label class="dialog-field">
-        Suchen
-        <input v-model="search" placeholder="Titel, Vorderseite, Rückseite oder Schlagwort" />
-      </label>
-      <label class="dialog-field">
-        Sortieren
-        <select v-model="sortMode">
-          <option value="updated">Zuletzt bearbeitet</option>
-          <option value="title">Titel</option>
-          <option value="due">Fälligkeit</option>
-          <option value="rating">Letzte Bewertung</option>
-        </select>
-      </label>
+      <UFormField class="dialog-field" label="Suchen"><UInput v-model="search" placeholder="Titel, Vorderseite, Rückseite oder Schlagwort" /></UFormField>
+      <UFormField class="dialog-field" label="Sortieren"><USelect v-model="sortMode" :items="sortOptions" value-key="value" /></UFormField>
     </div>
 
-    <ListSkeleton v-if="loading" variant="flashcard" :count="4" />
-    <p v-else-if="loadError" class="action-notice error">
-      <span>{{ loadError }}</span>
-      <button type="button" class="secondary" @click="reloadCards">Erneut versuchen</button>
-    </p>
+    <div v-if="loading" class="skeleton-list" aria-hidden="true">
+      <UCard v-for="index in 4" :key="index" class="skeleton-tile"><USkeleton class="h-5 w-2/5" /><USkeleton class="mt-3 h-4 w-full" /><USkeleton class="mt-2 h-4 w-3/5" /></UCard>
+    </div>
+    <UAlert v-else-if="loadError" class="action-notice" color="error" :description="loadError">
+      <template #actions><UButton color="neutral" variant="outline" @click="reloadCards">Erneut versuchen</UButton></template>
+    </UAlert>
 
     <div v-else-if="!filteredCards.length" class="empty-state">
       <h2>Noch keine Karteikarten</h2>
       <p>{{ search.trim() ? 'Keine Karteikarte passt zur aktuellen Suche.' : 'Erstelle die erste Karteikarte direkt in dieser Sammlung.' }}</p>
-      <button type="button" @click="openCreateCardDialog">Neue Karteikarte</button>
+      <UButton type="button" @click="openCreateCardDialog">Neue Karteikarte</UButton>
     </div>
 
     <div
@@ -60,7 +50,7 @@
           <h2>{{ card.title }}</h2>
           <p>{{ preview(card.frontMarkdown) }}</p>
           <div v-if="card.tags.length" class="study-card-tags" aria-label="Schlagwörter">
-            <AppBadge v-for="tag in card.tags" :key="tag">{{ tag }}</AppBadge>
+            <UBadge v-for="tag in card.tags" :key="tag" variant="soft">{{ tag }}</UBadge>
           </div>
         </div>
         <dl class="card-performance">
@@ -81,70 +71,59 @@
             <dd>{{ card.lapses }}</dd>
           </div>
         </dl>
-        <ActionMenu label="Karteikartenaktionen" :items="cardActions(card)" />
+        <UDropdownMenu :items="cardActions(card)">
+          <UButton color="neutral" variant="ghost" icon="i-lucide-ellipsis" aria-label="Karteikartenaktionen" />
+        </UDropdownMenu>
       </article>
     </div>
-    <AppPagination
+    <nav
       v-if="!loading && !loadError && cardsTotal > 0"
+      class="app-pagination"
       label="Karteikartenseiten"
-      :page="cardsPage"
-      :page-size="cardsPageSize"
-      :page-count="cardsPageCount"
-      :total="cardsTotal"
-      :disabled="refreshing"
-      @update:page="setCardsPage"
-      @update:page-size="setCardsPageSize"
-    />
+    >
+      <span>{{ (cardsPage - 1) * cardsPageSize + 1 }}-{{ Math.min(cardsTotal, cardsPage * cardsPageSize) }} von {{ cardsTotal }}</span>
+      <UPagination :model-value="cardsPage" :total="cardsTotal" :items-per-page="cardsPageSize" :disabled="refreshing" @update:model-value="setCardsPage" />
+      <USelect :model-value="cardsPageSize" :items="pageSizeOptions" :disabled="refreshing" @update:model-value="setCardsPageSize" />
+    </nav>
 
-    <div v-if="showCardDialog" class="dialog-backdrop" @click="cancelCardDialog">
-      <div class="dialog-card dialog-card-wide" @click.stop>
+    <UModal :open="showCardDialog" @update:open="showCardDialog = $event">
+      <template #content>
+      <div class="dialog-card dialog-card-wide">
         <h2>{{ editingCard ? 'Karteikarte bearbeiten' : 'Neue Karteikarte' }}</h2>
         <p class="dialog-copy">
           {{ editingCard ? 'Passe die Karteikarte an.' : `Diese Karte wird in der Sammlung „${collection?.name}“ gespeichert.` }}
         </p>
         <form class="dialog-form" @submit.prevent="saveCard">
-          <label class="dialog-field">
-            Titel
-            <input v-model="cardTitle" placeholder="Kurzer Titel, z. B. Abmahnung" autofocus />
-          </label>
-          <label class="dialog-field">
-            Vorderseite
-            <textarea v-model="cardFront" rows="4" placeholder="Was soll auf der Vorderseite stehen?" />
-          </label>
-          <label class="dialog-field">
-            Rückseite
-            <textarea v-model="cardBack" rows="5" placeholder="Was soll auf der Rückseite stehen?" />
-          </label>
+          <UFormField class="dialog-field" label="Titel"><UInput v-model="cardTitle" placeholder="Kurzer Titel, z. B. Abmahnung" autofocus /></UFormField>
+          <UFormField class="dialog-field" label="Vorderseite"><UTextarea v-model="cardFront" :rows="4" placeholder="Was soll auf der Vorderseite stehen?" /></UFormField>
+          <UFormField class="dialog-field" label="Rückseite"><UTextarea v-model="cardBack" :rows="5" placeholder="Was soll auf der Rückseite stehen?" /></UFormField>
           <div class="dialog-field">
             <span>Schlagwörter</span>
             <TagInput v-model="cardTags" :suggestions="tagSuggestions" placeholder="Schlagwörter hinzufügen" />
           </div>
           <div class="dialog-actions">
-            <button type="button" class="secondary" @click="cancelCardDialog">Abbrechen</button>
-            <button type="submit" :disabled="!canCreateCard">
+            <UButton type="button" color="neutral" variant="outline" @click="cancelCardDialog">Abbrechen</UButton>
+            <UButton type="submit" :disabled="!canCreateCard">
               <Save :size="17" aria-hidden="true" />
               {{ editingCard ? 'Änderungen speichern' : 'Karteikarte speichern' }}
-            </button>
+            </UButton>
           </div>
         </form>
       </div>
-    </div>
+      </template>
+    </UModal>
   </section>
 </template>
 
 <script setup lang="ts">
-import type { Component } from 'vue'
 import { computed, onMounted, ref, watch } from 'vue'
-import { Pencil, Plus, Save } from 'lucide-vue-next'
+import { Plus, Save } from 'lucide-vue-next'
 import { useRoute, useRouter } from 'vue-router'
 import type { LearningCard, LearningCollection, ReviewRating } from '@shared/schemas'
 import { api } from '../api'
 import TagInput from '../components/TagInput.vue'
-import ActionMenu, { type ActionMenuItem } from '../components/ui/ActionMenu.vue'
-import AppBreadcrumb, { type BreadcrumbItem } from '../components/ui/AppBreadcrumb.vue'
-import AppBadge from '../components/ui/AppBadge.vue'
-import AppPagination from '../components/ui/AppPagination.vue'
-import ListSkeleton from '../components/ui/ListSkeleton.vue'
+import type { AppActionMenuItem } from '../ui/actionMenu'
+import { type AppBreadcrumbItem, withHomeIcon } from '../ui/breadcrumbs'
 
 const route = useRoute()
 const router = useRouter()
@@ -160,6 +139,13 @@ const cardsPage = ref(1)
 const cardsPageSize = ref(25)
 const cardsPageCount = ref(1)
 const cardsTotal = ref(0)
+const pageSizeOptions = [10, 25, 50, 100]
+const sortOptions = [
+  { label: 'Zuletzt bearbeitet', value: 'updated' },
+  { label: 'Titel', value: 'title' },
+  { label: 'Fälligkeit', value: 'due' },
+  { label: 'Letzte Bewertung', value: 'rating' }
+]
 const transferMessage = ref('')
 const showCardDialog = ref(false)
 const editingCard = ref<LearningCard | null>(null)
@@ -168,9 +154,9 @@ const cardFront = ref('')
 const cardBack = ref('')
 const cardTags = ref<string[]>([])
 const canCreateCard = computed(() => Boolean(cardFront.value.trim()) && Boolean(cardBack.value.trim()))
-const breadcrumbItems = computed<BreadcrumbItem[]>(() => [
+const breadcrumbItems = computed<AppBreadcrumbItem[]>(() => [
   { label: 'Home', to: { name: 'home' } },
-  { label: 'Karteikarten' },
+  { label: 'Karteikarten', to: { name: 'flashcards' } },
   { label: 'Sammlungen', to: { name: 'flashcards-collections' } },
   { label: collection.value?.name || 'Sammlung' }
 ])
@@ -287,12 +273,12 @@ async function saveCard(): Promise<void> {
   await loadCards()
 }
 
-function cardActions(card: LearningCard): ActionMenuItem[] {
+function cardActions(card: LearningCard): AppActionMenuItem[] {
   return [
     {
       label: 'Karteikarte bearbeiten',
-      icon: Pencil as Component,
-      action: () => openEditCardDialog(card)
+      icon: 'i-lucide-pencil',
+      onSelect: () => openEditCardDialog(card)
     }
   ]
 }

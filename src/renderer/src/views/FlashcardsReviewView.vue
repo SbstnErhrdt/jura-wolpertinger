@@ -2,26 +2,26 @@
   <section class="flashcard-review">
     <header class="review-header">
       <div>
-        <AppBreadcrumb :items="breadcrumbItems" />
+        <UBreadcrumb class="app-breadcrumb" :items="withHomeIcon(breadcrumbItems)" />
         <p class="eyebrow">Wiederholen</p>
         <h1>Karteikarten</h1>
       </div>
-      <RouterLink class="secondary" :to="{ name: 'flashcards-collections' }">Sammlungen</RouterLink>
+      <UButton color="neutral" variant="outline" :to="{ name: 'flashcards-collections' }">Sammlungen</UButton>
     </header>
 
-    <div v-if="loading" class="empty-state">Lade Karten...</div>
+    <UCard v-if="loading" class="empty-state"><USkeleton class="h-6 w-1/3" /><USkeleton class="mt-4 h-24 w-full" /></UCard>
     <div v-else-if="sessionCompleted" class="empty-state">
       <h2>Runde geschafft</h2>
       <p>Du kannst die Karten direkt noch einmal üben oder zurück zu deinen Sammlungen gehen.</p>
       <div class="empty-actions">
-        <button type="button" @click="restartPractice">Nochmal üben</button>
-        <RouterLink class="secondary" :to="{ name: 'flashcards-collections' }">Zu den Sammlungen</RouterLink>
+        <UButton type="button" @click="restartPractice">Nochmal üben</UButton>
+        <UButton color="neutral" variant="outline" :to="{ name: 'flashcards-collections' }">Zu den Sammlungen</UButton>
       </div>
     </div>
     <div v-else-if="!currentCard" class="empty-state">
       <h2>{{ emptyTitle }}</h2>
       <p>{{ emptyCopy }}</p>
-      <RouterLink class="secondary" :to="{ name: 'flashcards-collections' }">Zu den Sammlungen</RouterLink>
+      <UButton color="neutral" variant="outline" :to="{ name: 'flashcards-collections' }">Zu den Sammlungen</UButton>
     </div>
 
     <article v-else class="study-card">
@@ -31,9 +31,11 @@
           <strong>{{ currentCard.title }}</strong>
         </div>
         <span>{{ positionLabel }}</span>
-        <ActionMenu label="Kartenaktionen" :items="reviewActions" />
+        <UDropdownMenu :items="reviewActions">
+          <UButton color="neutral" variant="ghost" icon="i-lucide-ellipsis" aria-label="Kartenaktionen" />
+        </UDropdownMenu>
       </div>
-      <button
+      <UButton
         :key="`${currentCard.id}-${showBack ? 'back' : 'front'}`"
         :class="[
           'study-card-face',
@@ -45,54 +47,56 @@
           }
         ]"
         type="button"
+        color="neutral"
+        variant="ghost"
         @click="revealBack"
       >
         <MarkdownBlock :markdown="showBack ? currentCard.backMarkdown : currentCard.frontMarkdown" />
-      </button>
+      </UButton>
       <div v-if="currentCard.tags.length" class="study-card-tags" aria-label="Tags">
-        <AppBadge v-for="tag in currentCard.tags" :key="tag">{{ tag }}</AppBadge>
+        <UBadge v-for="tag in currentCard.tags" :key="tag" variant="soft">{{ tag }}</UBadge>
       </div>
       <p v-if="feedback" class="review-feedback">{{ feedback }}</p>
       <div class="review-navigation">
-        <button type="button" class="secondary" :disabled="!canGoPrevious || ratingBusy" @click="previousCard">
+        <UButton type="button" color="neutral" variant="outline" :disabled="!canGoPrevious || ratingBusy" @click="previousCard">
           <kbd class="key-hint" aria-hidden="true">←</kbd>
           Vorherige
-        </button>
-        <button type="button" class="secondary" :disabled="ratingBusy" @click="skipCard">
+        </UButton>
+        <UButton type="button" color="neutral" variant="outline" :disabled="ratingBusy" @click="skipCard">
           Überspringen
           <kbd class="key-hint" aria-hidden="true">→</kbd>
-        </button>
+        </UButton>
       </div>
       <div v-if="showBack" class="rating-row">
-        <button class="rating-option again" :disabled="ratingBusy" @click="rate(1)">
+        <UButton class="rating-option again" color="error" variant="soft" :disabled="ratingBusy" @click="rate(1)">
           <RotateCcw :size="18" aria-hidden="true" />
           <span>Nochmal</span>
           <kbd class="key-hint">1</kbd>
           <small>nicht sicher</small>
-        </button>
-        <button class="rating-option hard" :disabled="ratingBusy" @click="rate(2)">
+        </UButton>
+        <UButton class="rating-option hard" color="warning" variant="soft" :disabled="ratingBusy" @click="rate(2)">
           <TriangleAlert :size="18" aria-hidden="true" />
           <span>Schwer</span>
           <kbd class="key-hint">2</kbd>
           <small>wackelig</small>
-        </button>
-        <button class="rating-option good" :disabled="ratingBusy" @click="rate(3)">
+        </UButton>
+        <UButton class="rating-option good" color="success" variant="soft" :disabled="ratingBusy" @click="rate(3)">
           <CircleCheck :size="18" aria-hidden="true" />
           <span>Gut</span>
           <kbd class="key-hint">3</kbd>
           <small>sauber</small>
-        </button>
-        <button class="rating-option easy" :disabled="ratingBusy" @click="rate(4)">
+        </UButton>
+        <UButton class="rating-option easy" color="info" variant="soft" :disabled="ratingBusy" @click="rate(4)">
           <Sparkles :size="18" aria-hidden="true" />
           <span>Leicht</span>
           <kbd class="key-hint">4</kbd>
           <small>sicher</small>
-        </button>
+        </UButton>
       </div>
-      <button v-else class="secondary reveal-button" @click="revealBack">
+      <UButton v-else color="neutral" variant="outline" class="reveal-button" @click="revealBack">
         Rückseite zeigen
         <kbd class="key-hint">Enter</kbd>
-      </button>
+      </UButton>
     </article>
   </section>
 </template>
@@ -100,12 +104,11 @@
 <script setup lang="ts">
 import { computed, defineComponent, h, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { CircleCheck, RotateCcw, Sparkles, Trash2, TriangleAlert } from 'lucide-vue-next'
+import { CircleCheck, RotateCcw, Sparkles, TriangleAlert } from 'lucide-vue-next'
 import type { ReviewCard, ReviewRating } from '@shared/schemas'
 import { api } from '../api'
-import ActionMenu, { type ActionMenuItem } from '../components/ui/ActionMenu.vue'
-import AppBadge from '../components/ui/AppBadge.vue'
-import AppBreadcrumb, { type BreadcrumbItem } from '../components/ui/AppBreadcrumb.vue'
+import type { AppActionMenuItem } from '../ui/actionMenu'
+import { type AppBreadcrumbItem, withHomeIcon } from '../ui/breadcrumbs'
 
 const route = useRoute()
 const loading = ref(true)
@@ -124,10 +127,10 @@ const sessionCompleted = ref(false)
 const currentCard = computed(() => cards.value[currentIndex.value] ?? againQueue.value[0] ?? null)
 const canGoPrevious = computed(() => currentIndex.value > 0 && !sessionCompleted.value)
 const positionLabel = computed(() => `${Math.min(currentIndex.value + 1, cards.value.length)} / ${cards.value.length}`)
-const breadcrumbItems = computed<BreadcrumbItem[]>(() => {
-  const items: BreadcrumbItem[] = [
+const breadcrumbItems = computed<AppBreadcrumbItem[]>(() => {
+  const items: AppBreadcrumbItem[] = [
     { label: 'Home', to: { name: 'home' } },
-    { label: 'Karteikarten' }
+    { label: 'Karteikarten', to: { name: 'flashcards' } }
   ]
   if (collectionId.value) {
     items.push({ label: 'Sammlungen', to: { name: 'flashcards-collections' } })
@@ -146,11 +149,12 @@ const emptyCopy = computed(() => {
   }
   return 'Starte die Übungsrunde mit den vorhandenen Karten.'
 })
-const reviewActions = computed<ActionMenuItem[]>(() => [
+const reviewActions = computed<AppActionMenuItem[]>(() => [
   {
     label: 'Aus Session entfernen',
-    icon: Trash2,
-    action: removeFromSession
+    icon: 'i-lucide-trash-2',
+    color: 'error',
+    onSelect: removeFromSession
   }
 ])
 

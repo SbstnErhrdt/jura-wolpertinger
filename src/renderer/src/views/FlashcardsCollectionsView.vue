@@ -2,43 +2,38 @@
   <section class="page flashcards-page">
     <header class="page-header">
       <div>
-        <AppBreadcrumb :items="breadcrumbItems" />
+        <UBreadcrumb class="app-breadcrumb" :items="withHomeIcon(breadcrumbItems)" />
         <p class="eyebrow">Karteikarten</p>
         <h1>Sammlungen</h1>
         <p>Sammlungen bündeln deine Karteikarten nach Rechtsgebiet, Kurs oder Lernziel.</p>
       </div>
       <div class="header-actions">
-        <button type="button" @click="openCreateCollectionDialog">
+        <UButton type="button" @click="openCreateCollectionDialog">
           <Plus :size="17" aria-hidden="true" />
           Neue Sammlung
-        </button>
-        <button class="secondary" type="button" @click="triggerImport">
+        </UButton>
+        <UButton color="neutral" variant="outline" type="button" @click="triggerImport">
           <Upload :size="17" aria-hidden="true" />
           Datei auswählen
-        </button>
-        <button class="secondary" type="button" @click="exportDecks">
+        </UButton>
+        <UButton color="neutral" variant="outline" type="button" @click="exportDecks">
           <Download :size="17" aria-hidden="true" />
           Karten sichern
-        </button>
+        </UButton>
       </div>
     </header>
 
-    <input
-      ref="importInput"
-      class="visually-hidden"
-      type="file"
-      accept="application/json,.json"
-      @change="importDecks"
-    />
-    <div v-if="transferMessage" class="action-notice" :class="{ error: transferMessageKind === 'error' }">
-      <span>{{ transferMessage }}</span>
-      <button v-if="showImportPrompt" class="secondary" type="button" @click="triggerImport">
-        Karteikarten-Datei auswählen
-      </button>
+    <div ref="importControl" class="visually-hidden">
+      <UInput type="file" accept="application/json,.json" @change="importDecks" />
     </div>
+    <UAlert v-if="transferMessage" class="action-notice" :color="transferMessageKind === 'error' ? 'error' : 'info'" :description="transferMessage">
+      <template v-if="showImportPrompt" #actions>
+        <UButton color="neutral" variant="outline" type="button" @click="triggerImport">Karteikarten-Datei auswählen</UButton>
+      </template>
+    </UAlert>
 
     <div class="collection-grid">
-      <article v-for="collection in collections" :key="collection.id" class="collection-card">
+      <UCard v-for="collection in collections" :key="collection.id" class="collection-card">
         <h2>{{ collection.name }}</h2>
         <p>{{ collection.subject || 'Allgemein' }}</p>
         <div class="collection-stats">
@@ -46,36 +41,32 @@
           <span>{{ collection.dueCount }} fällig</span>
         </div>
         <div class="collection-card-actions">
-          <RouterLink class="secondary" :to="{ name: 'flashcards-collection', params: { id: collection.id } }">
+          <UButton color="neutral" variant="outline" :to="{ name: 'flashcards-collection', params: { id: collection.id } }">
             Öffnen
-          </RouterLink>
-          <RouterLink class="secondary" :to="{ name: 'flashcards-review', query: { collection: collection.id } }">
+          </UButton>
+          <UButton color="neutral" variant="outline" :to="{ name: 'flashcards-review', query: { collection: collection.id } }">
             Wiederholen
-          </RouterLink>
+          </UButton>
         </div>
-      </article>
+      </UCard>
     </div>
 
-    <div v-if="showCreateCollectionDialog" class="dialog-backdrop" @click="cancelCreateCollection">
-      <div class="dialog-card" @click.stop>
+    <UModal :open="showCreateCollectionDialog" @update:open="showCreateCollectionDialog = $event">
+      <template #content>
+      <div class="dialog-card">
         <h2>Neue Sammlung</h2>
         <p class="dialog-copy">Lege einen fachlichen Ort an, in dem du danach Karteikarten erstellst.</p>
         <form class="dialog-form" @submit.prevent="createCollection">
-          <label class="dialog-field">
-            Name
-            <input v-model="newName" placeholder="z. B. Strafrecht AT" autofocus />
-          </label>
-          <label class="dialog-field">
-            Rechtsgebiet
-            <input v-model="newSubject" placeholder="z. B. Strafrecht" />
-          </label>
+          <UFormField class="dialog-field" label="Name"><UInput v-model="newName" placeholder="z. B. Strafrecht AT" autofocus /></UFormField>
+          <UFormField class="dialog-field" label="Rechtsgebiet"><UInput v-model="newSubject" placeholder="z. B. Strafrecht" /></UFormField>
           <div class="dialog-actions">
-            <button type="button" class="secondary" @click="cancelCreateCollection">Abbrechen</button>
-            <button type="submit" :disabled="!newName.trim()">Sammlung speichern</button>
+            <UButton type="button" color="neutral" variant="outline" @click="cancelCreateCollection">Abbrechen</UButton>
+            <UButton type="submit" :disabled="!newName.trim()">Sammlung speichern</UButton>
           </div>
         </form>
       </div>
-    </div>
+      </template>
+    </UModal>
   </section>
 </template>
 
@@ -85,21 +76,21 @@ import { Download, Plus, Upload } from 'lucide-vue-next'
 import { useRoute, useRouter } from 'vue-router'
 import type { LearningCollection } from '@shared/schemas'
 import { api } from '../api'
-import AppBreadcrumb, { type BreadcrumbItem } from '../components/ui/AppBreadcrumb.vue'
+import { type AppBreadcrumbItem, withHomeIcon } from '../ui/breadcrumbs'
 
 const route = useRoute()
 const router = useRouter()
 const collections = ref<LearningCollection[]>([])
 const newName = ref('')
 const newSubject = ref('')
-const importInput = ref<HTMLInputElement | null>(null)
+const importControl = ref<HTMLElement | null>(null)
 const transferMessage = ref('')
 const transferMessageKind = ref<'info' | 'error'>('info')
 const showImportPrompt = ref(false)
 const showCreateCollectionDialog = ref(false)
-const breadcrumbItems: BreadcrumbItem[] = [
+const breadcrumbItems: AppBreadcrumbItem[] = [
   { label: 'Home', to: { name: 'home' } },
-  { label: 'Karteikarten' },
+  { label: 'Karteikarten', to: { name: 'flashcards' } },
   { label: 'Sammlungen' }
 ]
 
@@ -120,7 +111,7 @@ async function load(): Promise<void> {
 function triggerImport(): void {
   showImportPrompt.value = false
   transferMessage.value = ''
-  importInput.value?.click()
+  importControl.value?.querySelector('input')?.click()
 }
 
 async function exportDecks(): Promise<void> {
