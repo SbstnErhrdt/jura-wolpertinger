@@ -1,4 +1,5 @@
 <template>
+  <UApp>
   <section v-if="cloudAuth.status !== 'not_required' && cloudAuth.status !== 'signed_in'" class="auth-gate">
     <div class="auth-panel">
       <div class="auth-brand">
@@ -147,17 +148,17 @@
         <House :size="18" aria-hidden="true" />
         <span>Home</span>
       </RouterLink>
-      <RouterLink :to="{ name: 'flashcards-review' }">
+      <RouterLink :to="{ name: 'flashcards' }">
         <Layers :size="18" aria-hidden="true" />
-        <span>Lernen</span>
+        <span>Karteikarten</span>
       </RouterLink>
-      <RouterLink :to="{ name: 'flashcards-collections' }">
-        <FolderKanban :size="18" aria-hidden="true" />
-        <span>Karten</span>
-      </RouterLink>
-      <RouterLink :to="{ name: 'dashboard' }">
+      <RouterLink :to="{ name: 'exams' }">
         <LibraryBig :size="18" aria-hidden="true" />
         <span>Prüfungen</span>
+      </RouterLink>
+      <RouterLink :to="{ name: 'more' }">
+        <Ellipsis :size="18" aria-hidden="true" />
+        <span>Mehr</span>
       </RouterLink>
     </nav>
     <main class="main-pane">
@@ -223,6 +224,7 @@
       </section>
     </div>
   </div>
+  </UApp>
 </template>
 
 <script setup lang="ts">
@@ -232,6 +234,7 @@ import {
   ChartNoAxesCombined,
   CircleHelp,
   ClipboardCheck,
+  Ellipsis,
   FolderKanban,
   House,
   Info,

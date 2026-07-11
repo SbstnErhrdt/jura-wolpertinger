@@ -1,3 +1,20 @@
+@import "tailwindcss";
+@import "@nuxt/ui";
+
+@theme static {
+  --color-wolpi-50: #eff9fe;
+  --color-wolpi-100: #dff3fc;
+  --color-wolpi-200: #b9e7f8;
+  --color-wolpi-300: #82d5f2;
+  --color-wolpi-400: #43bce8;
+  --color-wolpi-500: #159fd8;
+  --color-wolpi-600: #008bd2;
+  --color-wolpi-700: #006ea8;
+  --color-wolpi-800: #075d88;
+  --color-wolpi-900: #0c4d70;
+  --color-wolpi-950: #073149;
+}
+
 :root {
   --color-bg: #f2f7fa;
   --color-surface: #fff;
@@ -18,6 +35,12 @@
   --radius-control: 6px;
   --radius-card: 8px;
   --shadow-panel: 0 18px 60px rgba(0, 79, 128, 0.12);
+  --page-max-width: 1120px;
+  --page-padding: 28px;
+  --page-gap: 22px;
+  --page-title-size: 32px;
+  --page-title-size-mobile: 28px;
+  --page-copy-size: 16px;
   color: var(--color-text);
   background: var(--color-bg);
   font-family:
@@ -482,13 +505,20 @@ textarea {
 }
 
 .home-view,
+.dashboard,
+.analytics-view,
+.settings-view,
+.about-view,
+.help-view,
 .flashcards-page,
-.flashcard-review {
+.flashcard-review,
+.mobile-hub-view {
   display: grid;
-  gap: 22px;
+  gap: var(--page-gap);
   margin: 0 auto;
-  max-width: 1120px;
-  padding: 28px;
+  max-width: var(--page-max-width);
+  padding: 0;
+  width: 100%;
 }
 
 .home-hero {
@@ -502,19 +532,25 @@ textarea {
   padding: 28px;
 }
 
-.home-hero h1,
-.page-header h1,
-.review-header h1 {
-  font-size: 42px;
+.home-hero h1 {
+  font-size: 36px;
   letter-spacing: 0;
   line-height: 1.08;
+  margin: 0;
+}
+
+.page-header h1,
+.review-header h1 {
+  font-size: var(--page-title-size);
+  letter-spacing: 0;
+  line-height: 1.12;
   margin: 0;
 }
 
 .home-hero p,
 .page-header p {
   color: #647985;
-  font-size: 18px;
+  font-size: var(--page-copy-size);
   margin: 10px 0 0;
 }
 
@@ -606,6 +642,46 @@ textarea {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.mobile-hub-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.mobile-hub-link {
+  align-content: start;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  color: var(--color-text);
+  display: grid;
+  gap: 8px;
+  min-height: 132px;
+  padding: 18px;
+  text-decoration: none;
+}
+
+.mobile-hub-link svg {
+  color: var(--color-primary-strong);
+}
+
+.mobile-hub-link span {
+  font-size: 18px;
+  font-weight: 850;
+  line-height: 1.15;
+}
+
+.mobile-hub-link small {
+  color: var(--color-text-muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.mobile-hub-link:hover {
+  border-color: var(--color-primary);
+  filter: none;
 }
 
 .collection-card h2 {
@@ -1324,7 +1400,7 @@ button:active .key-hint,
 .main-pane {
   grid-column: 2;
   min-width: 0;
-  padding: 26px;
+  padding: var(--page-padding);
 }
 
 .page-header {
@@ -1336,9 +1412,9 @@ button:active .key-hint,
 }
 
 .page-header h1 {
-  font-size: 28px;
+  font-size: var(--page-title-size);
   letter-spacing: 0;
-  line-height: 1.2;
+  line-height: 1.12;
   margin: 0;
 }
 
@@ -3533,6 +3609,7 @@ button:active .key-hint,
 :root[data-theme='dark'] .analytics-filters,
 :root[data-theme='dark'] .analytics-panel,
 :root[data-theme='dark'] .collection-card,
+:root[data-theme='dark'] .mobile-hub-link,
 :root[data-theme='dark'] .study-card,
 :root[data-theme='dark'] .empty-state,
 :root[data-theme='dark'] .panel,
@@ -4787,12 +4864,17 @@ button:active .key-hint,
   .home-metrics,
   .collection-grid,
   .collection-toolbar,
+  .mobile-hub-grid,
   .flashcard-list-card {
     grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 720px) {
+  .main-pane {
+    padding: 16px 16px 104px;
+  }
+
   .dialog-backdrop,
   .modal-backdrop {
     align-items: flex-start;
@@ -4808,8 +4890,9 @@ button:active .key-hint,
 
   .home-view,
   .flashcards-page,
-  .flashcard-review {
-    padding: 16px;
+  .flashcard-review,
+  .mobile-hub-view {
+    padding: 0;
   }
 
   .home-hero,
@@ -4836,10 +4919,13 @@ button:active .key-hint,
     flex-direction: column;
   }
 
-  .home-hero h1,
+  .home-hero h1 {
+    font-size: 30px;
+  }
+
   .page-header h1,
   .review-header h1 {
-    font-size: 30px;
+    font-size: var(--page-title-size-mobile);
   }
 
   .home-actions,

@@ -27,6 +27,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@nuxt/ui": "^4.9.0",
     "@supabase/supabase-js": "^2.110.0",
     "@tiptap/core": "^2.11.5",
     "@tiptap/extension-highlight": "^2.11.5",
@@ -42,6 +43,7 @@
     "lucide-vue-next": "^0.468.0",
     "pinia": "^2.3.0",
     "reka-ui": "^2.10.1",
+    "tailwindcss": "^4.3.2",
     "vue": "^3.5.13",
     "vue-router": "^4.5.0",
     "zod": "^3.24.1"
