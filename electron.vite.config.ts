@@ -74,6 +74,7 @@ export default defineConfig({
     plugins: [
       vue(),
       ui({
+        colorMode: false,
         ui: {
           colors: {
             primary: 'wolpi',

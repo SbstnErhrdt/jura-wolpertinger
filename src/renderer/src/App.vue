@@ -1,251 +1,206 @@
 <template>
   <UApp>
-  <section v-if="cloudAuth.status !== 'not_required' && cloudAuth.status !== 'signed_in'" class="auth-gate">
-    <div class="auth-panel">
-      <div class="auth-brand">
-        <img :src="welcomeImageUrl" alt="" />
-        <div>
-          <p class="eyebrow">Jura Wolpertinger</p>
-          <h1>{{ authTitle }}</h1>
-        </div>
-      </div>
-      <p class="auth-copy">{{ authCopy }}</p>
-      <div
-        v-if="cloudAuth.status !== 'missing_config'"
-        class="auth-mode-switch"
-        aria-label="Anmeldung oder Registrierung auswählen"
-      >
-        <button
-          type="button"
-          :class="{ active: authMode === 'sign_in' }"
-          :aria-pressed="authMode === 'sign_in'"
-          @click="setAuthMode('sign_in')"
-        >
-          Einloggen
-        </button>
-        <button
-          type="button"
-          :class="{ active: authMode === 'sign_up' }"
-          :aria-pressed="authMode === 'sign_up'"
-          @click="setAuthMode('sign_up')"
-        >
-          Account erstellen
-        </button>
-      </div>
-      <form v-if="cloudAuth.status !== 'missing_config'" class="auth-form" @submit.prevent="submitAuthForm">
-        <label class="form-field">
-          E-Mail
-          <input v-model="authEmail" type="email" autocomplete="email" required />
-        </label>
-        <label class="form-field">
-          Passwort
-          <input
-            v-model="authPassword"
-            type="password"
-            :autocomplete="authMode === 'sign_up' ? 'new-password' : 'current-password'"
-            required
-          />
-        </label>
-        <p class="auth-action-hint">{{ authActionHint }}</p>
-        <p v-if="authMessage" class="auth-message" :class="{ error: authMessageKind === 'error' }">
-          {{ authMessage }}
-        </p>
-        <div class="auth-actions">
-          <button type="submit" :disabled="authBusy">{{ authSubmitLabel }}</button>
-        </div>
-        <p class="auth-switch-copy">
-          {{ authSwitchText }}
-          <button type="button" class="link-button" :disabled="authBusy" @click="toggleAuthMode">
-            {{ authSwitchLabel }}
-          </button>
-        </p>
-      </form>
-      <p v-else class="auth-message error">{{ cloudAuth.error }}</p>
-    </div>
-  </section>
-
-  <div v-else class="app-shell" :class="{ 'exam-shell': isExamFocus }">
-    <aside v-if="!isExamFocus" class="sidebar">
-      <div class="beta-banner" aria-label="Beta-Version">BETA</div>
-        <RouterLink class="brand" to="/">
-        <img :src="iconUrl" alt="" />
-        <span>Jura Wolpertinger</span>
-      </RouterLink>
-      <nav class="nav">
-        <RouterLink to="/">
-          <House :size="18" aria-hidden="true" />
-          <span>Home</span>
-        </RouterLink>
-        <p class="nav-section">Karteikarten</p>
-        <RouterLink :to="{ name: 'flashcards-review' }">
-          <Layers :size="18" aria-hidden="true" />
-          <span>Wiederholen</span>
-        </RouterLink>
-        <RouterLink :to="{ name: 'flashcards-collections' }">
-          <FolderKanban :size="18" aria-hidden="true" />
-          <span>Sammlungen</span>
-        </RouterLink>
-        <p class="nav-section">Prüfungen</p>
-        <RouterLink :to="{ name: 'dashboard' }">
-          <LibraryBig :size="18" aria-hidden="true" />
-          <span>Bibliothek</span>
-        </RouterLink>
-        <RouterLink :to="{ name: 'correction' }">
-          <ClipboardCheck :size="18" aria-hidden="true" />
-          <span>Bewertung</span>
-        </RouterLink>
-        <RouterLink :to="{ name: 'analytics' }">
-          <ChartNoAxesCombined :size="18" aria-hidden="true" />
-          <span>Auswertung</span>
-        </RouterLink>
-        <RouterLink :to="{ name: 'settings' }">
-          <Settings :size="18" aria-hidden="true" />
-          <span>Einstellungen</span>
-        </RouterLink>
-        <RouterLink :to="{ name: 'about' }">
-          <Info :size="18" aria-hidden="true" />
-          <span>About</span>
-        </RouterLink>
-        <RouterLink :to="{ name: 'help' }">
-          <CircleHelp :size="18" aria-hidden="true" />
-          <span>Hilfe</span>
-        </RouterLink>
-      </nav>
-      <div class="sidebar-footer">
-        <section class="sidebar-user" aria-label="Nutzer">
-          <label for="user-switcher">Nutzer</label>
-          <select id="user-switcher" :value="currentUser?.id" @change="switchUser">
-            <option v-for="user in users" :key="user.id" :value="user.id">
-              {{ user.displayName }}{{ user.kind === 'demo' ? ' · Demo' : '' }}
-            </option>
-          </select>
-          <button class="sidebar-small-button" @click="showCreateUser = true">
-            <UserPlus :size="15" />
-            Neuer Nutzer
-          </button>
-          <button class="sidebar-small-button" @click="startTour">
-            <Route :size="15" />
-            Tour
-          </button>
-        </section>
-        <button
-          class="sidebar-theme-toggle"
-          :title="isDark ? 'Hellmodus' : 'Dunkelmodus'"
-          @click="toggleTheme"
-        >
-          <span class="theme-toggle-option" :class="{ active: !isDark }">
-            <Sun :size="17" />
-          </span>
-          <span class="theme-toggle-option" :class="{ active: isDark }">
-            <Moon :size="17" />
-          </span>
-        </button>
-        <span class="sidebar-version">Version {{ appVersion }}</span>
-      </div>
-    </aside>
-    <nav v-if="!isExamFocus" class="mobile-nav" aria-label="Hauptnavigation">
-      <RouterLink to="/">
-        <House :size="18" aria-hidden="true" />
-        <span>Home</span>
-      </RouterLink>
-      <RouterLink :to="{ name: 'flashcards' }">
-        <Layers :size="18" aria-hidden="true" />
-        <span>Karteikarten</span>
-      </RouterLink>
-      <RouterLink :to="{ name: 'exams' }">
-        <LibraryBig :size="18" aria-hidden="true" />
-        <span>Prüfungen</span>
-      </RouterLink>
-      <RouterLink :to="{ name: 'more' }">
-        <Ellipsis :size="18" aria-hidden="true" />
-        <span>Mehr</span>
-      </RouterLink>
-    </nav>
-    <main class="main-pane">
-      <RouterView />
-    </main>
-
-    <div v-if="showTourPrompt" class="modal-backdrop" role="presentation">
-      <section class="modal-card onboarding-card" role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
-        <div class="onboarding-heading">
-          <img class="onboarding-image" :src="welcomeImageUrl" alt="" />
+    <section v-if="cloudAuth.status !== 'not_required' && cloudAuth.status !== 'signed_in'" class="auth-gate">
+      <div class="auth-panel">
+        <div class="auth-brand">
+          <img :src="welcomeImageUrl" alt="" />
           <div>
-            <p class="eyebrow">Erste Schritte</p>
-            <h2 id="onboarding-title">Was möchtest du als Nächstes tun?</h2>
-            <p>
-              Wähle einen Einstieg oder starte direkt. Du kannst alles später in den Einstellungen ändern.
-            </p>
+            <p class="eyebrow">Jura Wolpertinger</p>
+            <h1>{{ authTitle }}</h1>
           </div>
         </div>
-        <div class="onboarding-actions" aria-label="Onboarding Aktionen">
-          <button type="button" class="onboarding-action-card" @click="openOnboardingTarget('flashcards')">
-            <Layers :size="20" aria-hidden="true" />
-            <span>Karteikarten lernen</span>
-            <small>Wiederholen oder Sammlungen öffnen.</small>
-          </button>
-          <button type="button" class="onboarding-action-card" @click="openOnboardingTarget('exam')">
-            <LibraryBig :size="20" aria-hidden="true" />
-            <span>Klausur schreiben</span>
-            <small>Prüfungsbibliothek und Schreibmodus.</small>
-          </button>
-          <button type="button" class="onboarding-action-card" @click="openOnboardingTarget('import')">
-            <FolderKanban :size="20" aria-hidden="true" />
-            <span>Daten importieren</span>
-            <small>Vorhandene Karteikarten aus einer Datei übernehmen.</small>
-          </button>
-          <button type="button" class="onboarding-action-card" @click="openOnboardingTarget('settings')">
-            <Settings :size="20" aria-hidden="true" />
-            <span>{{ onboardingSettingsTitle }}</span>
-            <small>{{ onboardingSettingsCopy }}</small>
-          </button>
+        <p class="auth-copy">{{ authCopy }}</p>
+        <div
+          v-if="cloudAuth.status !== 'missing_config'"
+          class="auth-mode-switch"
+          aria-label="Anmeldung oder Registrierung auswählen"
+        >
+          <UButton
+            type="button"
+            label="Einloggen"
+            :variant="authMode === 'sign_in' ? 'solid' : 'ghost'"
+            :aria-pressed="authMode === 'sign_in'"
+            @click="setAuthMode('sign_in')"
+          />
+          <UButton
+            type="button"
+            label="Account erstellen"
+            :variant="authMode === 'sign_up' ? 'solid' : 'ghost'"
+            :aria-pressed="authMode === 'sign_up'"
+            @click="setAuthMode('sign_up')"
+          />
         </div>
-        <div class="modal-actions">
-          <button class="secondary" @click="showTourPrompt = false">Direkt zur App</button>
-          <button @click="skipOnboarding">Nicht mehr anzeigen</button>
-        </div>
-      </section>
-    </div>
+        <form v-if="cloudAuth.status !== 'missing_config'" class="auth-form" @submit.prevent="submitAuthForm">
+          <UFormField label="E-Mail" class="form-field">
+            <UInput v-model="authEmail" type="email" autocomplete="email" required />
+          </UFormField>
+          <UFormField label="Passwort" class="form-field">
+            <UInput
+              v-model="authPassword"
+              type="password"
+              :autocomplete="authMode === 'sign_up' ? 'new-password' : 'current-password'"
+              required
+            />
+          </UFormField>
+          <p class="auth-action-hint">{{ authActionHint }}</p>
+          <UAlert
+            v-if="authMessage"
+            class="auth-message"
+            :color="authMessageKind === 'error' ? 'error' : 'info'"
+            :description="authMessage"
+          />
+          <div class="auth-actions">
+            <UButton type="submit" :loading="authBusy" :label="authSubmitLabel" />
+          </div>
+          <p class="auth-switch-copy">
+            {{ authSwitchText }}
+            <UButton
+              type="button"
+              class="link-button"
+              color="neutral"
+              variant="link"
+              :disabled="authBusy"
+              :label="authSwitchLabel"
+              @click="toggleAuthMode"
+            />
+          </p>
+        </form>
+        <UAlert v-else class="auth-message" color="error" :description="cloudAuth.error ?? ''" />
+      </div>
+    </section>
 
-    <div v-if="showCreateUser" class="modal-backdrop" role="presentation">
-      <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="create-user-title">
-        <h2 id="create-user-title">Neuer lokaler Nutzer</h2>
-        <p>
-          Lege einen eigenen Arbeitsbereich an. Klausuren, Bewertungen und Einstellungen bleiben
-          getrennt und können später bei Bedarf übernommen werden.
-        </p>
-        <label class="form-field">
-          Name
-          <input v-model="newUserName" autofocus placeholder="z. B. Sebastian" @keyup.enter="createUser" />
-        </label>
-        <div class="modal-actions">
-          <button class="secondary" @click="showCreateUser = false">Abbrechen</button>
-          <button :disabled="!newUserName.trim()" @click="createUser">Erstellen</button>
+    <div v-else class="app-shell" :class="{ 'exam-shell': isExamFocus }">
+      <aside v-if="!isExamFocus" class="sidebar">
+        <div class="beta-banner" aria-label="Beta-Version">BETA</div>
+        <RouterLink class="brand" to="/">
+          <img :src="iconUrl" alt="" />
+          <span>Jura Wolpertinger</span>
+        </RouterLink>
+        <nav class="nav" aria-label="Hauptnavigation">
+          <UNavigationMenu :items="homeNavigationItems" orientation="vertical" />
+        <p class="nav-section">Karteikarten</p>
+          <UNavigationMenu :items="flashcardNavigationItems" orientation="vertical" />
+        <p class="nav-section">Prüfungen</p>
+          <UNavigationMenu :items="examNavigationItems" orientation="vertical" />
+          <UNavigationMenu :items="moreNavigationItems" orientation="vertical" />
+        </nav>
+        <div class="sidebar-footer">
+          <section class="sidebar-user" aria-label="Nutzer">
+            <UFormField label="Nutzer">
+              <USelect
+                id="user-switcher"
+                class="user-switcher"
+                :model-value="currentUser?.id"
+                :items="userOptions"
+                value-key="value"
+                @update:model-value="switchUser"
+              />
+            </UFormField>
+            <UButton class="sidebar-small-button" color="neutral" variant="ghost" @click="showCreateUser = true">
+              <UserPlus :size="15" />
+              Neuer Nutzer
+            </UButton>
+            <UButton class="sidebar-small-button" color="neutral" variant="ghost" @click="startTour">
+              <Route :size="15" />
+              Tour
+            </UButton>
+          </section>
+          <UButton
+            class="sidebar-theme-toggle"
+            color="neutral"
+            variant="ghost"
+            :title="isDark ? 'Hellmodus' : 'Dunkelmodus'"
+            @click="toggleTheme"
+          >
+            <span class="theme-toggle-option" :class="{ active: !isDark }">
+              <Sun :size="17" />
+            </span>
+            <span class="theme-toggle-option" :class="{ active: isDark }">
+              <Moon :size="17" />
+            </span>
+          </UButton>
+          <span class="sidebar-version">Version {{ appVersion }}</span>
         </div>
-      </section>
+      </aside>
+
+      <UNavigationMenu
+        v-if="!isExamFocus"
+        class="mobile-nav"
+        :items="mobileNavigationItems"
+        aria-label="Hauptnavigation"
+      />
+
+      <main class="main-pane">
+        <RouterView />
+      </main>
+
+      <UModal :open="showTourPrompt" :dismissible="false" @update:open="showTourPrompt = $event">
+        <template #content>
+          <section class="modal-card onboarding-card" aria-labelledby="onboarding-title">
+            <div class="onboarding-heading">
+              <img class="onboarding-image" :src="welcomeImageUrl" alt="" />
+              <div>
+                <p class="eyebrow">Erste Schritte</p>
+                <h2 id="onboarding-title">Was möchtest du als Nächstes tun?</h2>
+                <p>Wähle einen Einstieg oder starte direkt. Du kannst alles später in den Einstellungen ändern.</p>
+              </div>
+            </div>
+            <div class="onboarding-actions" aria-label="Onboarding Aktionen">
+              <UButton type="button" class="onboarding-action-card" variant="outline" @click="openOnboardingTarget('flashcards')">
+                <Layers :size="20" aria-hidden="true" />
+                <span>Karteikarten lernen</span>
+                <small>Wiederholen oder Sammlungen öffnen.</small>
+              </UButton>
+              <UButton type="button" class="onboarding-action-card" variant="outline" @click="openOnboardingTarget('exam')">
+                <LibraryBig :size="20" aria-hidden="true" />
+                <span>Klausur schreiben</span>
+                <small>Prüfungsbibliothek und Schreibmodus.</small>
+              </UButton>
+              <UButton type="button" class="onboarding-action-card" variant="outline" @click="openOnboardingTarget('import')">
+                <FolderKanban :size="20" aria-hidden="true" />
+                <span>Daten importieren</span>
+                <small>Vorhandene Karteikarten aus einer Datei übernehmen.</small>
+              </UButton>
+              <UButton type="button" class="onboarding-action-card" variant="outline" @click="openOnboardingTarget('settings')">
+                <Settings :size="20" aria-hidden="true" />
+                <span>{{ onboardingSettingsTitle }}</span>
+                <small>{{ onboardingSettingsCopy }}</small>
+              </UButton>
+            </div>
+            <div class="modal-actions">
+              <UButton color="neutral" variant="outline" @click="showTourPrompt = false">Direkt zur App</UButton>
+              <UButton @click="skipOnboarding">Nicht mehr anzeigen</UButton>
+            </div>
+          </section>
+        </template>
+      </UModal>
+
+      <UModal :open="showCreateUser" :dismissible="false" @update:open="showCreateUser = $event">
+        <template #content>
+          <section class="modal-card" aria-labelledby="create-user-title">
+            <h2 id="create-user-title">Neuer lokaler Nutzer</h2>
+            <p>
+              Lege einen eigenen Arbeitsbereich an. Klausuren, Bewertungen und Einstellungen bleiben
+              getrennt und können später bei Bedarf übernommen werden.
+            </p>
+            <UFormField label="Name" class="form-field">
+              <UInput v-model="newUserName" autofocus placeholder="z. B. Sebastian" @keyup.enter="createUser" />
+            </UFormField>
+            <div class="modal-actions">
+              <UButton color="neutral" variant="outline" @click="showCreateUser = false">Abbrechen</UButton>
+              <UButton :disabled="!newUserName.trim()" @click="createUser">Erstellen</UButton>
+            </div>
+          </section>
+        </template>
+      </UModal>
     </div>
-  </div>
   </UApp>
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import {
-  ChartNoAxesCombined,
-  CircleHelp,
-  ClipboardCheck,
-  Ellipsis,
-  FolderKanban,
-  House,
-  Info,
-  Layers,
-  LibraryBig,
-  Moon,
-  Route,
-  Settings,
-  Sun,
-  UserPlus
-} from 'lucide-vue-next'
+import { FolderKanban, Layers, LibraryBig, Moon, Route, Settings, Sun, UserPlus } from 'lucide-vue-next'
 import type { AppUser } from '@shared/ipc'
 import { APP_VERSION } from '@shared/constants'
 import { api, isElectronApiAvailable } from './api'
@@ -305,6 +260,33 @@ const onboardingSettingsCopy = computed(() =>
     ? 'Optional synchronisieren. Lokal bleibt alles nutzbar.'
     : 'Account, App-Status und Optionen prüfen.'
 )
+const userOptions = computed(() =>
+  users.value.map((user) => ({
+    label: `${user.displayName}${user.kind === 'demo' ? ' · Demo' : ''}`,
+    value: user.id
+  }))
+)
+const homeNavigationItems = [{ label: 'Home', icon: 'i-lucide-house', to: { name: 'home' } }]
+const flashcardNavigationItems = [
+  { label: 'Wiederholen', icon: 'i-lucide-layers', to: { name: 'flashcards-review' } },
+  { label: 'Sammlungen', icon: 'i-lucide-folder-kanban', to: { name: 'flashcards-collections' } }
+]
+const examNavigationItems = [
+  { label: 'Bibliothek', icon: 'i-lucide-library-big', to: { name: 'dashboard' } },
+  { label: 'Bewertung', icon: 'i-lucide-clipboard-check', to: { name: 'correction' } },
+  { label: 'Auswertung', icon: 'i-lucide-chart-no-axes-combined', to: { name: 'analytics' } }
+]
+const moreNavigationItems = [
+  { label: 'Einstellungen', icon: 'i-lucide-settings', to: { name: 'settings' } },
+  { label: 'About', icon: 'i-lucide-info', to: { name: 'about' } },
+  { label: 'Hilfe', icon: 'i-lucide-circle-help', to: { name: 'help' } }
+]
+const mobileNavigationItems = [
+  { label: 'Home', icon: 'i-lucide-house', to: { name: 'home' } },
+  { label: 'Karteikarten', icon: 'i-lucide-layers', to: { name: 'flashcards' } },
+  { label: 'Prüfungen', icon: 'i-lucide-library-big', to: { name: 'exams' } },
+  { label: 'Mehr', icon: 'i-lucide-ellipsis', to: { name: 'more' } }
+]
 const startTourListener = () => startTour()
 const usersUpdatedListener = () => {
   void loadUsers()
@@ -337,8 +319,8 @@ async function loadUsers(): Promise<void> {
   showTourPrompt.value = !currentUser.value.onboardingCompletedAt
 }
 
-async function switchUser(event: Event): Promise<void> {
-  const userId = (event.target as HTMLSelectElement).value
+async function switchUser(userId: string | undefined): Promise<void> {
+  if (!userId) return
   currentUser.value = await api.switchUser(userId)
   showTourPrompt.value = !currentUser.value.onboardingCompletedAt
   window.location.reload()
