@@ -33,8 +33,8 @@ describe('paginated list UI affordances', () => {
     const source = await readFile(resolve(rendererRoot, 'views/DashboardView.vue'), 'utf8')
     const store = await readFile(resolve(rendererRoot, 'stores/library.ts'), 'utf8')
 
-    expect(source).toContain('AppPagination')
-    expect(source).toContain('ListSkeleton')
+    expect(source).toContain('<UPagination')
+    expect(source).toContain('<USkeleton')
     expect(source).toContain('aria-busy')
     expect(source).toContain('paginated-list-refreshing')
     expect(source).toContain('store.examTotal')

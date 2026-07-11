@@ -2,7 +2,7 @@
   <section class="analytics-view">
     <header class="page-header analytics-header">
       <div>
-        <AppBreadcrumb :items="breadcrumbItems" />
+        <UBreadcrumb class="app-breadcrumb" :items="withHomeIcon(breadcrumbItems)" />
         <p class="eyebrow">Leistung über die Zeit</p>
         <h1>Auswertung</h1>
       </div>
@@ -12,11 +12,11 @@
       <div class="analytics-filter-grid">
         <label class="analytics-field">
           Zeitraum von
-          <input :value="filters.startDate" type="date" @input="setStartDate(($event.target as HTMLInputElement).value)" />
+          <UInput :value="filters.startDate" type="date" @input="setStartDate(($event.target as HTMLInputElement).value)" />
         </label>
         <label class="analytics-field">
           Zeitraum bis
-          <input :value="filters.endDate" type="date" @input="setEndDate(($event.target as HTMLInputElement).value)" />
+          <UInput :value="filters.endDate" type="date" @input="setEndDate(($event.target as HTMLInputElement).value)" />
         </label>
         <div class="analytics-field analytics-tag-field">
           <span>Tags</span>
@@ -31,7 +31,7 @@
 
       <div class="analytics-filter-actions">
         <div class="analytics-presets">
-          <button
+          <UButton
             v-for="preset in rangePresets"
             :key="preset.id"
             class="secondary analytics-preset"
@@ -40,9 +40,9 @@
             @click="applyPreset(preset.id)"
           >
             {{ preset.label }}
-          </button>
+          </UButton>
         </div>
-        <button class="secondary" type="button" @click="resetFilters">Filter zurücksetzen</button>
+        <UButton class="secondary" type="button" @click="resetFilters">Filter zurücksetzen</UButton>
       </div>
 
       <p class="analytics-range-copy">
@@ -164,7 +164,7 @@
             <h3>{{ task.title }}</h3>
             <p v-if="task.detail">{{ task.detail }}</p>
           </div>
-          <button class="secondary" type="button" @click="() => void markTaskDone(task.id)">Erledigt</button>
+          <UButton class="secondary" type="button" @click="() => void markTaskDone(task.id)">Erledigt</UButton>
         </article>
       </div>
       <p v-if="hiddenLearningTaskCount > 0" class="analytics-learning-more">
@@ -208,7 +208,7 @@ import type { AnalyticsEntry } from '@shared/ipc'
 import type { LearningTask } from '@shared/schemas'
 import { api } from '../api'
 import TagInput from '../components/TagInput.vue'
-import AppBreadcrumb, { type BreadcrumbItem } from '../components/ui/AppBreadcrumb.vue'
+import { type AppBreadcrumbItem, withHomeIcon } from '../ui/breadcrumbs'
 
 type RangePresetId = '3m' | '6m' | '12m'
 
@@ -239,9 +239,9 @@ const entries = ref<AnalyticsEntry[]>([])
 const learningTasks = ref<LearningTask[]>([])
 const learningTasksError = ref('')
 const filters = ref<AnalyticsFilters>(loadFilters())
-const breadcrumbItems: BreadcrumbItem[] = [
+const breadcrumbItems: AppBreadcrumbItem[] = [
   { label: 'Home', to: { name: 'home' } },
-  { label: 'Prüfungen' },
+  { label: 'Prüfungen', to: { name: 'exams' } },
   { label: 'Auswertung' }
 ]
 

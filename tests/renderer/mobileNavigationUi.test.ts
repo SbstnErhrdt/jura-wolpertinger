@@ -82,8 +82,8 @@ describe('mobile hub navigation', () => {
     const listHeaderEnd = correction.indexOf('<div v-if="submittedItems.length"', listHeaderStart)
     const listHeader = correction.slice(listHeaderStart, listHeaderEnd)
 
-    expect(listHeader).not.toContain('AppBreadcrumb')
-    expect(correction).toContain('<AppBreadcrumb :items="detailBreadcrumbItems" />')
-    expect(correction).toContain('<AppBreadcrumb :items="listBreadcrumbItems" />')
+    expect(listHeader).not.toContain('UBreadcrumb')
+    expect(correction).toContain(':items="withHomeIcon(detailBreadcrumbItems)"')
+    expect(correction).toContain(':items="withHomeIcon(listBreadcrumbItems)"')
   })
 })
