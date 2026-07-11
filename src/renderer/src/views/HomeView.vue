@@ -8,33 +8,33 @@
           Kleine, echte Lerneinheiten zählen: Karteikarten wiederholen oder eine Prüfung schreiben.
         </p>
         <div class="home-actions">
-          <RouterLink class="primary-action" :to="{ name: 'flashcards-review' }">
+          <UButton class="primary-action" size="lg" :to="{ name: 'flashcards-review' }">
             Karteikarten wiederholen
-          </RouterLink>
-          <RouterLink class="secondary" :to="{ name: 'dashboard' }">
+          </UButton>
+          <UButton color="neutral" variant="outline" size="lg" :to="{ name: 'dashboard' }">
             Prüfung schreiben
-          </RouterLink>
+          </UButton>
         </div>
       </div>
       <img :src="helloUrl" alt="" />
     </div>
 
     <div class="home-metrics">
-      <article>
+      <UCard>
         <span>{{ dashboard?.streakDays ?? 0 }}</span>
         <strong>Tage Streak</strong>
         <small>{{ dashboard?.freeDaysRemainingThisWeek ?? 2 }} freie Tage diese Woche übrig</small>
-      </article>
-      <article>
+      </UCard>
+      <UCard>
         <span>{{ dashboard?.dueCount ?? 0 }}</span>
         <strong>Karten fällig</strong>
         <small>{{ dashboard?.totalCards ?? 0 }} Karten insgesamt</small>
-      </article>
-      <article>
+      </UCard>
+      <UCard>
         <span>{{ dashboard?.collectionCount ?? 0 }}</span>
         <strong>Sammlungen</strong>
         <small>{{ dashboard?.learnedToday ? 'Heute gelernt' : 'Heute noch offen' }}</small>
-      </article>
+      </UCard>
     </div>
   </section>
 </template>

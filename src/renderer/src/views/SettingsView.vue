@@ -2,13 +2,14 @@
   <section class="settings-view">
     <header class="page-header">
       <div>
+        <UBreadcrumb class="app-breadcrumb" :items="withHomeIcon(breadcrumbItems)" />
         <p class="eyebrow">Einstellungen</p>
         <h1>App einrichten</h1>
       </div>
     </header>
 
-    <p v-if="actionError" class="action-error">{{ actionError }}</p>
-    <p v-if="actionNotice" class="action-notice">{{ actionNotice }}</p>
+    <UAlert v-if="actionError" class="action-error" color="error" :description="actionError" />
+    <UAlert v-if="actionNotice" class="action-notice" color="success" :description="actionNotice" />
 
     <div class="settings-grid">
       <section class="settings-panel">
@@ -19,28 +20,22 @@
           </div>
         </div>
 
-        <label class="settings-field">
-          Aktueller Nutzer
-          <select :value="currentUser?.id" @change="switchUser">
-            <option v-for="user in users" :key="user.id" :value="user.id">
-              {{ user.displayName }}{{ user.kind === 'demo' ? ' · Demo' : '' }}
-            </option>
-          </select>
-        </label>
+        <UFormField class="settings-field" label="Aktueller Nutzer">
+          <USelect :model-value="currentUser?.id" :items="userOptions" value-key="value" @update:model-value="switchUser" />
+        </UFormField>
 
-        <label class="settings-field">
-          Nutzername
+        <UFormField class="settings-field" label="Nutzername">
           <div class="settings-inline-control">
-            <input v-model="currentUserName" placeholder="Name" @keyup.enter="saveCurrentUserName" />
-            <button type="button" :disabled="!currentUser" @click="saveCurrentUserName">Speichern</button>
+            <UInput v-model="currentUserName" placeholder="Name" @keyup.enter="saveCurrentUserName" />
+            <UButton type="button" :disabled="!currentUser" @click="saveCurrentUserName">Speichern</UButton>
           </div>
-        </label>
+        </UFormField>
 
         <div class="settings-actions">
-          <button type="button" class="secondary" @click="startTour">Tour starten</button>
-          <button type="button" class="secondary" :disabled="!currentUser" @click="resetTour">
+          <UButton type="button" color="neutral" variant="outline" @click="startTour">Tour starten</UButton>
+          <UButton type="button" color="neutral" variant="outline" :disabled="!currentUser" @click="resetTour">
             Tour zurücksetzen
-          </button>
+          </UButton>
         </div>
       </section>
 
@@ -54,13 +49,12 @@
           </div>
         </div>
 
-        <label class="settings-field">
-          Name
+        <UFormField class="settings-field" label="Name">
           <div class="settings-inline-control">
-            <input v-model="newUserName" placeholder="z. B. Sebastian" @keyup.enter="createUser" />
-            <button type="button" :disabled="!newUserName.trim()" @click="createUser">Anlegen</button>
+            <UInput v-model="newUserName" placeholder="z. B. Sebastian" @keyup.enter="createUser" />
+            <UButton type="button" :disabled="!newUserName.trim()" @click="createUser">Anlegen</UButton>
           </div>
-        </label>
+        </UFormField>
       </section>
 
       <section class="settings-panel">
@@ -71,9 +65,9 @@
               Sichere deinen Arbeitsbereich online oder lade ihn auf ein anderes Gerät.
             </p>
           </div>
-          <span class="settings-status-pill" :class="{ active: syncStatus.connected }">
+          <UBadge :color="syncStatus.connected ? 'success' : 'neutral'" variant="soft">
             {{ syncStatus.connected ? 'verbunden' : 'nicht verbunden' }}
-          </span>
+          </UBadge>
         </div>
 
         <div class="settings-ai-status">
@@ -91,22 +85,22 @@
         </div>
 
         <div v-if="isElectronApiAvailable" class="settings-actions">
-          <button v-if="!syncStatus.connected" type="button" @click="openSyncConnectModal">
+          <UButton v-if="!syncStatus.connected" type="button" @click="openSyncConnectModal">
             Mit Online-Version verbinden
-          </button>
+          </UButton>
           <template v-else>
-            <button type="button" :disabled="syncBusy" @click="openSyncConfirm('merge')">
+            <UButton type="button" :loading="syncBusy" @click="openSyncConfirm('merge')">
               Alles abgleichen
-            </button>
-            <button type="button" class="secondary" :disabled="syncBusy" @click="openSyncConfirm('upload')">
+            </UButton>
+            <UButton type="button" color="neutral" variant="outline" :disabled="syncBusy" @click="openSyncConfirm('upload')">
               Lokale Daten online sichern
-            </button>
-            <button type="button" class="secondary" :disabled="syncBusy" @click="openSyncConfirm('download')">
+            </UButton>
+            <UButton type="button" color="neutral" variant="outline" :disabled="syncBusy" @click="openSyncConfirm('download')">
               Online-Daten auf dieses Gerät holen
-            </button>
-            <button type="button" class="secondary danger-secondary" :disabled="syncBusy" @click="disconnectSync">
+            </UButton>
+            <UButton type="button" color="error" variant="outline" :loading="syncBusy" @click="disconnectSync">
               Verbindung trennen
-            </button>
+            </UButton>
           </template>
         </div>
 
@@ -122,9 +116,9 @@
               konfigurierten KI-Anbieter übertragen.
             </p>
           </div>
-          <span class="settings-status-pill" :class="{ active: aiSettings.configured }">
+          <UBadge :color="aiSettings.configured ? 'success' : 'neutral'" variant="soft">
             {{ aiSettings.configured ? 'aktiv' : 'nicht eingerichtet' }}
-          </span>
+          </UBadge>
         </div>
 
         <div class="settings-ai-status">
@@ -144,63 +138,63 @@
         </div>
 
         <div v-if="!showAiKeyForm" class="settings-actions">
-          <button type="button" @click="openAiKeyForm">{{ aiSetupButtonLabel }}</button>
-          <button type="button" class="secondary" :disabled="!aiSettings.configured || aiBusy" @click="testAiConnection">
+          <UButton type="button" @click="openAiKeyForm">{{ aiSetupButtonLabel }}</UButton>
+          <UButton type="button" color="neutral" variant="outline" :disabled="!aiSettings.configured || aiBusy" @click="testAiConnection">
             {{ aiBusy ? 'Prüft ...' : 'Verbindung testen' }}
-          </button>
-          <button
+          </UButton>
+          <UButton
             v-if="storedKeyOverridesEnvironment"
             type="button"
-            class="secondary"
+            color="neutral"
+            variant="outline"
             :disabled="aiBusy"
             @click="testEnvironmentConnection"
           >
             .env-Key testen
-          </button>
-          <button
+          </UButton>
+          <UButton
             v-if="effectiveAiSource === 'stored'"
             type="button"
-            class="secondary danger-secondary"
+            color="error"
+            variant="outline"
             :disabled="aiBusy"
             @click="startRemoveAiSettings"
           >
             App-Key entfernen
-          </button>
+          </UButton>
         </div>
 
         <div v-if="confirmRemoveAiKey" class="settings-confirm-remove">
           <strong>App-Key entfernen?</strong>
           <p>KI-Korrekturen nutzen danach keinen gespeicherten App-Key mehr.</p>
           <div class="settings-actions">
-            <button type="button" class="danger-button" :disabled="aiBusy" @click="removeAiSettings">
+            <UButton type="button" color="error" :loading="aiBusy" @click="removeAiSettings">
               Entfernen
-            </button>
-            <button type="button" class="secondary" :disabled="aiBusy" @click="cancelRemoveAiSettings">
+            </UButton>
+            <UButton type="button" color="neutral" variant="outline" :disabled="aiBusy" @click="cancelRemoveAiSettings">
               Abbrechen
-            </button>
+            </UButton>
           </div>
         </div>
 
         <form v-if="showAiKeyForm" class="settings-key-form" @submit.prevent="saveAiSettings">
-          <label class="settings-field">
-            OpenAI API-Key
-            <input v-model="aiApiKeyInput" type="password" :placeholder="aiKeyPlaceholder" />
+          <UFormField class="settings-field" label="OpenAI API-Key">
+            <UInput v-model="aiApiKeyInput" type="password" :placeholder="aiKeyPlaceholder" />
             <span v-if="effectiveAiSource === 'stored'" class="settings-field-note">
               Der gespeicherte Key bleibt erhalten, wenn du hier nichts eingibst.
             </span>
-          </label>
-          <label class="settings-field">
-            Modell
-            <input v-model="aiModelInput" :placeholder="DEFAULT_AI_MODEL" />
-          </label>
+          </UFormField>
+          <UFormField class="settings-field" label="Modell">
+            <UInput v-model="aiModelInput" :placeholder="DEFAULT_AI_MODEL" />
+          </UFormField>
 
           <div class="settings-actions">
-            <button type="submit" :disabled="aiBusy">
+            <UButton type="submit" :loading="aiBusy">
               {{ aiBusy ? 'Speichert ...' : 'Speichern' }}
-            </button>
-            <button type="button" class="secondary" :disabled="aiBusy" @click="cancelAiKeyForm">
+            </UButton>
+            <UButton type="button" color="neutral" variant="outline" :disabled="aiBusy" @click="cancelAiKeyForm">
               Abbrechen
-            </button>
+            </UButton>
           </div>
         </form>
       </section>
@@ -214,53 +208,55 @@
         </div>
 
         <div class="settings-mode-row" role="group" aria-label="Farbschema">
-          <button type="button" class="secondary" :class="{ active: !isDark }" @click="setLightTheme">
+          <UButton type="button" color="neutral" :variant="!isDark ? 'solid' : 'outline'" @click="setLightTheme">
             Hellmodus
-          </button>
-          <button type="button" class="secondary" :class="{ active: isDark }" @click="setDarkTheme">
+          </UButton>
+          <UButton type="button" color="neutral" :variant="isDark ? 'solid' : 'outline'" @click="setDarkTheme">
             Dunkelmodus
-          </button>
+          </UButton>
         </div>
       </section>
     </div>
 
-    <div v-if="showSyncConnectModal" class="modal-backdrop" role="presentation">
-      <form class="modal-card" role="dialog" aria-modal="true" aria-labelledby="sync-connect-title" @submit.prevent="connectSync">
-        <h2 id="sync-connect-title">Mit Online-Version verbinden</h2>
-        <p>Deine lokalen Daten bleiben auf diesem Gerät. Nach der Anmeldung entscheidest du, was übertragen wird.</p>
-        <label class="settings-field">
-          E-Mail
-          <input v-model="syncEmail" type="email" autocomplete="email" required />
-        </label>
-        <label class="settings-field">
-          Passwort
-          <input v-model="syncPassword" type="password" autocomplete="current-password" required />
-        </label>
-        <div class="modal-actions">
-          <button type="button" class="secondary" :disabled="syncBusy" @click="closeSyncConnectModal">
-            Abbrechen
-          </button>
-          <button type="submit" :disabled="syncBusy || !syncEmail.trim() || !syncPassword">
-            {{ syncBusy ? 'Verbindet ...' : 'Jetzt verbinden' }}
-          </button>
-        </div>
-      </form>
-    </div>
+    <UModal :open="showSyncConnectModal" @update:open="showSyncConnectModal = $event">
+      <template #content>
+        <form class="modal-card" aria-labelledby="sync-connect-title" @submit.prevent="connectSync">
+          <h2 id="sync-connect-title">Mit Online-Version verbinden</h2>
+          <p>Deine lokalen Daten bleiben auf diesem Gerät. Nach der Anmeldung entscheidest du, was übertragen wird.</p>
+          <UFormField class="settings-field" label="E-Mail">
+            <UInput v-model="syncEmail" type="email" autocomplete="email" required />
+          </UFormField>
+          <UFormField class="settings-field" label="Passwort">
+            <UInput v-model="syncPassword" type="password" autocomplete="current-password" required />
+          </UFormField>
+          <div class="modal-actions">
+            <UButton type="button" color="neutral" variant="outline" :disabled="syncBusy" @click="closeSyncConnectModal">
+              Abbrechen
+            </UButton>
+            <UButton type="submit" :loading="syncBusy" :disabled="!syncEmail.trim() || !syncPassword">
+              {{ syncBusy ? 'Verbindet ...' : 'Jetzt verbinden' }}
+            </UButton>
+          </div>
+        </form>
+      </template>
+    </UModal>
 
-    <div v-if="syncConfirmAction" class="modal-backdrop" role="presentation">
-      <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="sync-confirm-title">
-        <h2 id="sync-confirm-title">{{ syncConfirmTitle }}</h2>
-        <p>{{ syncConfirmCopy }}</p>
-        <div class="modal-actions">
-          <button type="button" class="secondary" :disabled="syncBusy" @click="syncConfirmAction = null">
-            Abbrechen
-          </button>
-          <button type="button" :disabled="syncBusy" @click="runSyncAction">
-            {{ syncBusy ? 'Überträgt ...' : syncConfirmButton }}
-          </button>
-        </div>
-      </section>
-    </div>
+    <UModal :open="Boolean(syncConfirmAction)" @update:open="!$event && (syncConfirmAction = null)">
+      <template #content>
+        <section class="modal-card" aria-labelledby="sync-confirm-title">
+          <h2 id="sync-confirm-title">{{ syncConfirmTitle }}</h2>
+          <p>{{ syncConfirmCopy }}</p>
+          <div class="modal-actions">
+            <UButton type="button" color="neutral" variant="outline" :disabled="syncBusy" @click="syncConfirmAction = null">
+              Abbrechen
+            </UButton>
+            <UButton type="button" :loading="syncBusy" @click="runSyncAction">
+              {{ syncBusy ? 'Überträgt ...' : syncConfirmButton }}
+            </UButton>
+          </div>
+        </section>
+      </template>
+    </UModal>
   </section>
 </template>
 
@@ -271,7 +267,14 @@ import type { SyncRunAction, SyncStatus } from '@shared/schemas'
 import { DEFAULT_AI_MODEL } from '@shared/constants'
 import { aiConnectionFallbackMessage, type AiConnectionTestSource } from '@shared/aiConnectionFeedback'
 import { api, isElectronApiAvailable } from '../api'
+import { type AppBreadcrumbItem, withHomeIcon } from '../ui/breadcrumbs'
 import { useTheme } from '../theme'
+
+const breadcrumbItems: AppBreadcrumbItem[] = [
+  { label: 'Home', to: { name: 'home' } },
+  { label: 'Mehr', to: { name: 'more' } },
+  { label: 'Einstellungen' }
+]
 
 const { isDark, toggleTheme, applyTheme } = useTheme()
 const users = ref<AppUser[]>([])
@@ -309,6 +312,12 @@ const syncPassword = ref('')
 const syncBusy = ref(false)
 const syncResultSummary = ref('')
 const syncConfirmAction = ref<SyncRunAction | null>(null)
+const userOptions = computed(() =>
+  users.value.map((user) => ({
+    label: `${user.displayName}${user.kind === 'demo' ? ' · Demo' : ''}`,
+    value: user.id
+  }))
+)
 const effectiveAiSource = computed(() =>
   aiSettings.value.source ?? (aiSettings.value.configured ? 'stored' : null)
 )
@@ -477,8 +486,8 @@ function cancelRemoveAiSettings(): void {
   confirmRemoveAiKey.value = false
 }
 
-async function switchUser(event: Event): Promise<void> {
-  const userId = (event.target as HTMLSelectElement).value
+async function switchUser(userId: string | undefined): Promise<void> {
+  if (!userId) return
   await api.switchUser(userId)
   window.location.reload()
 }

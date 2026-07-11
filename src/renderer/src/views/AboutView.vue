@@ -2,6 +2,7 @@
   <section class="about-view">
     <header class="page-header about-header">
       <div>
+        <UBreadcrumb class="app-breadcrumb" :items="withHomeIcon(breadcrumbItems)" />
         <p class="eyebrow">Über das Projekt</p>
         <h1>Wolpi und das Schreiben</h1>
       </div>
@@ -29,7 +30,7 @@
     </section>
 
     <section class="about-grid">
-      <article class="about-panel">
+      <UCard class="about-panel">
         <h3>Die Idee</h3>
         <p>
           Wolpi steht für eine einfache Idee: Wenn die Oberfläche vertraut ist, bleibt im Ernstfall
@@ -37,18 +38,18 @@
           prüfungsnahen Ablauf und soll Schreiben, automatisches Speichern und Abgeben nicht
           unnötig kompliziert machen.
         </p>
-      </article>
+      </UCard>
 
-      <article class="about-panel">
+      <UCard class="about-panel">
         <h3>Was die App können soll</h3>
         <p>
           Prüfungen verwalten, in Ordnern ablegen, lokal exportieren, Kommentare und Bewertungen
           festhalten und den eigenen Fortschritt sauber dokumentieren. Alles offline-ready, klar
           und ohne unnötigen Ballast.
         </p>
-      </article>
+      </UCard>
 
-      <article class="about-panel">
+      <UCard class="about-panel">
         <h3>Warum lokal</h3>
         <p>
           Die Arbeit soll auf dem eigenen Rechner bleiben. Entwürfe werden fortlaufend in lokale
@@ -56,20 +57,28 @@
           App-Absturz nicht einfach verloren ist. Ein Server kann später kommen, aber der Kern
           soll auch allein zuverlässig funktionieren.
         </p>
-      </article>
+      </UCard>
 
-      <article class="about-panel">
+      <UCard class="about-panel">
         <h3>Ton des Projekts</h3>
         <p>
           Kein großes Produktversprechen, keine offizielle Plattform. Nur ein sorgfältig gebautes
           Tool, das im Alltag helfen soll. Wenn Wolpi dabei ein wenig Motivation mitbringt, ist das
           genau die richtige Größenordnung.
         </p>
-      </article>
+      </UCard>
     </section>
   </section>
 </template>
 
 <script setup lang="ts">
+import { type AppBreadcrumbItem, withHomeIcon } from '../ui/breadcrumbs'
+
+const breadcrumbItems: AppBreadcrumbItem[] = [
+  { label: 'Home', to: { name: 'home' } },
+  { label: 'Mehr', to: { name: 'more' } },
+  { label: 'About' }
+]
+
 const submissionImageUrl = 'assets/submission.png'
 </script>

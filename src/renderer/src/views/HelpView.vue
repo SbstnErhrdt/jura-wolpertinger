@@ -2,14 +2,15 @@
   <section class="help-view">
     <header class="page-header">
       <div>
+        <UBreadcrumb class="app-breadcrumb" :items="withHomeIcon(breadcrumbItems)" />
         <p class="eyebrow">Hilfe</p>
         <h1>Fragen und Antworten</h1>
       </div>
       <div class="header-actions">
-        <button @click="startTour">
+        <UButton @click="startTour">
           <Route :size="17" />
           Tour starten
-        </button>
+        </UButton>
       </div>
     </header>
 
@@ -24,16 +25,23 @@
     </section>
 
     <section class="help-grid">
-      <article v-for="item in faq" :key="item.question" class="help-item">
+      <UCard v-for="item in faq" :key="item.question" class="help-item">
         <h2>{{ item.question }}</h2>
         <p>{{ item.answer }}</p>
-      </article>
+      </UCard>
     </section>
   </section>
 </template>
 
 <script setup lang="ts">
 import { Route } from 'lucide-vue-next'
+import { type AppBreadcrumbItem, withHomeIcon } from '../ui/breadcrumbs'
+
+const breadcrumbItems: AppBreadcrumbItem[] = [
+  { label: 'Home', to: { name: 'home' } },
+  { label: 'Mehr', to: { name: 'more' } },
+  { label: 'Hilfe' }
+]
 
 const faq = [
   {
