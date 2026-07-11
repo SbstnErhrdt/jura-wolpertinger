@@ -36,6 +36,19 @@ describe('mobile hub navigation', () => {
     expect(styles).toMatch(/\.mobile-nav\s+\[data-slot='item'\]\s*\{[^}]*min-width:\s*0/s)
   })
 
+  it('defines consistent mobile hover, active, focus and dark interaction states', async () => {
+    const styles = await readFile(resolve(rendererRoot, 'styles/main.css'), 'utf8')
+
+    expect(styles).toMatch(/\.mobile-nav a:hover\s*\{[^}]*background:/s)
+    expect(styles).toMatch(/\.mobile-nav a\[data-active\]\s*\{[^}]*background:/s)
+    expect(styles).toMatch(/\.mobile-nav a\.router-link-active\s*\{[^}]*background:/s)
+    expect(styles).toMatch(/\.mobile-nav a:focus-visible\s*\{[^}]*outline:\s*2px solid/s)
+    expect(styles).toMatch(/:root\[data-theme='dark'\] \.mobile-nav\s*\{[^}]*background:/s)
+    expect(styles).toMatch(/:root\[data-theme='dark'\] \.mobile-nav a:hover\s*\{[^}]*background:/s)
+    expect(styles).toMatch(/:root\[data-theme='dark'\] \.mobile-nav a\[data-active\]\s*\{[^}]*background:/s)
+    expect(styles).toMatch(/:root\[data-theme='dark'\] \.mobile-nav a\.router-link-active\s*\{[^}]*background:/s)
+  })
+
   it('provides hub pages with the missing desktop subnavigation actions', async () => {
     const flashcardsHub = await readFile(resolve(rendererRoot, 'views/FlashcardsHubView.vue'), 'utf8')
     const examsHub = await readFile(resolve(rendererRoot, 'views/ExamsHubView.vue'), 'utf8')

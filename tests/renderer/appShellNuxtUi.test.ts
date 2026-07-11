@@ -41,10 +41,36 @@ describe('Nuxt UI app shell', () => {
     }
   })
 
+  it('keeps section navigation active on every nested route', async () => {
+    const app = await readFile(resolve(rendererRoot, 'App.vue'), 'utf8')
+
+    expect(app).toContain('const homeNavigationItems = computed')
+    expect(app).toContain('const flashcardNavigationItems = computed')
+    expect(app).toContain('const examNavigationItems = computed')
+    expect(app).toContain('const mobileNavigationItems = computed')
+    expect(app).toContain("route.path.startsWith('/flashcards')")
+    expect(app).toContain("route.path.startsWith('/exams')")
+    expect(app).toContain("route.path.startsWith('/more')")
+    expect(app).toContain("['flashcards-collections', 'flashcards-collection'].includes(String(route.name))")
+    expect(app).toContain("['dashboard', 'exam', 'exam-focus'].includes(String(route.name))")
+  })
+
   it('maps the existing theme state to the dark class used by Nuxt UI', async () => {
     const theme = await readFile(resolve(rendererRoot, 'theme.ts'), 'utf8')
 
     expect(theme).toContain("document.documentElement.classList.toggle('dark', theme.value === 'dark')")
     expect(theme).toContain("document.documentElement.classList.toggle('light', theme.value === 'light')")
+  })
+
+  it('defines consistent sidebar hover, active, focus and dark interaction states', async () => {
+    const styles = await readFile(resolve(rendererRoot, 'styles/main.css'), 'utf8')
+
+    expect(styles).toMatch(/\.nav a:hover\s*\{[^}]*background:/s)
+    expect(styles).toMatch(/\.nav a\[data-active\]\s*\{[^}]*background:/s)
+    expect(styles).toMatch(/\.nav a\.router-link-active\s*\{[^}]*background:/s)
+    expect(styles).toMatch(/\.nav a:focus-visible\s*\{[^}]*outline:\s*2px solid/s)
+    expect(styles).toMatch(/:root\[data-theme='dark'\] \.nav a:hover\s*\{[^}]*background:/s)
+    expect(styles).toMatch(/:root\[data-theme='dark'\] \.nav a\[data-active\]\s*\{[^}]*background:/s)
+    expect(styles).toMatch(/:root\[data-theme='dark'\] \.nav a\.router-link-active\s*\{[^}]*background:/s)
   })
 })

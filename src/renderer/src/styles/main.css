@@ -142,7 +142,8 @@ body {
 }
 
 .app-breadcrumb-link,
-.app-breadcrumb-current {
+.app-breadcrumb-current,
+.app-breadcrumb [data-slot='link'] {
   align-items: center;
   border-radius: 999px;
   color: var(--color-text-muted);
@@ -154,20 +155,52 @@ body {
   min-height: 26px;
   padding: 0 9px;
   text-decoration: none;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
 }
 
 .app-breadcrumb-link:hover {
-  background: var(--color-surface-muted);
+  background: #dff3fc;
   color: var(--color-primary-strong);
   filter: none;
 }
 
+.app-breadcrumb a[data-slot='link']:hover {
+  background: #dff3fc;
+  color: var(--color-primary-strong);
+}
+
+.app-breadcrumb-link:focus-visible {
+  background: #dff3fc;
+  color: var(--color-primary-strong);
+  outline: 2px solid #008bd2;
+  outline-offset: 2px;
+}
+
+.app-breadcrumb a[data-slot='link']:focus-visible {
+  background: #dff3fc;
+  color: var(--color-primary-strong);
+  outline: 2px solid #008bd2;
+  outline-offset: 2px;
+}
+
 .app-breadcrumb-current[aria-current='page'] {
-  background: var(--color-primary);
+  background: var(--color-primary-strong);
+  color: #fff;
+}
+
+.app-breadcrumb span[data-slot='link'] {
+  background: var(--color-primary-strong);
   color: #fff;
 }
 
 .app-breadcrumb-separator {
+  color: var(--color-text-muted);
+  opacity: 0.62;
+}
+
+.app-breadcrumb [data-slot='separatorIcon'] {
   color: var(--color-text-muted);
   opacity: 0.62;
 }
@@ -372,6 +405,21 @@ body {
   gap: 10px;
   padding: 10px 8px;
   text-decoration: none;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.nav a:hover {
+  background: rgba(255, 255, 255, 0.11);
+  color: #fff;
+}
+
+.nav a:focus-visible {
+  background: rgba(255, 255, 255, 0.11);
+  color: #fff;
+  outline: 2px solid #82d5f2;
+  outline-offset: -2px;
 }
 
 .auth-gate {
@@ -1326,7 +1374,12 @@ button:active .key-hint,
 }
 
 .nav a.router-link-active {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.nav a[data-active] {
+  background: rgba(255, 255, 255, 0.2);
   color: #fff;
 }
 
@@ -3470,9 +3523,25 @@ button:active .key-hint,
   color: #cbd9de;
 }
 
-:root[data-theme='dark'] .nav a.router-link-active {
-  background: rgba(121, 185, 218, 0.2);
+:root[data-theme='dark'] .nav a:hover {
+  background: rgba(121, 185, 218, 0.14);
   color: #f4fbff;
+}
+
+:root[data-theme='dark'] .nav a.router-link-active {
+  background: rgba(121, 185, 218, 0.26);
+  color: #f4fbff;
+}
+
+:root[data-theme='dark'] .nav a[data-active] {
+  background: rgba(121, 185, 218, 0.26);
+  color: #f4fbff;
+}
+
+:root[data-theme='dark'] .nav a:focus-visible {
+  background: rgba(121, 185, 218, 0.14);
+  color: #f4fbff;
+  outline-color: #43bce8;
 }
 
 :root[data-theme='dark'] .exam-view button,
@@ -3684,13 +3753,19 @@ button:active .key-hint,
 }
 
 :root[data-theme='dark'] .app-breadcrumb-link,
-:root[data-theme='dark'] .app-breadcrumb-current {
+:root[data-theme='dark'] .app-breadcrumb-current,
+:root[data-theme='dark'] .app-breadcrumb [data-slot='link'] {
   color: #b7c9d0;
 }
 
 :root[data-theme='dark'] .app-breadcrumb-link:hover {
-  background: #172b34;
-  color: #9bdcff;
+  background: #173746;
+  color: #b9e7f8;
+}
+
+:root[data-theme='dark'] .app-breadcrumb a[data-slot='link']:hover {
+  background: #173746;
+  color: #b9e7f8;
 }
 
 :root[data-theme='dark'] .app-breadcrumb-current[aria-current='page'] {
@@ -3698,8 +3773,29 @@ button:active .key-hint,
   color: #fff;
 }
 
+:root[data-theme='dark'] .app-breadcrumb span[data-slot='link'] {
+  background: #0f6c9d;
+  color: #fff;
+}
+
 :root[data-theme='dark'] .app-breadcrumb-separator {
   color: #8fa3ac;
+}
+
+:root[data-theme='dark'] .app-breadcrumb [data-slot='separatorIcon'] {
+  color: #8fa3ac;
+}
+
+:root[data-theme='dark'] .app-breadcrumb-link:focus-visible {
+  background: #173746;
+  color: #b9e7f8;
+  outline-color: #43bce8;
+}
+
+:root[data-theme='dark'] .app-breadcrumb a[data-slot='link']:focus-visible {
+  background: #173746;
+  color: #b9e7f8;
+  outline-color: #43bce8;
 }
 
 :root[data-theme='dark'] .app-badge-blue {
@@ -4817,7 +4913,22 @@ button:active .key-hint,
     min-width: 0;
     padding: 7px 4px;
     text-decoration: none;
+    transition:
+      background-color 140ms ease,
+      color 140ms ease;
     width: 100%;
+  }
+
+  .mobile-nav a:hover {
+    background: #dff3fc;
+    color: #075d88;
+  }
+
+  .mobile-nav a:focus-visible {
+    background: #dff3fc;
+    color: #075d88;
+    outline: 2px solid #008bd2;
+    outline-offset: -2px;
   }
 
   .mobile-nav [data-slot='linkLabel'] {
@@ -4828,8 +4939,45 @@ button:active .key-hint,
   }
 
   .mobile-nav a.router-link-active {
-    color: #006ea8;
+    background: #b9e7f8;
+    color: #075d88;
     font-weight: 800;
+  }
+
+  .mobile-nav a[data-active] {
+    background: #b9e7f8;
+    color: #075d88;
+    font-weight: 800;
+  }
+
+  :root[data-theme='dark'] .mobile-nav {
+    background: rgba(7, 21, 28, 0.97);
+    border-top-color: #31424a;
+  }
+
+  :root[data-theme='dark'] .mobile-nav a {
+    color: #b7c9d0;
+  }
+
+  :root[data-theme='dark'] .mobile-nav a:hover {
+    background: #173746;
+    color: #b9e7f8;
+  }
+
+  :root[data-theme='dark'] .mobile-nav a.router-link-active {
+    background: #0f506f;
+    color: #eff9fe;
+  }
+
+  :root[data-theme='dark'] .mobile-nav a[data-active] {
+    background: #0f506f;
+    color: #eff9fe;
+  }
+
+  :root[data-theme='dark'] .mobile-nav a:focus-visible {
+    background: #173746;
+    color: #b9e7f8;
+    outline-color: #43bce8;
   }
 
   .main-pane {

@@ -26,4 +26,18 @@ describe('breadcrumb navigation', () => {
       else expect(source, page).toContain('UBreadcrumb')
     }
   })
+
+  it('defines consistent breadcrumb hover, current, focus and dark interaction states', async () => {
+    const styles = await readFile(resolve(rendererRoot, 'styles/main.css'), 'utf8')
+
+    expect(styles).toMatch(/\.app-breadcrumb-link:hover\s*\{[^}]*background:/s)
+    expect(styles).toMatch(/\.app-breadcrumb a\[data-slot='link'\]:hover\s*\{[^}]*background:/s)
+    expect(styles).toMatch(/\.app-breadcrumb-current\[aria-current='page'\]\s*\{[^}]*background:/s)
+    expect(styles).toMatch(/\.app-breadcrumb span\[data-slot='link'\]\s*\{[^}]*background:/s)
+    expect(styles).toMatch(/\.app-breadcrumb-link:focus-visible\s*\{[^}]*outline:\s*2px solid/s)
+    expect(styles).toMatch(/:root\[data-theme='dark'\] \.app-breadcrumb\s*\{[^}]*background:/s)
+    expect(styles).toMatch(/:root\[data-theme='dark'\] \.app-breadcrumb-link:hover\s*\{[^}]*background:/s)
+    expect(styles).toMatch(/:root\[data-theme='dark'\] \.app-breadcrumb a\[data-slot='link'\]:hover\s*\{[^}]*background:/s)
+    expect(styles).toMatch(/:root\[data-theme='dark'\] \.app-breadcrumb-current\[aria-current='page'\]\s*\{[^}]*background:/s)
+  })
 })

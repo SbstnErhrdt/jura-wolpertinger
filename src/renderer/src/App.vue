@@ -266,27 +266,69 @@ const userOptions = computed(() =>
     value: user.id
   }))
 )
-const homeNavigationItems = [{ label: 'Home', icon: 'i-lucide-house', to: { name: 'home' } }]
-const flashcardNavigationItems = [
-  { label: 'Wiederholen', icon: 'i-lucide-layers', to: { name: 'flashcards-review' } },
-  { label: 'Sammlungen', icon: 'i-lucide-folder-kanban', to: { name: 'flashcards-collections' } }
-]
-const examNavigationItems = [
-  { label: 'Bibliothek', icon: 'i-lucide-library-big', to: { name: 'dashboard' } },
-  { label: 'Bewertung', icon: 'i-lucide-clipboard-check', to: { name: 'correction' } },
-  { label: 'Auswertung', icon: 'i-lucide-chart-no-axes-combined', to: { name: 'analytics' } }
-]
-const moreNavigationItems = [
-  { label: 'Einstellungen', icon: 'i-lucide-settings', to: { name: 'settings' } },
-  { label: 'About', icon: 'i-lucide-info', to: { name: 'about' } },
-  { label: 'Hilfe', icon: 'i-lucide-circle-help', to: { name: 'help' } }
-]
-const mobileNavigationItems = [
-  { label: 'Home', icon: 'i-lucide-house', to: { name: 'home' } },
-  { label: 'Karteikarten', icon: 'i-lucide-layers', to: { name: 'flashcards' } },
-  { label: 'Prüfungen', icon: 'i-lucide-library-big', to: { name: 'exams' } },
-  { label: 'Mehr', icon: 'i-lucide-ellipsis', to: { name: 'more' } }
-]
+const homeNavigationItems = computed(() => [
+  { label: 'Home', icon: 'i-lucide-house', to: { name: 'home' }, active: route.name === 'home' }
+])
+const flashcardNavigationItems = computed(() => [
+  {
+    label: 'Wiederholen',
+    icon: 'i-lucide-layers',
+    to: { name: 'flashcards-review' },
+    active: route.name === 'flashcards-review'
+  },
+  {
+    label: 'Sammlungen',
+    icon: 'i-lucide-folder-kanban',
+    to: { name: 'flashcards-collections' },
+    active: ['flashcards-collections', 'flashcards-collection'].includes(String(route.name))
+  }
+])
+const examNavigationItems = computed(() => [
+  {
+    label: 'Bibliothek',
+    icon: 'i-lucide-library-big',
+    to: { name: 'dashboard' },
+    active: ['dashboard', 'exam', 'exam-focus'].includes(String(route.name))
+  },
+  {
+    label: 'Bewertung',
+    icon: 'i-lucide-clipboard-check',
+    to: { name: 'correction' },
+    active: route.name === 'correction'
+  },
+  {
+    label: 'Auswertung',
+    icon: 'i-lucide-chart-no-axes-combined',
+    to: { name: 'analytics' },
+    active: route.name === 'analytics'
+  }
+])
+const moreNavigationItems = computed(() => [
+  { label: 'Einstellungen', icon: 'i-lucide-settings', to: { name: 'settings' }, active: route.name === 'settings' },
+  { label: 'About', icon: 'i-lucide-info', to: { name: 'about' }, active: route.name === 'about' },
+  { label: 'Hilfe', icon: 'i-lucide-circle-help', to: { name: 'help' }, active: route.name === 'help' }
+])
+const mobileNavigationItems = computed(() => [
+  { label: 'Home', icon: 'i-lucide-house', to: { name: 'home' }, active: route.path === '/' },
+  {
+    label: 'Karteikarten',
+    icon: 'i-lucide-layers',
+    to: { name: 'flashcards' },
+    active: route.path.startsWith('/flashcards')
+  },
+  {
+    label: 'Prüfungen',
+    icon: 'i-lucide-library-big',
+    to: { name: 'exams' },
+    active: route.path.startsWith('/exams')
+  },
+  {
+    label: 'Mehr',
+    icon: 'i-lucide-ellipsis',
+    to: { name: 'more' },
+    active: route.path.startsWith('/more')
+  }
+])
 const startTourListener = () => startTour()
 const usersUpdatedListener = () => {
   void loadUsers()
