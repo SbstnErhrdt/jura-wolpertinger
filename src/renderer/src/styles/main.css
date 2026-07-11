@@ -4784,12 +4784,26 @@ button:active .key-hint,
     background: rgba(255, 255, 255, 0.96);
     border-top: 1px solid #c8e0eb;
     bottom: 0;
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    display: block;
     left: 0;
     position: fixed;
     right: 0;
     z-index: 30;
+  }
+
+  .mobile-nav > div:first-child {
+    width: 100%;
+  }
+
+  .mobile-nav [data-slot='list'] {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .mobile-nav [data-slot='item'] {
+    min-width: 0;
+    padding: 0;
   }
 
   .mobile-nav a {
@@ -4800,8 +4814,17 @@ button:active .key-hint,
     gap: 3px;
     justify-items: center;
     min-height: 58px;
+    min-width: 0;
     padding: 7px 4px;
     text-decoration: none;
+    width: 100%;
+  }
+
+  .mobile-nav [data-slot='linkLabel'] {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .mobile-nav a.router-link-active {

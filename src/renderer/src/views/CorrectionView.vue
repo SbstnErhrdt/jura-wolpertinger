@@ -41,10 +41,10 @@
             <h1>{{ submission.examTitle }}</h1>
           </div>
           <div class="header-actions">
-            <RouterLink class="secondary" :to="{ name: 'exam', params: { id: submission.examId } }">
+            <UButton color="neutral" variant="outline" :to="{ name: 'exam', params: { id: submission.examId } }">
               Zur Prüfung
-            </RouterLink>
-            <UButton type="button" class="secondary" @click="showAiSettings = !showAiSettings">
+            </UButton>
+            <UButton type="button" color="neutral" variant="outline" @click="showAiSettings = !showAiSettings">
               KI einrichten
             </UButton>
             <UButton type="button" :disabled="aiBusy || !aiSettings.configured || cloudAiDisabled" @click="generateAiDraft">
@@ -81,7 +81,8 @@
                 <UButton type="button" @click="openAiKeyForm">{{ aiSetupButtonLabel }}</UButton>
                 <UButton
                   type="button"
-                  class="secondary"
+                  color="neutral"
+                  variant="outline"
                   :disabled="!aiSettings.configured || aiBusy"
                   @click="testAiConnection"
                 >
@@ -90,7 +91,8 @@
                 <UButton
                   v-if="storedKeyOverridesEnvironment"
                   type="button"
-                  class="secondary"
+                  color="neutral"
+                  variant="outline"
                   :disabled="aiBusy"
                   @click="testEnvironmentConnection"
                 >
@@ -99,7 +101,8 @@
                 <UButton
                   v-if="effectiveAiSource === 'stored'"
                   type="button"
-                  class="secondary danger-secondary"
+                  color="error"
+                  variant="outline"
                   :disabled="aiBusy"
                   @click="startRemoveAiSettings"
                 >
@@ -110,10 +113,10 @@
                 <strong>App-Key entfernen?</strong>
                 <p>KI-Korrekturen nutzen danach keinen gespeicherten App-Key mehr.</p>
                 <div class="dialog-actions">
-                  <UButton type="button" class="danger-button" :disabled="aiBusy" @click="removeAiSettings">
+                  <UButton type="button" color="error" :disabled="aiBusy" @click="removeAiSettings">
                     Entfernen
                   </UButton>
-                  <UButton type="button" class="secondary" :disabled="aiBusy" @click="cancelRemoveAiSettings">
+                  <UButton type="button" color="neutral" variant="outline" :disabled="aiBusy" @click="cancelRemoveAiSettings">
                     Abbrechen
                   </UButton>
                 </div>
@@ -134,7 +137,7 @@
                   <UButton type="submit" :disabled="aiBusy">
                     {{ aiBusy ? 'Speichert ...' : 'Speichern' }}
                   </UButton>
-                  <UButton type="button" class="secondary" :disabled="aiBusy" @click="cancelAiKeyForm">
+                  <UButton type="button" color="neutral" variant="outline" :disabled="aiBusy" @click="cancelAiKeyForm">
                     Abbrechen
                   </UButton>
                 </div>
@@ -159,7 +162,7 @@
               </div>
               <label>
                 Bewertungskommentar
-                <UTextarea v-model="gradingComment" rows="4" />
+                <UTextarea v-model="gradingComment" :rows="4" />
               </label>
             </div>
           </section>
@@ -233,7 +236,7 @@
               </div>
 
               <div class="dialog-actions">
-                <UButton type="button" class="secondary" :disabled="aiBusy" @click="rejectAiDraft(selectedAiDraft.id)">
+                <UButton type="button" color="neutral" variant="outline" :disabled="aiBusy" @click="rejectAiDraft(selectedAiDraft.id)">
                   Verwerfen
                 </UButton>
                 <UButton type="button" :disabled="aiBusy" @click="acceptAiDraft(selectedAiDraft.id)">
@@ -268,13 +271,13 @@
                   Kommentar
                   <UTextarea
                     v-model="commentBody"
-                    rows="3"
+                    :rows="3"
                     placeholder="Hinweis oder Korrektur zur markierten Passage"
                     autofocus
                   />
                 </label>
                 <div class="comment-actions">
-                  <UButton type="button" class="secondary" @click="clearSelectedText">
+                  <UButton type="button" color="neutral" variant="outline" @click="clearSelectedText">
                     Abbrechen
                   </UButton>
                   <UButton type="button" :disabled="!canAddComment" @click="addComment">

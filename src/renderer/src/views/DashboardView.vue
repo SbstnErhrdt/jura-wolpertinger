@@ -7,7 +7,7 @@
         <h1>Bibliothek</h1>
       </div>
       <div class="header-actions">
-        <UButton class="secondary" @click="importPackage">
+        <UButton color="neutral" variant="outline" @click="importPackage">
           <Upload :size="17" />
           Importieren
         </UButton>
@@ -37,7 +37,7 @@
       <aside class="panel">
         <div class="panel-header">
           <h2>Ordner</h2>
-          <UButton class="secondary compact-button" title="Ordner erstellen" @click="openCreateFolderDialog">
+          <UButton class="compact-button" color="neutral" variant="outline" title="Ordner erstellen" @click="openCreateFolderDialog">
             <FolderPlus :size="16" />
             Neuer Ordner
           </UButton>
@@ -93,7 +93,7 @@
                 <strong>{{ exam.title }}</strong>
                 <span>Klausur · {{ formatDate(exam.updatedAt) }}</span>
               </div>
-              <UButton class="secondary" @click="restoreExam(exam.id)">
+              <UButton color="neutral" variant="outline" @click="restoreExam(exam.id)">
                 <RotateCcw :size="15" />
                 Wiederherstellen
               </UButton>
@@ -103,7 +103,7 @@
                 <strong>{{ folder.name }}</strong>
                 <span>Ordner · {{ formatDate(folder.trashedAt) }}</span>
               </div>
-              <UButton class="secondary" @click="restoreFolder(folder.id)">
+              <UButton color="neutral" variant="outline" @click="restoreFolder(folder.id)">
                 <RotateCcw :size="15" />
                 Wiederherstellen
               </UButton>
@@ -131,7 +131,7 @@
         </div>
         <p v-else-if="store.error" class="action-notice error">
           <span>{{ store.error }}</span>
-          <UButton type="button" class="secondary" @click="reloadExams">Erneut versuchen</UButton>
+          <UButton type="button" color="neutral" variant="outline" @click="reloadExams">Erneut versuchen</UButton>
         </p>
         <div
           v-else
@@ -233,7 +233,7 @@
             <UInput v-model="folderName" placeholder="Ordnername" autofocus />
           </label>
           <div class="dialog-actions">
-            <UButton type="button" class="secondary" @click="cancelCreateFolder">Abbrechen</UButton>
+            <UButton type="button" color="neutral" variant="outline" @click="cancelCreateFolder">Abbrechen</UButton>
             <UButton type="submit">
               <FolderPlus :size="16" />
               Erstellen
@@ -260,7 +260,7 @@
             <TagInput v-model="tagValues" :suggestions="tagSuggestions" placeholder="Tags hinzufügen" />
           </div>
           <div class="dialog-actions">
-            <UButton type="button" class="secondary" @click="cancelCreateExam">Abbrechen</UButton>
+            <UButton type="button" color="neutral" variant="outline" @click="cancelCreateExam">Abbrechen</UButton>
             <UButton type="submit">
               <Plus :size="17" />
               Erstellen
@@ -279,7 +279,7 @@
             <UInput v-model="renameExamTitle" placeholder="Titel" autofocus />
           </label>
           <div class="dialog-actions">
-            <UButton type="button" class="secondary" @click="cancelRenameExam">Abbrechen</UButton>
+            <UButton type="button" color="neutral" variant="outline" @click="cancelRenameExam">Abbrechen</UButton>
             <UButton type="submit">Speichern</UButton>
           </div>
         </form>
@@ -292,7 +292,7 @@
         <form class="dialog-form" @submit.prevent="submitRenameFolder">
           <UInput v-model="renameFolderName" placeholder="Ordnername" />
           <div class="dialog-actions">
-            <UButton type="button" class="secondary" @click="cancelRenameFolder">Abbrechen</UButton>
+            <UButton type="button" color="neutral" variant="outline" @click="cancelRenameFolder">Abbrechen</UButton>
             <UButton type="submit">Speichern</UButton>
           </div>
         </form>
@@ -311,8 +311,8 @@
           <USelect v-model="trashMoveTargetId" :items="trashTargetOptions" value-key="value" />
         </label>
         <div class="dialog-actions">
-          <UButton type="button" class="secondary" @click="cancelTrashFolder">Abbrechen</UButton>
-          <UButton type="button" class="danger-button" @click="submitTrashFolder">
+          <UButton type="button" color="neutral" variant="outline" @click="cancelTrashFolder">Abbrechen</UButton>
+          <UButton type="button" color="error" @click="submitTrashFolder">
             In Papierkorb
           </UButton>
         </div>

@@ -34,15 +34,17 @@
           <UButton
             v-for="preset in rangePresets"
             :key="preset.id"
-            class="secondary analytics-preset"
+            class="analytics-preset"
             :class="{ active: filters.preset === preset.id }"
+            color="neutral"
+            variant="outline"
             type="button"
             @click="applyPreset(preset.id)"
           >
             {{ preset.label }}
           </UButton>
         </div>
-        <UButton class="secondary" type="button" @click="resetFilters">Filter zurücksetzen</UButton>
+        <UButton color="neutral" variant="outline" type="button" @click="resetFilters">Filter zurücksetzen</UButton>
       </div>
 
       <p class="analytics-range-copy">
@@ -164,7 +166,7 @@
             <h3>{{ task.title }}</h3>
             <p v-if="task.detail">{{ task.detail }}</p>
           </div>
-          <UButton class="secondary" type="button" @click="() => void markTaskDone(task.id)">Erledigt</UButton>
+          <UButton color="neutral" variant="outline" type="button" @click="() => void markTaskDone(task.id)">Erledigt</UButton>
         </article>
       </div>
       <p v-if="hiddenLearningTaskCount > 0" class="analytics-learning-more">

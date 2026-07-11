@@ -301,11 +301,11 @@ const autosaveLabel = ref('Entwurf lokal gespeichert')
 const showSubmitDialog = ref(false)
 const showSubmissionOverlay = ref(false)
 const { isDark, toggleTheme } = useTheme()
-let submissionOverlayTimer: ReturnType<typeof window.setTimeout> | null = null
+let submissionOverlayTimer: number | null = null
 const SUBMISSION_OVERLAY_MS = 10_000
 const breadcrumbItems = computed<BreadcrumbItem[]>(() => [
   { label: 'Home', to: { name: 'home' } },
-  { label: 'Prüfungen' },
+  { label: 'Prüfungen', to: { name: 'exams' } },
   { label: 'Bibliothek', to: { name: 'dashboard' } },
   { label: exam.value?.folderName ?? 'Ohne Ordner' },
   { label: title.value || exam.value?.title || 'Klausur' }

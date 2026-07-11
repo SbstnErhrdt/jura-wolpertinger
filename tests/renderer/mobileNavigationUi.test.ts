@@ -28,6 +28,14 @@ describe('mobile hub navigation', () => {
     expect(app).not.toContain('<span>Karten</span>')
   })
 
+  it('lays out Nuxt UI navigation list items in four stable mobile columns', async () => {
+    const styles = await readFile(resolve(rendererRoot, 'styles/main.css'), 'utf8')
+
+    expect(styles).toMatch(/\.mobile-nav\s+\[data-slot='list'\]\s*\{[^}]*grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/s)
+    expect(styles).toMatch(/\.mobile-nav\s*>\s*div:first-child\s*\{[^}]*width:\s*100%/s)
+    expect(styles).toMatch(/\.mobile-nav\s+\[data-slot='item'\]\s*\{[^}]*min-width:\s*0/s)
+  })
+
   it('provides hub pages with the missing desktop subnavigation actions', async () => {
     const flashcardsHub = await readFile(resolve(rendererRoot, 'views/FlashcardsHubView.vue'), 'utf8')
     const examsHub = await readFile(resolve(rendererRoot, 'views/ExamsHubView.vue'), 'utf8')

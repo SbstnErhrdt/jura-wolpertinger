@@ -47,7 +47,7 @@ describe('paginated list UI affordances', () => {
     expect(source).toContain('<UPagination')
     expect(source).toContain('<USkeleton')
     expect(source).toContain('listLearningCardsPage')
-    expect(source).toContain('collection?.cardCount')
+    expect(source).toContain('{{ cardsTotal }} Karten')
     expect(source).toContain('aria-busy')
     expect(source).toContain('paginated-list-refreshing')
   })

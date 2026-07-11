@@ -12,8 +12,11 @@ describe('Nuxt UI renderer foundation', () => {
     ])
 
     expect(viteConfig).toContain("from '@nuxt/ui/vite'")
+    expect(viteConfig).toContain("from '@nuxt/icon/vite'")
     expect(viteConfig).toMatch(/plugins:\s*\[\s*vue\(\),\s*ui\(/)
+    expect(viteConfig).toContain('NuxtIconBundle({')
     expect(main).toContain("from '@nuxt/ui/vue-plugin'")
+    expect(main).toContain("import 'virtual:nuxt-icon-bundle/register'")
     expect(main).toContain('.use(ui)')
   })
 
