@@ -15,14 +15,15 @@ const breadcrumbPages = [
 ]
 
 describe('breadcrumb navigation', () => {
-  it('uses one shared breadcrumb component on learning and exam pages', async () => {
+  it('uses Nuxt UI breadcrumbs outside the protected exam view', async () => {
     const component = await readFile(resolve(rendererRoot, 'components/ui/AppBreadcrumb.vue'), 'utf8').catch(() => '')
 
     expect(component).toContain('app-breadcrumb')
 
     for (const page of breadcrumbPages) {
       const source = await readFile(resolve(rendererRoot, page), 'utf8')
-      expect(source, page).toContain('AppBreadcrumb')
+      if (page.endsWith('ExamView.vue')) expect(source, page).toContain('AppBreadcrumb')
+      else expect(source, page).toContain('UBreadcrumb')
     }
   })
 })

@@ -13,11 +13,11 @@ describe('flashcards UI affordances', () => {
     expect(source).toContain('api.updateLearningCard')
   })
 
-  it('uses the shared action menu instead of native details for review actions', async () => {
+  it('uses the Nuxt UI dropdown menu instead of native details for review actions', async () => {
     const source = await readFile(resolve(rendererRoot, 'views/FlashcardsReviewView.vue'), 'utf8')
 
     expect(source).not.toContain('<details>')
-    expect(source).toContain('ActionMenu')
+    expect(source).toContain('UDropdownMenu')
     expect(source).toContain('Aus Session entfernen')
   })
 

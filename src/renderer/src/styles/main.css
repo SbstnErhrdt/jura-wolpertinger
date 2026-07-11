@@ -60,15 +60,15 @@ body {
   margin: 0;
 }
 
-button,
-input,
-select,
-textarea {
+.exam-view button,
+.exam-view input,
+.exam-view select,
+.exam-view textarea {
   font: inherit;
 }
 
-button,
-.secondary {
+.exam-view button,
+.exam-view .secondary {
   align-items: center;
   background: var(--color-primary);
   border: 1px solid var(--color-primary);
@@ -82,21 +82,21 @@ button,
   text-decoration: none;
 }
 
-button.secondary,
-.secondary {
+.exam-view button.secondary,
+.exam-view .secondary {
   background: var(--color-surface);
   border-color: var(--color-border-strong);
   color: var(--color-primary-strong);
 }
 
-button:hover,
-.secondary:hover {
+.exam-view button:hover,
+.exam-view .secondary:hover {
   filter: brightness(0.96);
 }
 
-input,
-select,
-textarea {
+.exam-view input,
+.exam-view select,
+.exam-view textarea {
   background: var(--color-surface);
   border: 1px solid var(--color-border-strong);
   border-radius: 5px;
@@ -282,7 +282,7 @@ textarea {
   filter: none;
 }
 
-textarea {
+.exam-view textarea {
   resize: vertical;
 }
 
@@ -3475,15 +3475,15 @@ button:active .key-hint,
   color: #f4fbff;
 }
 
-:root[data-theme='dark'] button,
-:root[data-theme='dark'] .secondary {
+:root[data-theme='dark'] .exam-view button,
+:root[data-theme='dark'] .exam-view .secondary {
   background: #0079b8;
   border-color: #0079b8;
   color: #f2f8fa;
 }
 
-:root[data-theme='dark'] button.secondary,
-:root[data-theme='dark'] .secondary {
+:root[data-theme='dark'] .exam-view button.secondary,
+:root[data-theme='dark'] .exam-view .secondary {
   background: #152126;
   border-color: #31424a;
   color: #d9e5ea;
@@ -3522,18 +3522,18 @@ button:active .key-hint,
   background: #0075b8;
 }
 
-:root[data-theme='dark'] input,
-:root[data-theme='dark'] select,
-:root[data-theme='dark'] textarea,
-:root[data-theme='dark'] .tag-input {
+:root[data-theme='dark'] .exam-view input,
+:root[data-theme='dark'] .exam-view select,
+:root[data-theme='dark'] .exam-view textarea,
+:root[data-theme='dark'] .exam-view .tag-input {
   background: #111b20;
   border-color: #31424a;
   color: #e5eef2;
 }
 
-:root[data-theme='dark'] input::placeholder,
-:root[data-theme='dark'] textarea::placeholder,
-:root[data-theme='dark'] .tag-input-field::placeholder {
+:root[data-theme='dark'] .exam-view input::placeholder,
+:root[data-theme='dark'] .exam-view textarea::placeholder,
+:root[data-theme='dark'] .exam-view .tag-input-field::placeholder {
   color: #82939b;
 }
 

@@ -5,26 +5,25 @@ import { describe, expect, it } from 'vitest'
 const rendererRoot = resolve(process.cwd(), 'src/renderer/src')
 
 describe('paginated list UI affordances', () => {
-  it('provides a reusable pagination component with range copy and page-size control', async () => {
-    const source = await readFile(resolve(rendererRoot, 'components/ui/AppPagination.vue'), 'utf8')
+  it('uses Nuxt UI pagination with range copy and page-size controls', async () => {
+    const sources = await Promise.all([
+      readFile(resolve(rendererRoot, 'views/DashboardView.vue'), 'utf8'),
+      readFile(resolve(rendererRoot, 'views/FlashcardsCollectionDetailView.vue'), 'utf8')
+    ])
 
-    expect(source).toContain('defineEmits')
-    expect(source).toContain('update:page')
-    expect(source).toContain('update:pageSize')
-    expect(source).toContain('rangeStart')
-    expect(source).toContain('rangeEnd')
-    expect(source).toContain('page-size')
-    expect(source).toContain('ChevronLeft')
-    expect(source).toContain('ChevronRight')
+    for (const source of sources) {
+      expect(source).toContain('<UPagination')
+      expect(source).toContain('pageSizeOptions')
+      expect(source).toContain('von {{')
+    }
   })
 
-  it('provides skeleton list tiles that are hidden from screen readers', async () => {
-    const source = await readFile(resolve(rendererRoot, 'components/ui/ListSkeleton.vue'), 'utf8')
+  it('provides Nuxt UI skeleton tiles that are hidden from screen readers', async () => {
+    const source = await readFile(resolve(rendererRoot, 'views/DashboardView.vue'), 'utf8')
     const styles = await readFile(resolve(rendererRoot, 'styles/main.css'), 'utf8')
 
     expect(source).toContain('aria-hidden="true"')
-    expect(source).toContain('skeleton-list')
-    expect(source).toContain("variant?: 'exam' | 'flashcard'")
+    expect(source).toContain('<USkeleton')
     expect(styles).toContain('.skeleton-list')
     expect(styles).toContain('@keyframes skeleton-shimmer')
   })
