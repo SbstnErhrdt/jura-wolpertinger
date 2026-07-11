@@ -1,6 +1,7 @@
 <template>
   <div class="tag-input-control">
     <div
+      ref="controlRef"
       class="tag-input"
       :class="{ focused: isFocused }"
       @click="focusInput"
@@ -11,19 +12,23 @@
         class="tag-input-chip"
       >
         <span>{{ tag }}</span>
-        <button
+        <UButton
           type="button"
           class="tag-input-chip-remove"
+          color="neutral"
+          variant="ghost"
+          size="xs"
           :aria-label="`Tag ${tag} entfernen`"
           @click.stop="removeTag(tag)"
         >
           ×
-        </button>
+        </UButton>
       </span>
-      <input
-        ref="inputRef"
+      <UInput
         v-model="draft"
-        class="tag-input-field"
+        class="tag-input-field-root"
+        variant="none"
+        :ui="{ base: 'tag-input-field' }"
         :placeholder="modelValue.length ? '' : placeholder"
         @blur="onBlur"
         @focus="isFocused = true"
@@ -32,15 +37,17 @@
       />
     </div>
     <div v-if="filteredSuggestions.length" class="tag-input-suggestions">
-      <button
+      <UButton
         v-for="tag in filteredSuggestions"
         :key="tag"
         type="button"
         class="tag-input-suggestion"
+        color="neutral"
+        variant="ghost"
         @click="addTag(tag)"
       >
         {{ tag }}
-      </button>
+      </UButton>
     </div>
   </div>
 </template>
@@ -66,7 +73,7 @@ const emit = defineEmits<{
   'update:modelValue': [string[]]
 }>()
 
-const inputRef = ref<HTMLInputElement | null>(null)
+const controlRef = ref<HTMLElement | null>(null)
 const draft = ref('')
 const isFocused = ref(false)
 
@@ -81,7 +88,7 @@ const filteredSuggestions = computed(() => {
 })
 
 function focusInput(): void {
-  inputRef.value?.focus()
+  controlRef.value?.querySelector('input')?.focus()
 }
 
 function onBlur(): void {
