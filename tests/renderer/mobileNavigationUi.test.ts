@@ -104,7 +104,7 @@ describe('mobile hub navigation', () => {
     const listHeader = correction.slice(listHeaderStart, listHeaderEnd)
 
     expect(listHeader).not.toContain('UBreadcrumb')
-    expect(correction).toContain(':items="withHomeIcon(detailBreadcrumbItems)"')
-    expect(correction).toContain(':items="withHomeIcon(listBreadcrumbItems)"')
+    expect(correction).toContain(':items="withHomeIcon(activeBreadcrumbItems)"')
+    expect(correction).toContain('submission.value && correction.value ? detailBreadcrumbItems.value : listBreadcrumbItems')
   })
 })

@@ -40,6 +40,18 @@ test.describe('Jura Wolpertinger Electron app', () => {
       await scanAccessibility(page, 'home')
       await page.click('.onboarding-card button:has-text("Nicht mehr anzeigen")')
       await expect(page.locator('.sidebar-user .user-switcher')).toContainText('Lokaler Nutzer')
+      await page.click('.nav a:has-text("Bewertung")')
+      await expect(page).toHaveURL(/#\/exams\/corrections/)
+      await expect(page.locator('.correction-page .app-breadcrumb')).toHaveCount(1)
+      await expect(page.locator('.correction-page .app-breadcrumb')).toContainText('Bewertung')
+      await expect
+        .poll(() => page.locator('.correction-page .app-breadcrumb').evaluate((element) => element.getBoundingClientRect().width))
+        .toBeLessThan(400)
+      const correctionEmptyState = page.locator('.correction-list-panel > .empty-state')
+      await expect(correctionEmptyState).toContainText('Keine abgegebenen Prüfungen.')
+      await expect
+        .poll(() => correctionEmptyState.evaluate((element) => getComputedStyle(element).borderTopWidth))
+        .toBe('0px')
       await page.click('.nav a:has-text("Sammlungen")')
       await expect(page).toHaveURL(/#\/flashcards\/collections/)
       await expect(page.locator('.flashcards-page')).toBeVisible()
@@ -93,12 +105,14 @@ test.describe('Jura Wolpertinger Electron app', () => {
       await page.click('.nav a:has-text("Hilfe")')
       await expect(page).toHaveURL(/#\/more\/help/)
       await expect(page.locator('.help-item', { hasText: 'Gehen meine Klausuren verloren' })).toBeVisible()
+      await expect.poll(() => page.locator('.help-view').evaluate((element) => element.getBoundingClientRect().width)).toBeGreaterThan(1550)
       await expect(page.locator('.help-item', { hasText: 'Was passiert bei einer KI-Korrektur?' })).toContainText(
         'Korrekturentwurf'
       )
       await page.click('.nav a:has-text("Einstellungen")')
       await expect(page).toHaveURL(/#\/more\/settings/)
       await expect(page.locator('.settings-view')).toBeVisible()
+      await expect.poll(() => page.locator('.settings-view').evaluate((element) => element.getBoundingClientRect().width)).toBeGreaterThan(1550)
       const userSettingsPanel = page.locator('.settings-panel').filter({ has: page.locator('h2:text-is("Nutzer")') })
       const newUserSettingsPanel = page.locator('.settings-panel').filter({ has: page.locator('h2:text-is("Neuer Nutzer")') })
       await expect(userSettingsPanel).toContainText('Lokaler Nutzer')

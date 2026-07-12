@@ -1,6 +1,9 @@
 <template>
-  <section class="correction-view">
-    <aside class="correction-list-panel">
+  <section class="correction-page">
+    <UBreadcrumb class="app-breadcrumb" :items="withHomeIcon(activeBreadcrumbItems)" />
+
+    <section class="correction-view">
+      <aside class="correction-list-panel">
       <div class="correction-list-header">
         <p class="eyebrow">Bewertung</p>
         <h1>Abgaben</h1>
@@ -30,13 +33,12 @@
         </RouterLink>
       </div>
       <p v-else class="empty-state">Keine abgegebenen Prüfungen.</p>
-    </aside>
+      </aside>
 
-    <div class="correction-detail-scroll">
+      <div class="correction-detail-scroll">
       <template v-if="submission && correction">
         <header class="page-header correction-detail-header">
           <div>
-            <UBreadcrumb class="app-breadcrumb" :items="withHomeIcon(detailBreadcrumbItems)" />
             <p class="eyebrow">Korrektur · {{ formatDate(submission.submittedAt) }}</p>
             <h1>{{ submission.examTitle }}</h1>
           </div>
@@ -313,7 +315,6 @@
       </template>
       <div v-else class="correction-empty-detail">
         <div class="correction-start-panel">
-          <UBreadcrumb class="app-breadcrumb" :items="withHomeIcon(listBreadcrumbItems)" />
           <p class="eyebrow">Bewertung</p>
           <h2>Abgabe auswählen</h2>
           <p>Wähle links eine abgegebene Prüfung aus, um die Bewertung zu starten.</p>
@@ -336,7 +337,8 @@
           </RouterLink>
         </div>
       </div>
-    </div>
+      </div>
+    </section>
   </section>
 </template>
 
@@ -428,6 +430,9 @@ const detailBreadcrumbItems = computed<AppBreadcrumbItem[]>(() => [
   { label: 'Bewertung', to: { name: 'correction' } },
   { label: submission.value?.examTitle ?? 'Abgabe' }
 ])
+const activeBreadcrumbItems = computed<AppBreadcrumbItem[]>(() =>
+  submission.value && correction.value ? detailBreadcrumbItems.value : listBreadcrumbItems
+)
 const selectedAiDraft = computed(
   () => aiDrafts.value.find((draft) => draft.status === 'draft') ?? null
 )

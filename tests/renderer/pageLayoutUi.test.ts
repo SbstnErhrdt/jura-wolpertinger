@@ -8,12 +8,24 @@ describe('page layout consistency', () => {
   it('uses shared page layout tokens and one wrapper rule for main pages', async () => {
     const styles = await readFile(resolve(rendererRoot, 'styles/main.css'), 'utf8')
 
-    expect(styles).toContain('--page-max-width: 1120px')
+    expect(styles).toContain('--page-max-width: none')
     expect(styles).toContain('--page-padding: 28px')
     expect(styles).toContain('--page-gap: 22px')
     expect(styles).toContain('--page-title-size: 32px')
-    expect(styles).toMatch(/\.home-view,\n\.dashboard,\n\.analytics-view,\n\.settings-view,\n\.about-view,\n\.help-view,\n\.flashcards-page,\n\.flashcard-review,\n\.mobile-hub-view\s*\{[^}]*max-width:\s*var\(--page-max-width\);[^}]*padding:\s*0;/s)
+    expect(styles).toMatch(/\.home-view,\n\.dashboard,\n\.analytics-view,\n\.settings-view,\n\.about-view,\n\.help-view,\n\.flashcards-page,\n\.flashcard-review,\n\.mobile-hub-view,\n\.correction-page\s*\{[^}]*max-width:\s*var\(--page-max-width\);[^}]*padding:\s*0;/s)
     expect(styles).toMatch(/\.main-pane\s*\{[^}]*padding:\s*var\(--page-padding\);/s)
+  })
+
+  it('uses one full-width correction breadcrumb and unframed empty states', async () => {
+    const styles = await readFile(resolve(rendererRoot, 'styles/main.css'), 'utf8')
+    const correction = await readFile(resolve(rendererRoot, 'views/CorrectionView.vue'), 'utf8')
+
+    expect(correction.match(/<UBreadcrumb/g)).toHaveLength(1)
+    expect(correction.indexOf('<UBreadcrumb')).toBeLessThan(correction.indexOf('<section class="correction-view">'))
+    expect(styles).toMatch(/\.correction-page\s*>\s*\.app-breadcrumb\s*\{[^}]*justify-self:\s*start;/s)
+    expect(styles).not.toMatch(/\.(?:settings|about|help)-view\s*\{[^}]*max-width:\s*1120px/s)
+    expect(styles).toMatch(/\.correction-list-panel\s*>\s*\.empty-state\s*\{[^}]*background:\s*transparent;[^}]*border:\s*0;/s)
+    expect(styles).toMatch(/\.correction-empty-detail\s*\{[^}]*background:\s*transparent;[^}]*border:\s*0;/s)
   })
 
   it('keeps page titles on one shared scale outside intentional hero areas', async () => {

@@ -35,7 +35,7 @@
   --radius-control: 6px;
   --radius-card: 8px;
   --shadow-panel: 0 18px 60px rgba(0, 79, 128, 0.12);
-  --page-max-width: 1440px;
+  --page-max-width: none;
   --page-padding: 28px;
   --page-gap: 22px;
   --page-title-size: 32px;
@@ -560,13 +560,18 @@ body {
 .help-view,
 .flashcards-page,
 .flashcard-review,
-.mobile-hub-view {
+.mobile-hub-view,
+.correction-page {
   display: grid;
   gap: var(--page-gap);
   margin: 0 auto;
   max-width: var(--page-max-width);
   padding: 0;
   width: 100%;
+}
+
+.correction-page > .app-breadcrumb {
+  justify-self: start;
 }
 
 .home-hero {
@@ -1905,7 +1910,7 @@ button:active .key-hint,
 }
 
 .settings-view {
-  max-width: 1120px;
+  max-width: var(--page-max-width);
 }
 
 .settings-grid {
@@ -2035,7 +2040,7 @@ button:active .key-hint,
 }
 
 .about-view {
-  max-width: 1120px;
+  max-width: var(--page-max-width);
 }
 
 .about-header {
@@ -2112,7 +2117,7 @@ button:active .key-hint,
 }
 
 .help-view {
-  max-width: 1120px;
+  max-width: var(--page-max-width);
 }
 
 .help-hero,
@@ -3047,7 +3052,7 @@ button:active .key-hint,
   display: grid;
   gap: 18px;
   grid-template-columns: 300px minmax(0, 1fr);
-  height: calc(100vh - 52px);
+  height: calc(100vh - 104px);
   min-height: 620px;
   overflow: hidden;
 }
@@ -3070,6 +3075,14 @@ button:active .key-hint,
 .correction-list-header h1 {
   font-size: 20px;
   margin: 0;
+}
+
+.correction-list-panel > .empty-state {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  margin: 0;
+  padding: 16px;
 }
 
 .correction-submission-list {
@@ -3325,23 +3338,23 @@ button:active .key-hint,
 }
 
 .correction-empty-detail {
-  align-items: center;
-  background: #fff;
-  border: 1px solid #d4e6ef;
-  border-radius: 6px;
+  align-items: start;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
   color: #627781;
   display: grid;
   min-height: 280px;
-  place-content: center;
-  text-align: center;
+  place-content: start;
+  text-align: left;
 }
 
 .correction-start-panel {
   display: grid;
   gap: 14px;
-  justify-items: center;
-  max-width: 480px;
-  padding: 32px;
+  justify-items: start;
+  max-width: 640px;
+  padding: 0;
 }
 
 .correction-empty-detail h2 {
@@ -4320,8 +4333,7 @@ button:active .key-hint,
 }
 
 :root[data-theme='dark'] .correction-list-panel,
-:root[data-theme='dark'] .correction-assessment-panel,
-:root[data-theme='dark'] .correction-empty-detail {
+:root[data-theme='dark'] .correction-assessment-panel {
   background: #152126;
   border-color: #31424a;
 }
