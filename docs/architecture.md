@@ -2,7 +2,7 @@
 
 Diese Dokumentation beschreibt die aktuelle Architektur von Jura Wolpertinger. Sie ist als Arbeitsgrundlage für Weiterentwicklung, Reviews und spätere Migrationen gedacht.
 
-Stand: App `0.1.4`, Datenbank-Schema `3`, `.jura` Format `1`.
+Stand: App `0.1.5`, Datenbank-Schema `3`, `.jura` Format `1`.
 
 ## Zielbild
 
@@ -52,6 +52,52 @@ flowchart LR
   Pdf --> PdfFiles
   Services --> Pdf
 ```
+
+## Distribution und Updates
+
+Desktop-Releases werden nicht aus GitHub Releases geladen. `electron-updater` nutzt ausschließlich den generischen HTTPS-Kanal `stable` unter `https://downloads.jura-wolpi.de/desktop/stable`. `JURA_UPDATE_URL` kann diesen Basisendpunkt für lokale Tests überschreiben. Plattform und Architektur bestimmen den Feed:
+
+| Laufzeit | Feed |
+| --- | --- |
+| macOS ARM64 | `mac/arm64/latest-mac.yml` |
+| macOS x64 | `mac/x64/latest-mac.yml` |
+| Windows x64 | `windows/x64/latest.yml` |
+| Linux x64 | `linux/x64/latest-linux.yml` |
+
+Nicht unterstützte Kombinationen erhalten keinen Update-Feed. Updatefehler werden protokolliert und blockieren den App-Start nicht. Die gepackte App lädt ein gefundenes Update automatisch herunter, installiert es aber erst nach der ausdrücklichen Neustartbestätigung. Im Entwicklungs- und E2E-Modus ist der Updater deaktiviert.
+
+### Feed-Struktur
+
+```text
+desktop/stable/
+├── manifest.json
+├── mac/
+│   ├── arm64/
+│   │   ├── latest-mac.yml
+│   │   └── 0.1.5/{latest-mac.yml,DMG,ZIP,ZIP.blockmap}
+│   └── x64/
+│       ├── latest-mac.yml
+│       └── 0.1.5/{latest-mac.yml,DMG,ZIP,ZIP.blockmap}
+├── windows/x64/
+│   ├── latest.yml
+│   └── 0.1.5/{latest.yml,EXE,EXE.blockmap}
+└── linux/x64/
+    ├── latest-linux.yml
+    └── 0.1.5/{latest-linux.yml,AppImage,AppImage.blockmap}
+```
+
+Alle Objekte im Versionsverzeichnis sind unveränderliche Kandidaten. Beim Staging werden die relativen Artefaktpfade in der ebenfalls versionierten YAML auf `0.1.5/<URL-kodierter-dateiname>` umgeschrieben. Die YAML im Plattformwurzelverzeichnis und das globale Manifest sind die einzigen veränderlichen Objekte. `manifest.json` enthält die vier öffentlichen Downloads mit Plattform, Architektur, Version, Dateiname, Byte-Größe, SHA-512 und HTTPS-URL; die Downloadseite verwendet ausschließlich dieses Manifest.
+
+### Veröffentlichungskonsistenz
+
+Build, Staging und Live-Schaltung sind getrennt. Windows x64 und Linux x64 werden im manuellen Release-Workflow gebaut und unveränderlich gestaged. Die signierten und notarisierten macOS-Kandidaten entstehen lokal. `release:publish` arbeitet anschließend in der festen Reihenfolge macOS ARM64, macOS x64, Windows x64 und Linux x64:
+
+1. Kandidaten-YAML, Artefakte und Blockmaps der Plattform vollständig aus RustFS lesen.
+2. Version, Pfade, Byte-Größen, SHA-512 und immutable Cache Header validieren.
+3. Erst dann das `latest*.yml` dieser Plattform mit `no-cache` veröffentlichen.
+4. Nach allen vier Plattformen `manifest.json` als globalen Abschluss schreiben.
+
+Damit ist die Veröffentlichung plattformweise atomar: Eine Plattform-Metadatei wird nie vor ihrer eigenen vollständigen Validierung geändert. Die vier Plattformen bilden jedoch keine gemeinsame Transaktion. Bricht der Lauf später ab, können bereits validierte Plattformen auf die neue Version zeigen, während `manifest.json` noch die vorherige Version enthält. Der Operator behebt den Kandidaten und wiederholt denselben Publish-Befehl oder führt den dokumentierten Rollback aus. Normale Builds, Dry Runs und Staging verändern keine Live-Metadaten.
 
 ## Persistenz
 

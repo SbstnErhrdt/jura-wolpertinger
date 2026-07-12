@@ -8,6 +8,7 @@ Diese Datei beschreibt die wichtigsten Nutzerbedürfnisse für Jura Wolpertinger
 - Examenskandidat:in mit Smartphone: wiederholt Karteikarten unterwegs und möchte schnell in eine kurze Lerneinheit starten.
 - Lerngruppe: nutzt dieselbe App auf einem Rechner oder tauscht Prüfungs- und Karteikarten-Dateien aus.
 - Korrektor:in oder Lernpartner:in: bewertet abgegebene Klausuren und setzt konkrete Hinweise am Text.
+- Release-Operator:in: erstellt, prüft und veröffentlicht plattformspezifische Desktop-Releases, ohne unvollständige Kandidaten live zu schalten.
 
 ## Übergreifende UI-Regeln
 
@@ -298,6 +299,42 @@ Akzeptanz:
 - Eine Verbindung zwischen Desktop und Online-Konto wird bewusst gestartet; lokale Daten gehen dabei nicht verloren.
 - Daten an einen KI-Anbieter werden nur bei ausdrücklicher KI-Korrektur übertragen.
 - Prüfungsdateien enthalten Prüfungsdaten wie Metadaten, Abgaben, Korrekturen und Attachment-Rollen, aber keine KI-Schlüssel, KI-Einstellungen, rohe KI-Entwürfe oder lokale Lernaufgaben.
+
+## Installation und Updates
+
+### Passenden Desktop-Build erhalten
+
+Als Desktop-Nutzer:in möchte ich auf der Projektseite nur den aktuellen stabilen Build für mein System angeboten bekommen, damit ich keine internen Kandidaten oder unpassenden Architekturen installiere.
+
+Akzeptanz:
+
+- Die Downloadseite liest ausschließlich das öffentliche Stable-Manifest.
+- Angeboten werden macOS ARM64, macOS Intel, Windows x64 und Linux x64.
+- Ist der Feed nicht erreichbar oder unvollständig, zeigt die Seite einen Fehler statt eines veralteten Ersatzlinks.
+- Die Installation ist nicht von einem öffentlichen GitHub-Repository oder GitHub Release abhängig.
+
+### Update bewusst installieren
+
+Als Desktop-Nutzer:in möchte ich über ein verfügbares stabiles Update informiert werden und den Neustart selbst bestätigen, damit meine laufende Arbeit nicht unerwartet unterbrochen wird.
+
+Akzeptanz:
+
+- Die App prüft nur den plattform- und architekturgerechten Stable-Feed.
+- Ein Feed- oder Netzwerkfehler verhindert den App-Start nicht.
+- Das Update darf im Hintergrund heruntergeladen werden.
+- Die Installation beginnt erst nach der ausdrücklichen Aktion `Jetzt neu starten`; `Später` beendet die laufende Sitzung nicht.
+
+### Release-Kandidaten getrennt veröffentlichen
+
+Als Release-Operator:in möchte ich Windows- und Linux-Kandidaten in CI sowie signierte macOS-Kandidaten lokal unveränderlich bereitstellen, damit Build und Live-Schaltung getrennte, überprüfbare Schritte bleiben.
+
+Akzeptanz:
+
+- Ein Stage- oder Dry-Run-Befehl ändert weder `latest*.yml` noch `manifest.json`.
+- Jede Plattform wird vor dem Umschalten ihrer Live-Metadatei vollständig remote validiert.
+- Die Veröffentlichung verlangt die exakte Bestätigung `publish <version>`.
+- Das globale Manifest wird erst nach den vier Plattform-Metadateien geschrieben.
+- Eine bereits gestagte ältere Version kann durch erneutes Publizieren ihrer Metadaten als Rollback aktiviert werden; installierte neuere Apps werden nicht automatisch heruntergestuft.
 
 ## Nutzer und Onboarding
 

@@ -1,138 +1,180 @@
 # Installation und Distribution
 
-Diese Anleitung beschreibt, wie Nutzer Jura Wolpertinger installieren und was für öffentliche Releases bei Signaturen, Zertifikaten und Plattformwarnungen zu beachten ist.
+Diese Anleitung gilt für Jura Wolpertinger `0.1.5`. Öffentliche Desktop-Builds kommen ausschließlich aus dem eigenen Stable-Feed. Ein öffentliches GitHub-Repository oder GitHub Release ist für Download und Updates nicht erforderlich.
 
-## Download
+## Download und Installation
 
-Die App wird über GitHub Releases verteilt. Die Website lädt die aktuelle Release-Liste und verlinkt erst dann direkt auf Dateien, wenn die Assets tatsächlich vorhanden sind:
+Die Projektseite liest `https://downloads.jura-wolpi.de/desktop/stable/manifest.json` und bietet den passenden Download an. Bei einem nicht erreichbaren oder ungültigen Manifest bleibt der Download deaktiviert; es gibt keinen veralteten GitHub-Ersatzlink.
+
+### Windows x64
+
+1. `Jura Wolpertinger-0.1.5-x64-win.exe` herunterladen und starten.
+2. Dem Installationsdialog folgen.
+3. Die App über Startmenü oder Desktop-Verknüpfung öffnen.
+
+Windows-Builds sind derzeit nicht produktiv signiert. SmartScreen kann deshalb warnen. Für eine spätere produktive Signierung ist ein vertrauenswürdiges Authenticode-Zertifikat oder Microsoft Trusted Signing erforderlich.
+
+### macOS
+
+Für Apple Silicon `Jura Wolpertinger-0.1.5-arm64-mac.dmg`, für Intel-Macs `Jura Wolpertinger-0.1.5-x64-mac.dmg` herunterladen. Die DMG öffnen, `Jura Wolpertinger.app` nach `Programme` ziehen und dort starten. Stable-macOS-Builds müssen mit einer Developer-ID signiert, von Apple notarisiert und mit dem Notarisierungsticket versehen sein.
+
+### Linux x64
+
+`Jura Wolpertinger-0.1.5-x64-linux.AppImage` herunterladen und ausführen:
+
+```bash
+chmod +x "Jura Wolpertinger-0.1.5-x64-linux.AppImage"
+./Jura\ Wolpertinger-0.1.5-x64-linux.AppImage
+```
+
+Linux AppImages sind derzeit nicht mit GPG signiert. Größe und SHA-512 stehen im Stable-Manifest und in den Update-Metadaten.
+
+## Updateverhalten
+
+Gepackte Desktop-Apps prüfen nach dem Start den Stable-Feed für ihre Plattform und Architektur. `JURA_UPDATE_URL` überschreibt den Standardendpunkt nur für Tests. Ein Update wird automatisch heruntergeladen, aber nicht beim normalen Beenden installiert. Erst `Jetzt neu starten` installiert es; `Später` lässt die App weiterlaufen. Feed- und Netzwerkfehler blockieren den Start nicht.
+
+## RustFS und DNS einrichten
+
+`downloads.jura-wolpi.de` muss per DNS auf den öffentlichen RustFS-Endpunkt oder dessen HTTPS-Reverse-Proxy zeigen. Vor dem ersten Release gelten folgende Betriebsanforderungen:
+
+- Gültiges TLS-Zertifikat für `downloads.jura-wolpi.de`; öffentliche URLs und `UPDATE_PUBLIC_BASE_URL` verwenden HTTPS.
+- Anonymer Zugriff nur lesend auf `desktop/stable/**`; kein öffentliches Schreiben, Löschen oder Bucket-Listing.
+- Schreibzugriff nur über getrennte RustFS-Zugangsdaten für lokale Operatoren und GitHub Actions.
+- `GET` und `HEAD` müssen funktionieren. Byte-Range-Anfragen dürfen als `Accept-Ranges: bytes` angekündigt werden, müssen dann aber `Range: bytes=0-0` mit HTTP `206` beantworten.
+- CORS erlaubt der aktuellen Projektseiten-Origin `https://sbstnerhrdt.github.io` sowie einer später ausdrücklich freigegebenen Ersatz-Origin `GET` und `HEAD` auf Manifest, YAML und Artefakte. Mindestens `Content-Type`, `Content-Length`, `Cache-Control` und `Accept-Ranges` müssen für Browser lesbar sein. Schreibmethoden werden nicht freigegeben.
+
+Die Upload-Skripte setzen diese MIME-Typen:
+
+| Datei | `Content-Type` |
+| --- | --- |
+| `manifest.json` | `application/json; charset=utf-8` |
+| `latest*.yml` | `application/x-yaml; charset=utf-8` |
+| ZIP | `application/zip` |
+| DMG | `application/x-apple-diskimage` |
+| EXE | `application/vnd.microsoft.portable-executable` |
+| AppImage und Blockmap | `application/octet-stream` |
+
+RustFS oder ein vorgeschalteter Proxy darf diese Werte nicht durch `text/html` ersetzen. Die exakten Cache Header sind:
+
+- Versionsobjekte: `public, max-age=31536000, immutable`
+- Live-`latest*.yml` und `manifest.json`: `no-cache`
+
+## Release-Zugangsdaten
+
+`.env.example` enthält ausschließlich unterstützte Variablennamen mit leeren Platzhaltern. Echte Werte gehören in die lokale Shell, eine ignorierte lokale Env-Datei, die macOS Keychain oder GitHub Actions Secrets und niemals in Git. Die Release-CLIs laden keine Env-Datei selbst; eine lokale Datei muss vor dem Aufruf in die Shell exportiert werden, beispielsweise mit `set -a; source .env.release; set +a`.
+
+Für alle Stage-, Publish- und RustFS-Zugriffe sind exakt diese fünf Variablen erforderlich:
 
 ```text
-docs/index.html#download
+UPDATE_S3_ENDPOINT
+UPDATE_S3_BUCKET
+UPDATE_S3_ACCESS_KEY_ID
+UPDATE_S3_SECRET_ACCESS_KEY
+UPDATE_PUBLIC_BASE_URL
 ```
 
-Für macOS gibt es zwei Builds: `arm64` für Apple Silicon und `x64` für ältere Intel-Macs.
+`UPDATE_PUBLIC_BASE_URL` ist der Feed-Basisendpunkt ohne Objektpfad dahinter, produktiv also `https://downloads.jura-wolpi.de/desktop/stable`. Der S3-Client nutzt den konfigurierten Endpunkt mit Region `auto` und Path-Style-Zugriff. Im manuellen GitHub-Release-Workflow müssen alle fünf Namen als Repository Secrets angelegt sein.
 
-## Windows
+## Release-Ablauf für `0.1.5`
 
-### Installation
+### 1. Ausgangslage prüfen
 
-1. Windows-Installer herunterladen:
+Der Branch enthält die freizugebende Version und `package.json` meldet exakt `0.1.5`. Vor dem Staging müssen die vorgesehenen Tests und Builds erfolgreich sein. Ein Stage-Befehl lädt nur unveränderliche Kandidaten hoch; ein normaler Build und `--dry-run` schreiben keine Live-Metadaten.
 
-   ```text
-   Jura Wolpertinger-x64-win.exe
-   ```
+### 2. Windows und Linux in CI stagen
 
-2. Die `.exe` starten.
-3. Dem Installationsdialog folgen.
-4. Die App über Startmenü oder Desktop-Verknüpfung öffnen.
+Den Workflow `.github/workflows/release.yml` manuell mit dem Input `version` = `0.1.5` starten. Die Matrix:
 
-### Wenn Windows warnt
+- baut Windows x64 mit `corepack pnpm run release:win -- --x64` und staged aus `release/0.1.5`;
+- baut Linux x64 mit `corepack pnpm run release:linux -- --x64` und staged aus `release/0.1.5`;
+- bricht ab, wenn der Workflow-Input nicht exakt `package.json.version` entspricht;
+- lädt nur `desktop/stable/<plattform>/<arch>/0.1.5/**` hoch und verändert weder `latest*.yml` noch `manifest.json`.
 
-Bei unsignierten oder neuen Apps kann Windows SmartScreen warnen. Das bedeutet nicht automatisch, dass die App schädlich ist, sondern dass Windows dem Herausgeber oder der Datei noch nicht vertraut.
+Beide Matrix-Jobs müssen erfolgreich sein. Ein einzelner erfolgreicher Job ist nur ein unvollständiger, noch nicht live geschalteter Kandidat.
 
-Für öffentliche Releases sollte die Windows-App signiert werden:
+### 3. macOS lokal bauen und prüfen
 
-- Authenticode-Code-Signing-Zertifikat eines vertrauenswürdigen Anbieters oder Microsoft Trusted Signing.
-- Optional EV-Zertifikat, wenn schneller Publisher-Reputation aufgebaut werden soll.
-- Signierte Installer reduzieren SmartScreen-Warnungen, garantieren aber nicht, dass nie eine Warnung erscheint.
+Voraussetzungen sind macOS, installierte Projektabhängigkeiten, Xcode-Werkzeuge und eine `Developer ID Application`-Identität in der Keychain oder `CSC_LINK`. Zusätzlich verlangt das Skript exakt:
 
-Aktueller Status im Projekt: Windows-Builds werden gebaut, aber noch nicht produktiv signiert.
+```text
+APPLE_API_KEY
+APPLE_API_KEY_ID
+APPLE_API_ISSUER
+APPLE_TEAM_ID
+```
 
-## macOS
-
-### Installation
-
-1. Passende macOS-Datei herunterladen:
-
-   ```text
-   Jura Wolpertinger-arm64-mac.dmg
-   Jura Wolpertinger-x64-mac.dmg
-   ```
-
-   Apple Silicon ist für Macs mit M1/M2/M3/M4. Intel ist für ältere Macs.
-
-2. Die `.dmg` öffnen.
-3. `Jura Wolpertinger.app` in den Programme-Ordner ziehen.
-4. Die App aus `Programme` starten.
-
-### Wenn macOS nachfragt
-
-Wenn macOS beim ersten Start nachfragt, bestätige den Start der heruntergeladenen App. Die Release-Dateien werden für die normale Installation vorbereitet.
-
-## Linux
-
-### Installation per AppImage
-
-1. Linux-Datei herunterladen:
-
-   ```text
-   Jura Wolpertinger-x64-linux.AppImage
-   ```
-
-2. Ausführbar machen:
-
-   ```bash
-   chmod +x "Jura Wolpertinger-x64-linux.AppImage"
-   ```
-
-3. Starten:
-
-   ```bash
-   ./Jura\ Wolpertinger-x64-linux.AppImage
-   ```
-
-### Linux-Signaturen
-
-Linux hat kein zentrales Gatekeeper-/SmartScreen-System. Für AppImage-Verteilung sind Signaturen optional, aber empfehlenswert:
-
-- SHA256-Checksums pro Release veröffentlichen.
-- Optional AppImage mit GPG signieren.
-- Wenn später `.deb` oder `.rpm` angeboten werden, sollten Paket-Repositories mit GPG signiert werden.
-
-Aktueller Status im Projekt: Linux wird als AppImage gebaut. Checksums und GPG-Signaturen sind noch nicht eingerichtet.
-
-## Für Maintainer
-
-### Release erstellen
-
-1. Version erhöhen:
-
-   ```bash
-   pnpm version patch
-   ```
-
-2. Tag und Commit pushen:
-
-   ```bash
-   git push origin main --tags
-   ```
-
-3. GitHub Actions baut und veröffentlicht die Release-Artefakte.
-
-### Lokale Builds
+`APPLE_API_KEY` muss auf eine vorhandene Apple-API-Schlüsseldatei zeigen. Das Skript gibt keine Zugangswerte aus. Dann ausführen:
 
 ```bash
-pnpm run dist:mac
-pnpm run release:win
-pnpm run release:linux
+corepack pnpm run release:mac:local
 ```
 
-Für lokale, nicht veröffentlichte Artefakte:
+Der Befehl leert nur die beiden lokalen Ausgabeordner, baut gemeinsame App-Ressourcen, führt den nativen Electron-Rebuild aus und erzeugt nacheinander:
+
+```text
+.release-stage/mac/arm64
+.release-stage/mac/x64
+```
+
+Für jede Architektur validiert er erforderliche DMG-, ZIP-, Blockmap- und YAML-Dateien, mountet die DMG und prüft das enthaltene App-Bundle mit `codesign --verify --deep --strict`, `spctl --assess`, `xcrun stapler validate` und `lipo -archs`. Der Befehl lädt nichts hoch.
+
+### 4. macOS unveränderlich stagen
+
+Optional zuerst ohne Schreibzugriff die lokalen Dateien und Zielschlüssel prüfen:
 
 ```bash
-pnpm run dist
+corepack pnpm run release:stage --platform mac-arm64 --input .release-stage/mac/arm64 --dry-run
+corepack pnpm run release:stage --platform mac-x64 --input .release-stage/mac/x64 --dry-run
 ```
 
-### Empfohlene nächste Schritte für produktive Distribution
+Danach mit gesetzten `UPDATE_*`-Variablen stagen:
 
-1. Apple Developer ID Signierung und Notarisierung einrichten.
-2. Windows Code Signing einrichten.
-3. Checksums für alle Release-Artefakte erzeugen und veröffentlichen.
-4. Optional Linux AppImage per GPG signieren.
-5. GitHub Pages Landingpage auf `docs/` oder GitHub Actions aktivieren.
+```bash
+corepack pnpm run release:stage --platform mac-arm64 --input .release-stage/mac/arm64
+corepack pnpm run release:stage --platform mac-x64 --input .release-stage/mac/x64
+```
 
-## Kurzantwort: Brauchen wir Zertifikate?
+### 5. Stable explizit veröffentlichen
 
-Für interne Tests: nein, aber Nutzer sehen je nach Plattform Warnungen.
+Erst wenn alle vier Kandidaten vollständig gestaged sind:
 
-Für öffentliche Releases: ja, sinnvoll und auf macOS faktisch notwendig. macOS braucht Developer ID Signierung plus Notarisierung für einen normalen Start ohne Gatekeeper-Probleme. Windows sollte mit einem vertrauenswürdigen Code-Signing-Zertifikat signiert werden, damit SmartScreen weniger aggressiv warnt. Linux braucht bei AppImage kein Vendor-Zertifikat, sollte aber Checksums und optional GPG-Signaturen bekommen.
+```bash
+corepack pnpm run release:publish --version 0.1.5 --confirm "publish 0.1.5"
+```
+
+Die Bestätigung muss exakt `publish 0.1.5` lauten. Der Publisher validiert jede Plattform vollständig, bevor er deren Live-YAML schreibt, und veröffentlicht `manifest.json` zuletzt. Die Reihenfolge ist macOS ARM64, macOS x64, Windows x64, Linux x64, globales Manifest.
+
+Die Atomarität gilt pro Plattform. Scheitert beispielsweise Windows, können die beiden macOS-Metadateien bereits auf `0.1.5` zeigen, während Windows, Linux und das Manifest noch die vorherige Version zeigen. Ursache beheben und denselben Publish-Befehl wiederholen; er validiert und schreibt deterministisch erneut. Nicht versuchen, einzelne Live-Dateien manuell zu mischen.
+
+### 6. Öffentlichen Feed verifizieren
+
+```bash
+corepack pnpm run release:verify --base-url https://downloads.jura-wolpi.de/desktop/stable
+```
+
+Der Check liest Manifest und alle vier Live-YAMLs, prüft deren gemeinsame Version, HTTPS-URLs, öffentliche Artefakt-`HEAD`-Antworten, Größen, MIME- und Cache Header sowie angekündigte Byte Ranges. Erst nach diesem erfolgreichen Check den Release als abgeschlossen melden.
+
+## Rollback
+
+Ein Rollback schaltet eine vollständig erhaltene, bereits gestagte ältere Version wieder live. Es löscht keine Objekte und stuft bereits installierte neuere Apps nicht automatisch herunter.
+
+```bash
+corepack pnpm run release:publish --version 0.1.4 --confirm "publish 0.1.4"
+corepack pnpm run release:verify --base-url https://downloads.jura-wolpi.de/desktop/stable
+```
+
+Auch der Rollback ist plattformweise atomar und schreibt das Manifest zuletzt. Fehlt ein älteres Objekt oder stimmt eine Prüfsumme nicht, verweigert der Publisher die betroffene Plattform; zuerst den unveränderlichen Kandidaten wiederherstellen, dann den Rollback erneut ausführen.
+
+## Repository privat schalten
+
+Die Umstellung erfolgt erst nach einem vollständig verifizierten Stable-Release in dieser Reihenfolge:
+
+1. Bestätigen, dass App-Updater, Downloadseite und Dokumentation keine produktiven GitHub-Release-URLs mehr verwenden.
+2. DNS, TLS, RustFS Public-Read, MIME, Cache, CORS und Range Requests mit `release:verify` prüfen.
+3. Die fünf `UPDATE_*` Repository Secrets setzen und einen manuellen Windows-/Linux-Kandidatenlauf erfolgreich abschließen.
+4. Lokalen signierten/notarisierten macOS-Build, Staging, expliziten Publish und Feed-Verifikation erfolgreich abschließen.
+5. Sicherstellen, dass die öffentliche Projektseite aus einem privaten Repository weiter deployt werden darf; andernfalls ihr Hosting vor der Privacy-Änderung migrieren.
+6. Benötigte Maintainer- und Actions-Zugriffe, Branch-Regeln und Secrets prüfen, dann erst die Repository-Sichtbarkeit auf privat ändern.
+7. Nach der Umstellung normale CI, den manuellen Kandidaten-Workflow, die Projektseite, einen frischen Download und den Stable-Feed erneut prüfen.
+
+Das Repository wird nicht vorgezogen privat geschaltet, solange Website-Hosting oder Release-Automation noch implizit öffentlichen Repository-Zugriff voraussetzen.

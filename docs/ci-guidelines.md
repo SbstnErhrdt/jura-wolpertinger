@@ -1,193 +1,142 @@
 # CI Guidelines für Agents
 
-Diese Guideline beschreibt, welche Checks für Jura Wolpertinger sinnvoll sind und wie Agents Änderungen vorbereiten sollen, damit CI reproduzierbar bleibt.
+Diese Guideline beschreibt die für Jura Wolpertinger `0.1.5` implementierten CI- und Release-Gates. Maßgeblich sind `.github/workflows/ci.yml`, `.github/workflows/release.yml` und die Scripts in `package.json`.
 
-## Ziel
+## Laufzeit und Installation
 
-CI soll drei Dinge absichern:
+GitHub Actions verwendet Node `22`, pnpm `10.33.0` und eine Installation mit unverändertem Lockfile:
 
-- TypeScript-, Vue- und Electron-Code kompiliert.
-- Datenmodell, Services, Schemas und Paketformat bleiben stabil.
-- Kritische UI-Flows wie Schreiben, Abgeben, Bewerten und Auswerten funktionieren.
-
-Aktuell gibt es Scripts in `package.json`, aber noch keine committed GitHub-Actions-Workflow-Datei. Diese Guideline ist die Grundlage für lokale Agent-Checks und eine spätere CI-Pipeline.
-
-## Standard-Pipeline
-
-```mermaid
-flowchart LR
-  Checkout["Checkout"]
-  Setup["Node + pnpm"]
-  Install["pnpm install --frozen-lockfile"]
-  Typecheck["pnpm run typecheck"]
-  Unit["pnpm test"]
-  Build["pnpm run build"]
-  E2E["pnpm run test:e2e"]
-  Artifacts["Upload reports/artifacts"]
-
-  Checkout --> Setup
-  Setup --> Install
-  Install --> Typecheck
-  Typecheck --> Unit
-  Unit --> Build
-  Build --> E2E
-  E2E --> Artifacts
+```bash
+corepack pnpm install --frozen-lockfile
 ```
 
-## Checks
+`better-sqlite3` ist nativ. `pnpm test`, `test:e2e`, `dist:dir` und die Release-Build-Scripts führen den jeweils notwendigen Node- oder Electron-Rebuild aus. Bei isolierten lokalen Checks muss der passende Rebuild ausdrücklich berücksichtigt werden.
 
-| Check | Befehl | Zweck | Wann ausführen |
-| --- | --- | --- | --- |
-| Install | `pnpm install --frozen-lockfile` | reproduzierbare Dependencies | CI immer |
-| Typecheck | `pnpm run typecheck` | Vue, Renderer, Main und Shared Types | bei fast jeder Codeänderung |
-| Unit/Service Tests | `pnpm test` | Schemas, Services, Datenmodell, Renderer-Helfer | bei Logik-, Schema- und Service-Änderungen |
-| Build | `pnpm run build` | produktiver Electron-Vite-Build | vor PRs und Releases |
-| E2E | `pnpm run test:e2e` | App-Flows über Playwright/Electron | bei UI-, Editor- und Abgabe-Änderungen |
-| Packaging Smoke | `pnpm run dist:dir` | Electron-Builder Bundle ohne Installer | bei Icon-/Packaging-Änderungen |
+## Normale CI
+
+`.github/workflows/ci.yml` läuft für Pull Requests, Pushes auf `main` und manuelle Starts. Concurrency bricht ältere Läufe desselben Refs ab.
+
+### Ubuntu: Checks und Web-Build
+
+Der Job führt aus:
+
+```bash
+corepack pnpm install --frozen-lockfile
+corepack pnpm run typecheck
+corepack pnpm test
+corepack pnpm run build
+corepack pnpm run build:web:production
+```
+
+Der authentifizierte Web-Build erhält ausschließlich diese nicht produktiven CI-Testwerte:
+
+```text
+VITE_JURA_REQUIRE_AUTH=1
+VITE_SUPABASE_URL=https://supabase.invalid
+VITE_SUPABASE_ANON_KEY=ci-placeholder-anon-key
+```
+
+Das sind keine GitHub Secrets. Produktive Supabase-Werte dürfen nicht für den Build-Test verwendet werden.
+
+### macOS: Electron E2E und Accessibility
+
+Der macOS-Job führt nach der Installation aus:
+
+```bash
+corepack pnpm run test:e2e
+```
+
+Playwright testet die Electron-App. Axe-Scans decken Home, Karteikarten-Sammlungen, Bibliothek, Bewertung und Auswertung ab. Verstöße mit `serious` oder `critical` blockieren CI. Bei einem Fehler werden `playwright-report` und `test-results` als Workflow-Artefakte hochgeladen.
+
+### Windows: Packaging-Smoke
+
+Der Windows-Job läuft nur bei Pushes auf `main` und manuellen Workflow-Starts:
+
+```bash
+corepack pnpm run dist:dir
+```
+
+Er erzeugt ein entpacktes Electron-Builder-Verzeichnis unter `release/<version>`, aber keinen Stable-Release. Fehlgeschlagene Build-Ausgaben aus `release` und `test-results` werden als Workflow-Artefakte gesichert.
 
 ## Änderungsbasierte Pflichtmatrix
 
-```mermaid
-flowchart TB
-  Change{"Änderungstyp"}
-  Docs["Nur Docs"]
-  Shared["Shared Types/Schemas"]
-  Main["Main/Services/SQLite"]
-  Renderer["Renderer/UI"]
-  Editor["Editor/Prüfungsmodus"]
-  Packaging["Icons/Packaging"]
+| Änderung | Mindestprüfung |
+| --- | --- |
+| Nur Dokumentation | `git diff --check` und dokumentierte Befehle/Variablen gegen Source prüfen |
+| Shared Types, Schemas, Main oder Services | `corepack pnpm run typecheck` und fokussierte Vitest-Dateien |
+| Renderer/UI | Typecheck, fokussierte Renderer-Tests, betroffene E2E-Flows |
+| Editor oder Prüfungsmodus | Typecheck, relevante Unit-Tests und Electron-E2E |
+| Accessibility-Markup oder gemeinsame Styles | Accessibility-Contract-Test und vollständige Axe-E2E-Scans |
+| Packaging, Icons oder Native Modules | Build, `rebuild:native` und `dist:dir` auf passender Plattform |
+| Release-Scripts oder Feed | Release-Unit-Tests, Typecheck und ein Dry Run; keine echten Uploads ohne Auftrag |
 
-  Docs --> DocCheck["Markdown- und Link-Sanity"]
-  Shared --> Typecheck["typecheck"]
-  Shared --> Unit["unit tests"]
-  Main --> Typecheck
-  Main --> Unit
-  Renderer --> Typecheck
-  Renderer --> Unit
-  Renderer --> MaybeE2E["E2E wenn Flow betroffen"]
-  Editor --> Typecheck
-  Editor --> Unit
-  Editor --> E2E["E2E Pflicht wenn möglich"]
-  Packaging --> BuildIcons["build:icons"]
-  Packaging --> DistDir["dist:dir"]
-  Change --> Docs
-  Change --> Shared
-  Change --> Main
-  Change --> Renderer
-  Change --> Editor
-  Change --> Packaging
+Agents führen den kleinsten aussagekräftigen Check zuerst aus. Nicht ausführbare Checks werden im Abschluss mit Befehl, Grund und Restrisiko genannt. Zugangsdaten, `.release-stage/`, `release/`, Playwright-Berichte und Builder-Ausgaben werden nicht committed.
+
+## Manueller Kandidaten-Workflow
+
+`.github/workflows/release.yml` ist kein Publish-Workflow. Er wird manuell mit dem erforderlichen String-Input `version` gestartet und besitzt nur `contents: read`. Der Input muss exakt `package.json.version` entsprechen.
+
+Die Matrix besteht aus:
+
+| Ziel | Runner | Build | Staging-Eingang |
+| --- | --- | --- | --- |
+| `windows-x64` | `windows-latest` | `corepack pnpm run release:win -- --x64` | `release/<version>` |
+| `linux-x64` | `ubuntu-latest` | `corepack pnpm run release:linux -- --x64` | `release/<version>` |
+
+Jeder Job ruft danach `release:stage` für genau seine Plattform auf. Staging schreibt ausschließlich unveränderliche Objekte unter `desktop/stable/<plattform>/<arch>/<version>/`. Der Workflow schreibt keine Live-`latest*.yml`, kein `manifest.json`, keinen GitHub Release und keinen Tag. `fail-fast` ist deaktiviert; deshalb können Kandidaten einer Plattform vorhanden sein, obwohl der andere Matrix-Job fehlschlägt. Veröffentlicht werden darf erst nach erfolgreichem Staging aller vier Plattformen einschließlich der beiden lokalen macOS-Builds.
+
+## GitHub Actions Secrets
+
+Der manuelle Kandidaten-Workflow referenziert exakt diese Repository Secrets:
+
+```text
+UPDATE_S3_ENDPOINT
+UPDATE_S3_BUCKET
+UPDATE_S3_ACCESS_KEY_ID
+UPDATE_S3_SECRET_ACCESS_KEY
+UPDATE_PUBLIC_BASE_URL
 ```
 
-## Agent-Regeln für CI
+Keine weiteren RustFS-Namen werden vom aktuellen Workflow gelesen. `UPDATE_PUBLIC_BASE_URL` muss eine HTTPS-URL sein. Secret-Werte dürfen weder in Workflow-YAML, `.env.example`, Logs noch Build-Artefakten stehen. Für RustFS sollte der Actions-Schlüssel nur Objekte unter `desktop/stable/**` schreiben und lesen dürfen.
 
-- Vor größeren Änderungen `AGENTS.md` und `docs/architecture.md` lesen.
-- Den kleinsten passenden Check ausführen, nicht blind immer alles.
-- Wenn ein Check fehlschlägt, Ursache analysieren und nicht einfach ignorieren.
-- Wenn ein Check lokal nicht möglich ist, im Abschluss konkret nennen: Befehl, Grund, Risiko.
-- Bei Schema-Änderungen Tests und Doku aktualisieren.
-- Bei `.jura` Änderungen Import, Export und Schema-Validierung testen.
-- Bei UI-Änderungen mindestens hellen und dunklen Modus bedenken.
-- Bei Editor-Änderungen den Prüfungsmodus als kritischen Flow behandeln.
-- Bei nativen Dependencies beachten: `better-sqlite3` wird für Node/Electron teilweise neu gebaut.
+Apple-Zugangsdaten gehören nicht in diesen Workflow. macOS wird lokal mit `APPLE_API_KEY`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER`, `APPLE_TEAM_ID` und einer Keychain-Identität oder `CSC_LINK` gebaut.
 
-## Empfohlene GitHub Actions Vorlage
+## Live-Veröffentlichung
 
-Diese Vorlage kann später als `.github/workflows/ci.yml` übernommen werden.
-
-```yaml
-name: CI
-
-on:
-  pull_request:
-  push:
-    branches:
-      - main
-
-jobs:
-  checks:
-    runs-on: macos-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Enable corepack
-        run: corepack enable
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Typecheck
-        run: pnpm run typecheck
-
-      - name: Unit tests
-        run: pnpm test
-
-      - name: Build
-        run: pnpm run build
-```
-
-E2E kann als separater Job laufen, weil er langsamer ist und Electron/Playwright mehr Umgebung braucht:
-
-```yaml
-  e2e:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: corepack enable
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm run test:e2e
-```
-
-## Release- und Packaging-Checks
-
-Packaging sollte getrennt von normaler PR-CI laufen, weil Signierung, notarization und Plattformartefakte eigene Anforderungen haben.
-
-Empfohlen für lokale Release-Vorbereitung:
+Nur ein Operator mit lokalen RustFS-Zugangsdaten führt die Live-Schaltung aus:
 
 ```bash
-pnpm run build:icons
-pnpm run dist:dir
+corepack pnpm run release:publish --version 0.1.5 --confirm "publish 0.1.5"
 ```
 
-Für macOS-Artefakte:
+Ohne die exakte Bestätigung verweigert das Skript den Vorgang. Pro Plattform werden versionierte YAML, Artefakte und Blockmaps remote gelesen und anhand von Version, Größe, SHA-512 und Cache Header validiert. Erst danach wird das Live-`latest*.yml` dieser Plattform geschrieben. Die Reihenfolge ist `mac-arm64`, `mac-x64`, `windows-x64`, `linux-x64`; `manifest.json` folgt zuletzt.
+
+Diese Garantie ist plattformweise, nicht global transaktional. Ein später Fehler rollt bereits geschriebene Plattform-Metadaten nicht zurück. Nach Behebung wird derselbe Publish-Befehl wiederholt oder eine vollständig gestagte ältere Version mit ihrer exakten Bestätigung publiziert.
+
+Nach Publish oder Rollback ist verpflichtend:
 
 ```bash
-pnpm run dist:mac
+corepack pnpm run release:verify --base-url https://downloads.jura-wolpi.de/desktop/stable
 ```
 
-## Artefakte
+## Merge- und Release-Kriterien
 
-Sinnvolle CI-Artefakte bei Fehlern:
+Ein PR oder Release ist blockiert, wenn:
 
-- Playwright Report
-- Screenshots und Videos aus E2E-Läufen
-- Electron Builder Logs
-- Test Coverage, falls später aktiviert
+- Typecheck, Vitest, Build oder ein erforderlicher Plattformjob fehlschlägt.
+- ein Axe-Befund der Schwere `serious` oder `critical` offen ist.
+- native Änderungen ohne passenden Rebuild oder Packaging-Smoke bleiben.
+- Release-Metadaten unvollständig sind oder nicht auf das eigene Versionsverzeichnis zeigen.
+- Feed-Objekte falsche MIME- oder Cache Header liefern.
+- ein produktiver Pfad noch die GitHub-Releases-API, den GitHub-Updater-Provider, `--publish always` oder `releases/latest/download` verwendet.
+- Credentials oder generierte Kandidaten im Git-Diff auftauchen.
 
-## Merge-Kriterien
+## Release-Audit
 
-Ein PR sollte nicht gemerged werden, wenn:
+Der stale-reference-Audit darf historische Spezifikationen und Pläne als Dokumentation früherer Beispiele ausnehmen, muss aber produktiven Code, aktive Doku, Scripts und Workflows prüfen:
 
-- Typecheck fehlschlägt.
-- Unit- oder Service-Tests fehlschlagen.
-- Migrationen ohne Tests oder Doku geändert wurden.
-- `.jura` Format/Schemas geändert wurden, ohne Import/Export zu testen.
-- UI-Flows geändert wurden, ohne den betroffenen Flow lokal oder per E2E zu prüfen.
-- Packaging/Icon-Änderungen ohne Packaging-Smoke landen.
+```bash
+rg -n "api.github.com/repos/.*/releases|provider:\s*[\"']github|--publish always|releases/latest/download" src docs scripts electron-builder.json5 .github package.json
+```
 
-## Bekannte technische Besonderheiten
-
-- `better-sqlite3` ist nativ und kann zwischen Node- und Electron-Runtime Rebuilds brauchen.
-- `pnpm run test:e2e` baut die App und ist deshalb deutlich langsamer als `pnpm test`.
-- Der App-Name und zentrale Assets müssen mit dem Packaging konsistent bleiben.
-- Diese App ist lokal und nicht-kommerziell. CI darf keine Cloud- oder Account-Pflicht einführen.
+Treffer in aktiven Dateien müssen vor dem privaten Repositorybetrieb entfernt werden. Abschließend `git diff --check`, `git status --short` und den Branch-Diff gegen `main` prüfen; keine Release-Artefakte, Credentials oder Staging-Dateien dürfen verfolgt sein.
