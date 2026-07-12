@@ -3,6 +3,7 @@
 .superpowers/
 references
 science/
+assets/wolpi/
 node_modules
 dist
 out

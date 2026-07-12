@@ -1,8 +1,9 @@
-import { readFile } from 'node:fs/promises'
+import { readdir, readFile, stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const rendererRoot = resolve(process.cwd(), 'src/renderer/src')
+const publicRoot = resolve(process.cwd(), 'src/renderer/public')
 
 describe('flashcards UI affordances', () => {
   it('offers an accessible edit action for cards inside a collection', async () => {
@@ -65,5 +66,26 @@ describe('flashcards UI affordances', () => {
     expect(styles).toContain('animation: study-card-slide-previous 320ms')
     expect(styles).toContain('@media (prefers-reduced-motion: reduce)')
     expect(styles).toContain(":root[data-theme='dark'] .key-hint")
+  })
+
+  it('celebrates every tenth reviewed card with rotating optimized Wolpi artwork', async () => {
+    const source = await readFile(resolve(rendererRoot, 'views/FlashcardsReviewView.vue'), 'utf8')
+    const styles = await readFile(resolve(rendererRoot, 'styles/main.css'), 'utf8')
+    const wolpiAssets = await readdir(resolve(publicRoot, 'assets/wolpi'))
+    const firstAsset = await stat(resolve(publicRoot, 'assets/wolpi/wolpi-01.webp'))
+
+    expect(source).toContain('reviewedCardsInSession.value % 10')
+    expect(source).toContain('showWolpiMilestone')
+    expect(source).toContain('assets/wolpi/wolpi-')
+    expect(source).toContain('WOLPI_MILESTONE_IMAGE_COUNT = 39')
+    expect(source).toContain('<Transition name="wolpi-milestone">')
+    expect(source).toContain('aria-live="polite"')
+    expect(source).toContain('Motivation ausblenden')
+    expect(styles).toContain('.wolpi-milestone')
+    expect(styles).toContain('@keyframes wolpi-milestone-pop')
+    expect(styles).toContain('.wolpi-milestone-enter-active')
+    expect(styles).toContain(":root[data-theme='dark'] .wolpi-milestone")
+    expect(wolpiAssets.filter((file) => file.endsWith('.webp'))).toHaveLength(39)
+    expect(firstAsset.size).toBeLessThan(80_000)
   })
 })

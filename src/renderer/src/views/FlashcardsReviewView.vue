@@ -98,6 +98,27 @@
         <kbd class="key-hint">Enter</kbd>
       </UButton>
     </article>
+
+    <Transition name="wolpi-milestone">
+      <aside v-if="wolpiMilestone" class="wolpi-milestone" aria-live="polite">
+        <div class="wolpi-milestone-image-wrap">
+          <img :src="wolpiMilestone.imageUrl" alt="" class="wolpi-milestone-image" />
+        </div>
+        <div class="wolpi-milestone-copy">
+          <span>{{ wolpiMilestone.kicker }}</span>
+          <strong>{{ wolpiMilestone.title }}</strong>
+          <p>{{ wolpiMilestone.copy }}</p>
+        </div>
+        <UButton
+          class="wolpi-milestone-close"
+          color="neutral"
+          variant="ghost"
+          icon="i-lucide-x"
+          aria-label="Motivation ausblenden"
+          @click="dismissWolpiMilestone"
+        />
+      </aside>
+    </Transition>
   </section>
 </template>
 
@@ -123,6 +144,23 @@ const collectionId = computed(() => (typeof route.query.collection === 'string' 
 const collectionName = ref('')
 const hasPracticeCards = ref(false)
 const sessionCompleted = ref(false)
+const reviewedCardsInSession = ref(0)
+const wolpiMilestone = ref<{
+  kicker: string
+  title: string
+  copy: string
+  imageUrl: string
+} | null>(null)
+let wolpiMilestoneTimer: number | null = null
+
+const WOLPI_MILESTONE_IMAGE_COUNT = 39
+const WOLPI_MILESTONE_COPY = [
+  'Kurze Pause, tiefer Atemzug, weiter geht es.',
+  'Das ist genau die Art Wiederholung, die hängen bleibt.',
+  'Sauber gearbeitet. Die nächste Karte wartet schon.',
+  'Du machst aus einzelnen Karten echtes Prüfungstraining.',
+  'Kleine Einheiten, großer Effekt.'
+]
 
 const currentCard = computed(() => cards.value[currentIndex.value] ?? againQueue.value[0] ?? null)
 const canGoPrevious = computed(() => currentIndex.value > 0 && !sessionCompleted.value)
@@ -165,6 +203,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleReviewKeydown)
+  clearWolpiMilestoneTimer()
 })
 
 async function load(): Promise<void> {
@@ -190,6 +229,8 @@ async function load(): Promise<void> {
   currentIndex.value = 0
   showBack.value = false
   cardMotion.value = 'flip'
+  reviewedCardsInSession.value = 0
+  dismissWolpiMilestone()
   loading.value = false
 }
 
@@ -205,11 +246,42 @@ async function rate(rating: ReviewRating): Promise<void> {
     const result = await api.recordReview({ cardId: card.id, rating })
     feedback.value = result.intervalLabel
     if (rating === 1) againQueue.value.push(card)
+    registerReviewedCard()
     window.setTimeout(nextCard, 550)
   } catch (error) {
     ratingBusy.value = false
     throw error
   }
+}
+
+function registerReviewedCard(): void {
+  reviewedCardsInSession.value += 1
+  if (reviewedCardsInSession.value % 10 !== 0) return
+  showWolpiMilestone(reviewedCardsInSession.value)
+}
+
+function showWolpiMilestone(reviewedCount: number): void {
+  clearWolpiMilestoneTimer()
+  const milestoneIndex = Math.floor(reviewedCount / 10) - 1
+  const imageNumber = (milestoneIndex % WOLPI_MILESTONE_IMAGE_COUNT) + 1
+  wolpiMilestone.value = {
+    kicker: `${reviewedCount} Karten`,
+    title: 'Starker Lauf',
+    copy: WOLPI_MILESTONE_COPY[milestoneIndex % WOLPI_MILESTONE_COPY.length],
+    imageUrl: `assets/wolpi/wolpi-${String(imageNumber).padStart(2, '0')}.webp`
+  }
+  wolpiMilestoneTimer = window.setTimeout(dismissWolpiMilestone, 3600)
+}
+
+function dismissWolpiMilestone(): void {
+  clearWolpiMilestoneTimer()
+  wolpiMilestone.value = null
+}
+
+function clearWolpiMilestoneTimer(): void {
+  if (wolpiMilestoneTimer === null) return
+  window.clearTimeout(wolpiMilestoneTimer)
+  wolpiMilestoneTimer = null
 }
 
 function nextCard(): void {

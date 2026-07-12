@@ -1100,7 +1100,9 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .study-card-face {
+  .study-card-face,
+  .wolpi-milestone-enter-active,
+  .wolpi-milestone-leave-active {
     animation: none;
   }
 }
@@ -1361,6 +1363,101 @@ button:active .key-hint,
   font-weight: 800;
   margin: 0;
   text-align: center;
+}
+
+.wolpi-milestone {
+  align-items: center;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(239, 249, 254, 0.96)),
+    radial-gradient(circle at 20% 20%, rgba(67, 188, 232, 0.2), transparent 34%);
+  border: 1px solid rgba(21, 159, 216, 0.2);
+  border-radius: 18px;
+  box-shadow: 0 24px 70px rgba(4, 16, 22, 0.2);
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 86px minmax(0, 1fr) auto;
+  max-width: min(460px, calc(100vw - 32px));
+  padding: 12px;
+  position: fixed;
+  right: 18px;
+  top: 18px;
+  z-index: 80;
+}
+
+.wolpi-milestone-image-wrap {
+  align-items: center;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: inset 0 0 0 1px rgba(21, 159, 216, 0.12);
+  display: flex;
+  height: 86px;
+  justify-content: center;
+  overflow: hidden;
+  width: 86px;
+}
+
+.wolpi-milestone-image {
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.wolpi-milestone-copy {
+  min-width: 0;
+}
+
+.wolpi-milestone-copy span {
+  color: var(--color-primary-strong);
+  display: block;
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  margin-bottom: 2px;
+  text-transform: uppercase;
+}
+
+.wolpi-milestone-copy strong {
+  color: var(--color-text);
+  display: block;
+  font-size: 20px;
+  line-height: 1.1;
+}
+
+.wolpi-milestone-copy p {
+  color: var(--color-text-muted);
+  font-size: 14px;
+  line-height: 1.35;
+  margin: 5px 0 0;
+}
+
+.wolpi-milestone-close {
+  align-self: start;
+}
+
+.wolpi-milestone-enter-active {
+  animation: wolpi-milestone-pop 520ms cubic-bezier(0.2, 0.9, 0.16, 1.18);
+}
+
+.wolpi-milestone-leave-active {
+  animation: wolpi-milestone-pop 180ms ease reverse;
+}
+
+@keyframes wolpi-milestone-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(-18px) scale(0.9) rotate(-1deg);
+  }
+
+  62% {
+    opacity: 1;
+    transform: translateY(4px) scale(1.03) rotate(0.4deg);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1) rotate(0);
+  }
 }
 
 .nav a svg {
@@ -3591,6 +3688,18 @@ button:active .key-hint,
   background: #0075b8;
 }
 
+:root[data-theme='dark'] .wolpi-milestone {
+  background:
+    linear-gradient(135deg, rgba(10, 31, 42, 0.96), rgba(8, 39, 55, 0.96)),
+    radial-gradient(circle at 20% 20%, rgba(67, 188, 232, 0.18), transparent 34%);
+  border-color: rgba(130, 213, 242, 0.22);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
+}
+
+:root[data-theme='dark'] .wolpi-milestone-image-wrap {
+  background: rgba(255, 255, 255, 0.92);
+}
+
 :root[data-theme='dark'] .exam-view input,
 :root[data-theme='dark'] .exam-view select,
 :root[data-theme='dark'] .exam-view textarea,
@@ -5117,6 +5226,29 @@ button:active .key-hint,
 
   .markdown-block {
     font-size: 19px;
+  }
+
+  .wolpi-milestone {
+    bottom: 90px;
+    grid-template-columns: 64px minmax(0, 1fr) auto;
+    left: 14px;
+    max-width: none;
+    right: 14px;
+    top: auto;
+  }
+
+  .wolpi-milestone-image-wrap {
+    border-radius: 14px;
+    height: 64px;
+    width: 64px;
+  }
+
+  .wolpi-milestone-copy strong {
+    font-size: 17px;
+  }
+
+  .wolpi-milestone-copy p {
+    font-size: 13px;
   }
 
   .analytics-filter-actions,
