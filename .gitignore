@@ -9,6 +9,7 @@ dist
 out
 coverage
 test-results
+.release-stage/
 /release
 build/icon.icns
 build/icon.png
