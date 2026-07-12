@@ -10,10 +10,8 @@
     output: "release/${version}"
   },
   publish: {
-    provider: "github",
-    owner: "SbstnErhrdt",
-    repo: "jura-wolpertinger",
-    releaseType: "release"
+    provider: "generic",
+    url: "https://downloads.jura-wolpi.de/desktop/stable"
   },
   files: [
     "out/**/*",
@@ -47,7 +45,7 @@
     hardenedRuntime: true,
     gatekeeperAssess: false,
     notarize: true,
-    artifactName: "${productName}-${arch}-mac.${ext}"
+    artifactName: "${productName}-${version}-${arch}-mac.${ext}"
   },
   dmg: {
     icon: "build/icon.icns"
@@ -55,7 +53,7 @@
   win: {
     target: ["nsis"],
     icon: "build/icon.png",
-    artifactName: "${productName}-${arch}-win.${ext}"
+    artifactName: "${productName}-${version}-${arch}-win.${ext}"
   },
   nsis: {
     oneClick: false,
@@ -66,6 +64,6 @@
   linux: {
     target: ["AppImage"],
     icon: "build/icon.png",
-    artifactName: "${productName}-${arch}-linux.${ext}"
+    artifactName: "${productName}-${version}-${arch}-linux.${ext}"
   }
 }

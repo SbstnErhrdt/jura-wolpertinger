@@ -37,6 +37,7 @@ import { AppServices } from './services/services'
 import { seedDemoDataIfEnabled } from './services/demoData'
 import { exportExamPdf } from './services/pdf'
 import { resolveRuntimeDockIconPath } from './appIdentity'
+import { configureAutoUpdaterFeed, resolveUpdateFeedUrl } from './updateFeed'
 
 let mainWindow: BrowserWindow | null = null
 let splashWindow: BrowserWindow | null = null
@@ -81,6 +82,14 @@ function configureApplicationIdentity(): void {
 function configureAutoUpdates(): void {
   if (!app.isPackaged || process.env.JURA_E2E === '1') return
 
+  const feedUrl = resolveUpdateFeedUrl({
+    baseUrl: process.env.JURA_UPDATE_URL,
+    platform: process.platform,
+    arch: process.arch
+  })
+  if (!feedUrl) return
+
+  configureAutoUpdaterFeed(autoUpdater, feedUrl)
   autoUpdater.autoDownload = true
   autoUpdater.autoInstallOnAppQuit = false
   autoUpdater.on('error', (error) => {
