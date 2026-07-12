@@ -10,11 +10,11 @@ Die App ist ein Freizeitprojekt. Sie ist nicht offiziell, nicht mit Classtime od
 
 ## Installation
 
-Die aktuelle Version gibt es direkt als Download über die Projektseite oder über die folgenden Links.
+Die aktuelle Version gibt es über die [Projektseite](https://sbstnerhrdt.github.io/jura-wolpertinger/#download). Dort wird das Betriebssystem erkannt und die passende Datei angeboten.
 
 ### Windows
 
-1. [Windows-Installer herunterladen](https://github.com/SbstnErhrdt/jura-wolpertinger/releases/latest/download/Jura%20Wolpertinger-x64-win.exe).
+1. [Projektseite öffnen](https://sbstnerhrdt.github.io/jura-wolpertinger/#download) und `Windows` wählen.
 2. Installer starten und dem Dialog folgen.
 3. Die App über Startmenü oder Desktop-Verknüpfung öffnen.
 
@@ -22,7 +22,7 @@ Hinweis: Bei neuen oder unsignierten Apps kann Windows SmartScreen warnen.
 
 ### macOS
 
-1. Passende DMG-Datei herunterladen: [Apple Silicon](https://github.com/SbstnErhrdt/jura-wolpertinger/releases/latest/download/Jura%20Wolpertinger-arm64-mac.dmg) oder [Intel](https://github.com/SbstnErhrdt/jura-wolpertinger/releases/latest/download/Jura%20Wolpertinger-x64-mac.dmg).
+1. [Projektseite öffnen](https://sbstnerhrdt.github.io/jura-wolpertinger/#download) und `Mac Apple Chip` oder `Mac Intel` wählen.
 2. DMG öffnen.
 3. `Jura Wolpertinger.app` in den Programme-Ordner ziehen.
 4. Die App aus `Programme` starten.
@@ -31,7 +31,7 @@ Hinweis: Apple Silicon ist für M1/M2/M3/M4-Macs. Intel ist für ältere Macs.
 
 ### Linux
 
-1. [Linux-AppImage herunterladen](https://github.com/SbstnErhrdt/jura-wolpertinger/releases/latest/download/Jura%20Wolpertinger-x64-linux.AppImage).
+1. [Projektseite öffnen](https://sbstnerhrdt.github.io/jura-wolpertinger/#download) und `Linux` wählen.
 2. Ausführbar machen:
 
    ```bash

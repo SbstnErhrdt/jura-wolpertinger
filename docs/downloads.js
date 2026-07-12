@@ -1,11 +1,4 @@
-const releaseApiUrl = 'https://api.github.com/repos/SbstnErhrdt/jura-wolpertinger/releases/latest'
-
-const assetMatchers = {
-  windows: (name) => /win.*\.exe$/i.test(name) || /\.exe$/i.test(name),
-  macosArm: (name) => /arm64.*mac.*\.dmg$/i.test(name),
-  macosIntel: (name) => /x64.*mac.*\.dmg$/i.test(name),
-  linux: (name) => /linux.*\.AppImage$/i.test(name) || /\.AppImage$/i.test(name)
-}
+import { DOWNLOAD_MANIFEST_URL, formatDownloadLabel, readManifestEntries, selectDownload } from './downloads-core.js'
 
 const osLabels = {
   windows: 'Windows',
@@ -25,27 +18,37 @@ function detectOs() {
   return null
 }
 
-function formatAssetLabel(asset) {
-  if (!asset) return 'Direkter Download'
-  const sizeInMb = asset.size ? ` · ${(asset.size / 1024 / 1024).toFixed(1)} MB` : ''
-  return `${asset.name}${sizeInMb}`
-}
+function detectMacArchitecture() {
+  const architecture = (navigator.userAgentData?.architecture || '').toLowerCase()
+  const userAgent = navigator.userAgent.toLowerCase()
+  const platform = (navigator.platform || '').toLowerCase()
+  const value = `${architecture} ${userAgent} ${platform}`
 
-function findAsset(assets, os) {
-  return assets.find((asset) => assetMatchers[os](asset.name))
+  if (value.includes('arm64') || value.includes('aarch64')) return 'arm64'
+  if (
+    value.includes('x64') ||
+    value.includes('x86_64') ||
+    value.includes('amd64') ||
+    value.includes('intel')
+  ) return 'x64'
+
+  return null
 }
 
 function updateCard(card, asset, os) {
   const detail = card.querySelector('small')
+  card.classList.toggle('recommended', getRecommendedDownloadKeys().includes(os))
+
   if (!asset) {
     markUnavailable(card, detail)
     return
   }
 
-  card.href = asset.browser_download_url
+  card.href = asset.url
   card.setAttribute('download', '')
-  if (detail) detail.textContent = formatAssetLabel(asset)
-  if (getRecommendedDownloadKeys().includes(os)) card.classList.add('recommended')
+  card.removeAttribute('aria-disabled')
+  card.classList.remove('unavailable')
+  if (detail) detail.textContent = formatDownloadLabel(asset)
 }
 
 function markUnavailable(card, detail) {
@@ -57,10 +60,21 @@ function markUnavailable(card, detail) {
 }
 
 const detectedOs = detectOs()
+const detectedMacArchitecture = detectedOs === 'macos' ? detectMacArchitecture() : null
 
 function getRecommendedDownloadKeys() {
   if (detectedOs === 'macos') return ['macosArm', 'macosIntel']
   return detectedOs ? [detectedOs] : []
+}
+
+function getDetectedDownloadKey() {
+  if (detectedOs === 'macos') {
+    if (detectedMacArchitecture === 'arm64') return 'macosArm'
+    if (detectedMacArchitecture === 'x64') return 'macosIntel'
+    return null
+  }
+
+  return detectedOs
 }
 
 async function loadDownloads() {
@@ -70,15 +84,19 @@ async function loadDownloads() {
   const detectedLabel = document.querySelector('#detected-label')
 
   try {
-    const response = await fetch(releaseApiUrl, { headers: { Accept: 'application/vnd.github+json' } })
-    if (!response.ok) throw new Error(`Release API returned ${response.status}`)
-    const release = await response.json()
-    const assets = release.assets || []
+    const response = await fetch(DOWNLOAD_MANIFEST_URL, { cache: 'no-cache' })
+    if (!response.ok) throw new Error(`Manifest returned ${response.status}`)
+    const manifest = await response.json()
+
+    if (!readManifestEntries(manifest)) {
+      throw new Error('Manifest is missing required release entries.')
+    }
+
     const assetsByOs = {
-      windows: findAsset(assets, 'windows'),
-      macosArm: findAsset(assets, 'macosArm'),
-      macosIntel: findAsset(assets, 'macosIntel'),
-      linux: findAsset(assets, 'linux')
+      windows: selectDownload(manifest, 'windows', 'x64'),
+      macosArm: selectDownload(manifest, 'macos', 'arm64'),
+      macosIntel: selectDownload(manifest, 'macos', 'x64'),
+      linux: selectDownload(manifest, 'linux', 'x64')
     }
 
     for (const card of cards) {
@@ -86,14 +104,15 @@ async function loadDownloads() {
       updateCard(card, assetsByOs[os], os)
     }
 
-    const recommendedKeys = getRecommendedDownloadKeys()
-    const detectedAsset = recommendedKeys.length === 1 ? assetsByOs[recommendedKeys[0]] : null
-    if (detectedAsset && detectedOs) {
+    const detectedKey = getDetectedDownloadKey()
+    const detectedAsset = detectedKey ? assetsByOs[detectedKey] : null
+
+    if (detectedAsset && detectedKey) {
       detectedDownload.hidden = false
-      detectedDownloadLink.href = detectedAsset.browser_download_url
+      detectedDownloadLink.href = detectedAsset.url
       detectedDownloadLink.setAttribute('download', '')
-      detectedDownloadLink.textContent = `Download für ${osLabels[recommendedKeys[0]]}`
-      detectedLabel.textContent = `Erkanntes System: ${osLabels[recommendedKeys[0]]} · ${formatAssetLabel(detectedAsset)}`
+      detectedDownloadLink.textContent = `Download für ${osLabels[detectedKey]}`
+      detectedLabel.textContent = `Erkanntes System: ${osLabels[detectedKey]} · ${formatDownloadLabel(detectedAsset)}`
     } else if (detectedOs === 'macos') {
       detectedDownload.hidden = false
       detectedDownloadLink.href = '#download-grid'
