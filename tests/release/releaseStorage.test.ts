@@ -461,6 +461,31 @@ describe('verifyReleaseFeed', () => {
 
     expect(fakeFetch.calls.some(({ method, url }) => method === 'HEAD' && url.includes('escape'))).toBe(false)
   })
+
+  it('rejects encoded dot segments in latest metadata before issuing artifact HEAD requests', async () => {
+    const fakeFetch = createReleaseFeedFetch({
+      metadataOverrides: {
+        'mac/arm64': YAML.stringify({
+          version: VERSION,
+          files: [
+            {
+              url: `${VERSION}/%2e%2e/escape.dmg`,
+              sha512: sha512('escape'),
+              size: 6
+            }
+          ]
+        })
+      }
+    })
+
+    await expect(
+      verifyReleaseFeed(PUBLIC_BASE_URL, {
+        fetch: fakeFetch
+      })
+    ).rejects.toThrow(/approved version path|unsafe/i)
+
+    expect(fakeFetch.calls.some(({ method, url }) => method === 'HEAD' && url.includes('escape'))).toBe(false)
+  })
 })
 
 async function createCompleteRemoteStorage() {

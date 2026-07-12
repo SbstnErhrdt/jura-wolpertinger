@@ -258,8 +258,20 @@ function parseLatestMetadata(input: {
         throw new Error(`${input.url} contains unsafe artifact URL ${entry.url}.`)
       }
 
+      const artifactUrl = new URL(`${input.baseUrl}/${input.directory}/${relativePath}`)
+      const approvedVersionUrl = new URL(
+        `${input.baseUrl}/${input.directory}/${input.version}/`
+      )
+
+      if (
+        artifactUrl.origin !== approvedVersionUrl.origin ||
+        !artifactUrl.pathname.startsWith(approvedVersionUrl.pathname)
+      ) {
+        throw new Error(`${input.url} contains an artifact URL outside its approved version path.`)
+      }
+
       return {
-        url: `${input.baseUrl}/${input.directory}/${relativePath}`,
+        url: artifactUrl.href,
         sha512: entry.sha512,
         size: entry.size
       }
