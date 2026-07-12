@@ -80,8 +80,8 @@ Die Matrix besteht aus:
 
 | Ziel | Runner | Build | Staging-Eingang |
 | --- | --- | --- | --- |
-| `windows-x64` | `windows-latest` | `corepack pnpm run release:win -- --x64` | `release/<version>` |
-| `linux-x64` | `ubuntu-latest` | `corepack pnpm run release:linux -- --x64` | `release/<version>` |
+| `windows-x64` | `windows-latest` | `corepack pnpm run release:win --x64` | `release/<version>` |
+| `linux-x64` | `ubuntu-latest` | `corepack pnpm run release:linux --x64` | `release/<version>` |
 
 Jeder Job ruft danach `release:stage` für genau seine Plattform auf. Staging schreibt ausschließlich unveränderliche Objekte unter `desktop/stable/<plattform>/<arch>/<version>/`. Der Workflow schreibt keine Live-`latest*.yml`, kein `manifest.json`, keinen GitHub Release und keinen Tag. `fail-fast` ist deaktiviert; deshalb können Kandidaten einer Plattform vorhanden sein, obwohl der andere Matrix-Job fehlschlägt. Veröffentlicht werden darf erst nach erfolgreichem Staging aller vier Plattformen einschließlich der beiden lokalen macOS-Builds.
 

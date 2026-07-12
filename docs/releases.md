@@ -1,41 +1,35 @@
 # Releases
 
-Jura Wolpertinger nutzt GitHub Releases als Distributions- und Update-Kanal. Die Nutzerinstallation ist in [installation.md](installation.md) beschrieben.
+Jura Wolpertinger verteilt Desktop-Releases und Auto-Updates ausschließlich über den eigenen Stable-Feed unter `https://downloads.jura-wolpi.de/desktop/stable`. GitHub Releases sind weder Download- noch Update-Kanal. Die Nutzerinstallation ist in [installation.md](installation.md) beschrieben.
 
-## Release erstellen
+## Kandidaten erstellen
 
-1. App-Version erhöhen:
+1. Version in `package.json` setzen und die vollständige Verifikationsmatrix ausführen.
+2. Den manuellen Workflow `.github/workflows/release.yml` mit derselben Version starten. Er baut und staged Windows x64 sowie Linux x64, veröffentlicht aber keine Live-Metadaten.
+3. macOS ARM64 und x64 lokal mit `corepack pnpm run release:mac:local` Developer-ID-signieren, notarisieren und prüfen.
+4. Beide macOS-Kandidaten mit `release:stage` unveränderlich in RustFS ablegen.
 
-   ```bash
-   pnpm version patch
-   ```
-
-2. Commit und Tag pushen:
-
-   ```bash
-   git push origin main --tags
-   ```
-
-3. GitHub Actions startet `.github/workflows/release.yml`, validiert die App, baut macOS-, Windows- und Linux-Pakete und veröffentlicht Installer plus Auto-Update-Metadaten im GitHub Release.
-
-## Lokaler Build
-
-Diesen Befehl verwenden, wenn lokal Installer-Artefakte ohne Veröffentlichung gebaut werden sollen:
+Normale lokale Pakete ohne Veröffentlichung entstehen mit:
 
 ```bash
-pnpm run dist
+corepack pnpm run dist
 ```
+
+## Stable veröffentlichen
+
+Erst nach vollständigem Staging aller vier Plattformen darf ein Operator die Live-Metadaten umschalten:
+
+```bash
+corepack pnpm run release:publish --version 0.1.5 --confirm "publish 0.1.5"
+corepack pnpm run release:verify --base-url https://downloads.jura-wolpi.de/desktop/stable
+```
+
+Die Veröffentlichung ist pro Plattform atomar: Jede Plattform wird vollständig remote validiert, bevor ihr `latest*.yml` geschrieben wird. `manifest.json` folgt zuletzt. Ein Rollback veröffentlicht auf dieselbe Weise eine vollständig erhaltene ältere Version; bereits installierte neuere Apps werden nicht automatisch heruntergestuft.
 
 ## Auto-Updates
 
-Gepackte Apps prüfen kurz nach dem Start auf Updates aus GitHub Releases. Wenn ein Update heruntergeladen wurde, fragt die App vor Neustart und Installation nach.
+Gepackte Apps verwenden nur den Stable-Feed ihrer Plattform und Architektur. Feedfehler blockieren den Start nicht. Ein Update darf im Hintergrund laden, wird aber erst nach der ausdrücklichen Aktion `Jetzt neu starten` installiert.
 
-macOS-Auto-Updates brauchen Code Signing. Unsigned Development-Builds können zwar veröffentlicht und manuell heruntergeladen werden, produktive Auto-Updates auf macOS sollten aber erst nach Developer-ID-Signierung und Notarisierung aktiviert werden.
+macOS-Releases benötigen Developer-ID-Signierung, Hardened Runtime, Notarisierung und Stapling. Für Windows ist produktives Authenticode oder Microsoft Trusted Signing vorgesehen. Linux-AppImages können zusätzlich per GPG signiert werden.
 
-Private GitHub-Repositories eignen sich für internes Release-Testing. Für externe Nutzer müssen Release-Artefakte für die installierte App erreichbar sein, üblicherweise über ein öffentliches GitHub-Release-Repository oder einen separaten Update-Server.
-
-## Signaturen
-
-- macOS: Developer ID Application Zertifikat, Hardened Runtime und Notarization einrichten.
-- Windows: Authenticode-Code-Signing-Zertifikat oder Microsoft Trusted Signing einrichten.
-- Linux: Checksums veröffentlichen, AppImage optional per GPG signieren.
+Das Repository darf privat sein, sobald Stable-Feed, Downloadseite, CI-Secrets und Zugriffe unabhängig vom öffentlichen GitHub-Repository verifiziert sind. Die vollständige Betriebs-, Rollback- und Privacy-Reihenfolge steht in [installation.md](installation.md).

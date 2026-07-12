@@ -85,8 +85,8 @@ Der Branch enthält die freizugebende Version und `package.json` meldet exakt `0
 
 Den Workflow `.github/workflows/release.yml` manuell mit dem Input `version` = `0.1.5` starten. Die Matrix:
 
-- baut Windows x64 mit `corepack pnpm run release:win -- --x64` und staged aus `release/0.1.5`;
-- baut Linux x64 mit `corepack pnpm run release:linux -- --x64` und staged aus `release/0.1.5`;
+- baut Windows x64 mit `corepack pnpm run release:win --x64` und staged aus `release/0.1.5`;
+- baut Linux x64 mit `corepack pnpm run release:linux --x64` und staged aus `release/0.1.5`;
 - bricht ab, wenn der Workflow-Input nicht exakt `package.json.version` entspricht;
 - lädt nur `desktop/stable/<plattform>/<arch>/0.1.5/**` hoch und verändert weder `latest*.yml` noch `manifest.json`.
 
@@ -152,7 +152,7 @@ Die Atomarität gilt pro Plattform. Scheitert beispielsweise Windows, können di
 corepack pnpm run release:verify --base-url https://downloads.jura-wolpi.de/desktop/stable
 ```
 
-Der Check liest Manifest und alle vier Live-YAMLs, prüft deren gemeinsame Version, HTTPS-URLs, öffentliche Artefakt-`HEAD`-Antworten, Größen, MIME- und Cache Header sowie angekündigte Byte Ranges. Erst nach diesem erfolgreichen Check den Release als abgeschlossen melden.
+Der Check liest Manifest und alle vier Live-YAMLs, prüft deren gemeinsame Version, HTTPS-URLs, öffentliche Artefakt-`HEAD`-Antworten, Größen, Cache Header sowie angekündigte Byte Ranges. Bei Artefakten verlangt er einen vorhandenen, nicht als `text/html` ausgelieferten MIME-Typ; die exakten Werte der Tabelle werden zusätzlich in der RustFS- oder Proxy-Konfiguration geprüft. Erst nach diesem erfolgreichen Check den Release als abgeschlossen melden.
 
 ## Rollback
 
