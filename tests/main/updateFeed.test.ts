@@ -15,6 +15,12 @@ describe('resolveUpdateFeedUrl', () => {
     expect(resolveUpdateFeedUrl({ platform: 'linux', arch: 'x64' })).toBe(
       'https://downloads.jura-wolpi.de/desktop/stable/linux/x64'
     )
+  })
+
+  it('returns null for unsupported platform and architecture combinations', () => {
+    expect(resolveUpdateFeedUrl({ platform: 'win32', arch: 'arm64' })).toBeNull()
+    expect(resolveUpdateFeedUrl({ platform: 'linux', arch: 'arm64' })).toBeNull()
+    expect(resolveUpdateFeedUrl({ platform: 'darwin', arch: 'ia32' })).toBeNull()
     expect(resolveUpdateFeedUrl({ platform: 'freebsd', arch: 'x64' })).toBeNull()
   })
 

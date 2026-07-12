@@ -1,9 +1,10 @@
 const DEFAULT_UPDATE_BASE_URL = 'https://downloads.jura-wolpi.de/desktop/stable'
 
-const PLATFORM_SEGMENTS: Partial<Record<NodeJS.Platform, string>> = {
-  darwin: 'mac',
-  linux: 'linux',
-  win32: 'windows'
+const SUPPORTED_FEED_PATHS: Record<string, string> = {
+  'darwin:arm64': 'mac/arm64',
+  'darwin:x64': 'mac/x64',
+  'linux:x64': 'linux/x64',
+  'win32:x64': 'windows/x64'
 }
 
 export interface ResolveUpdateFeedUrlInput {
@@ -21,11 +22,11 @@ export function resolveUpdateFeedUrl({
   platform,
   arch
 }: ResolveUpdateFeedUrlInput): string | null {
-  const platformSegment = PLATFORM_SEGMENTS[platform]
-  if (!platformSegment) return null
+  const feedPath = SUPPORTED_FEED_PATHS[`${platform}:${arch}`]
+  if (!feedPath) return null
 
   const normalizedBaseUrl = normalizeBaseUrl(baseUrl)
-  return `${normalizedBaseUrl}/${platformSegment}/${arch}`
+  return `${normalizedBaseUrl}/${feedPath}`
 }
 
 export function configureAutoUpdaterFeed(updater: FeedUrlConfigurable, url: string): void {
