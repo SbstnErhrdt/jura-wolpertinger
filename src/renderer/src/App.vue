@@ -1,6 +1,9 @@
 <template>
   <UApp>
-    <section v-if="cloudAuth.status !== 'not_required' && cloudAuth.status !== 'signed_in'" class="auth-gate">
+    <section
+      v-if="cloudAuth.status !== 'not_required' && (cloudAuth.status !== 'signed_in' || authMode === 'update_password')"
+      class="auth-gate"
+    >
       <div class="auth-panel">
         <div class="auth-brand">
           <img :src="welcomeImageUrl" alt="" />
@@ -11,7 +14,7 @@
         </div>
         <p class="auth-copy">{{ authCopy }}</p>
         <div
-          v-if="cloudAuth.status !== 'missing_config' && authMode !== 'reset_password'"
+          v-if="cloudAuth.status !== 'missing_config' && !['reset_password', 'update_password'].includes(authMode)"
           class="auth-mode-switch"
           aria-label="Anmeldung oder Registrierung auswählen"
         >
@@ -39,10 +42,10 @@
           </span>
         </div>
         <form v-if="cloudAuth.status !== 'missing_config'" class="auth-form" @submit.prevent="submitAuthForm">
-          <UFormField label="E-Mail" class="auth-field">
+          <UFormField v-if="authMode !== 'update_password'" label="E-Mail" class="auth-field">
             <UInput v-model="authEmail" class="auth-input" type="email" autocomplete="email" required />
           </UFormField>
-          <UFormField v-if="authMode !== 'reset_password'" label="Passwort" class="auth-field">
+          <UFormField v-if="['sign_in', 'sign_up'].includes(authMode)" label="Passwort" class="auth-field">
             <UInput
               v-model="authPassword"
               class="auth-input"
@@ -51,6 +54,26 @@
               required
             />
           </UFormField>
+          <template v-if="authMode === 'update_password'">
+            <UFormField label="Neues Passwort" class="auth-field">
+              <UInput
+                v-model="authPassword"
+                class="auth-input"
+                type="password"
+                autocomplete="new-password"
+                required
+              />
+            </UFormField>
+            <UFormField label="Neues Passwort wiederholen" class="auth-field">
+              <UInput
+                v-model="authPasswordConfirm"
+                class="auth-input"
+                type="password"
+                autocomplete="new-password"
+                required
+              />
+            </UFormField>
+          </template>
           <div v-if="authMode === 'sign_in'" class="auth-inline-action">
             <UButton
               type="button"
@@ -289,13 +312,15 @@ const cloudAuth = ref<CloudAuthState>(
 )
 const authEmail = ref('')
 const authPassword = ref('')
+const authPasswordConfirm = ref('')
 const authBusy = ref(false)
 const authMessage = ref('')
 const authMessageKind = ref<'info' | 'error'>('info')
-const authMode = ref<'sign_in' | 'sign_up' | 'reset_password'>('sign_in')
+const authMode = ref<'sign_in' | 'sign_up' | 'reset_password' | 'update_password'>('sign_in')
 const authTitle = computed(() => {
   if (authMode.value === 'sign_up') return 'Kostenlosen Account erstellen'
   if (authMode.value === 'reset_password') return 'Passwort zurücksetzen'
+  if (authMode.value === 'update_password') return 'Neues Passwort setzen'
   return 'Einloggen'
 })
 const authCopy = computed(() => {
@@ -305,26 +330,33 @@ const authCopy = computed(() => {
   if (authMode.value === 'reset_password') {
     return 'Gib deine E-Mail-Adresse ein. Wir senden dir einen Link, mit dem du dein Passwort neu setzen kannst.'
   }
+  if (authMode.value === 'update_password') {
+    return 'Wähle ein neues Passwort. Danach öffnet sich deine App wieder automatisch.'
+  }
   return 'Melde dich an, um deine Lern- und Prüfungsdaten zu öffnen.'
 })
 const authActionHint = computed(() => {
   if (authMode.value === 'sign_up') return 'Mit dem Button unten wird der Account sofort erstellt.'
   if (authMode.value === 'reset_password') return 'Du erhältst eine E-Mail, falls für diese Adresse ein Account existiert.'
+  if (authMode.value === 'update_password') return 'Das neue Passwort gilt sofort für deinen Account.'
   return 'Mit dem Button unten wirst du direkt angemeldet.'
 })
 const authSubmitLabel = computed(() => {
   if (authBusy.value) return 'Bitte warten'
   if (authMode.value === 'reset_password') return 'Link zum Zurücksetzen senden'
+  if (authMode.value === 'update_password') return 'Passwort speichern'
   return authMode.value === 'sign_up' ? 'Account jetzt erstellen' : 'Jetzt einloggen'
 })
 const authSwitchText = computed(() => {
   if (authMode.value === 'sign_up') return 'Du hast schon einen Account?'
   if (authMode.value === 'reset_password') return 'Passwort wieder eingefallen?'
+  if (authMode.value === 'update_password') return 'Du möchtest doch einloggen?'
   return 'Noch kein Account?'
 })
 const authSwitchLabel = computed(() => {
   if (authMode.value === 'sign_up') return 'Einloggen'
   if (authMode.value === 'reset_password') return 'Zurück zum Einloggen'
+  if (authMode.value === 'update_password') return 'Zum Einloggen'
   return 'Kostenlos erstellen'
 })
 const onboardingSettingsTitle = computed(() => (isElectronApiAvailable ? 'Cloud verbinden' : 'Einstellungen prüfen'))
@@ -427,11 +459,20 @@ const usersUpdatedListener = () => {
 
 onMounted(async () => {
   applyTheme()
+  if (window.location.hash.includes('type=recovery')) {
+    authMode.value = 'update_password'
+  }
   cloudAuth.value = await readCloudAuthState()
-  getSupabaseAuthClient()?.auth.onAuthStateChange((_event, session) => {
+  getSupabaseAuthClient()?.auth.onAuthStateChange((event, session) => {
     cloudAuth.value = session
       ? { status: 'signed_in', session, error: null }
       : { status: 'signed_out', session: null, error: null }
+    if (event === 'PASSWORD_RECOVERY') {
+      authMode.value = 'update_password'
+      authMessage.value = ''
+      authPassword.value = ''
+      authPasswordConfirm.value = ''
+    }
     if (session) void loadUsers()
   })
   if (cloudAuth.value.status === 'not_required' || cloudAuth.value.status === 'signed_in') {
@@ -512,9 +553,12 @@ async function startTour(): Promise<void> {
   })
 }
 
-function setAuthMode(mode: 'sign_in' | 'sign_up' | 'reset_password'): void {
+function setAuthMode(mode: 'sign_in' | 'sign_up' | 'reset_password' | 'update_password'): void {
   authMode.value = mode
-  if (mode !== 'reset_password') authPassword.value = ''
+  if (mode !== 'reset_password') {
+    authPassword.value = ''
+    authPasswordConfirm.value = ''
+  }
   authMessage.value = ''
 }
 
@@ -529,6 +573,10 @@ async function submitAuthForm(): Promise<void> {
   }
   if (authMode.value === 'reset_password') {
     await resetPassword()
+    return
+  }
+  if (authMode.value === 'update_password') {
+    await updateRecoveredPassword()
     return
   }
   await submitAuth()
@@ -596,6 +644,40 @@ async function resetPassword(): Promise<void> {
   authMessage.value = 'Wenn ein Account existiert, erhältst du eine E-Mail zum Zurücksetzen.'
 }
 
+async function updateRecoveredPassword(): Promise<void> {
+  const client = getSupabaseAuthClient()
+  if (!client) return
+  const password = authPassword.value.trim()
+  if (password.length < 8) {
+    authMessageKind.value = 'error'
+    authMessage.value = 'Bitte wähle ein Passwort mit mindestens 8 Zeichen.'
+    return
+  }
+  if (password !== authPasswordConfirm.value.trim()) {
+    authMessageKind.value = 'error'
+    authMessage.value = 'Die beiden Passwörter stimmen nicht überein.'
+    return
+  }
+  authBusy.value = true
+  authMessage.value = ''
+  const { error } = await client.auth.updateUser({ password })
+  authBusy.value = false
+  if (error) {
+    authMessageKind.value = 'error'
+    authMessage.value = 'Passwort konnte nicht gespeichert werden. Bitte fordere einen neuen Link an.'
+    return
+  }
+  authPassword.value = ''
+  authPasswordConfirm.value = ''
+  authMessageKind.value = 'info'
+  authMessage.value = ''
+  authMode.value = 'sign_in'
+  cloudAuth.value = await readCloudAuthState()
+  if (cloudAuth.value.status === 'signed_in') {
+    await loadUsers()
+  }
+}
+
 async function signOut(): Promise<void> {
   const client = getSupabaseAuthClient()
   if (!client) return
@@ -603,6 +685,7 @@ async function signOut(): Promise<void> {
   users.value = []
   currentUser.value = null
   authPassword.value = ''
+  authPasswordConfirm.value = ''
   authMessage.value = ''
   cloudAuth.value = await readCloudAuthState()
 }

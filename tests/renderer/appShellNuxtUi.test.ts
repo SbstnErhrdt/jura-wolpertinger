@@ -111,9 +111,12 @@ describe('Nuxt UI app shell', () => {
     const app = await readFile(resolve(rendererRoot, 'App.vue'), 'utf8')
     const styles = await readFile(resolve(rendererRoot, 'styles/main.css'), 'utf8')
 
-    expect(app).toContain("authMode = ref<'sign_in' | 'sign_up' | 'reset_password'>")
+    expect(app).toContain("authMode = ref<'sign_in' | 'sign_up' | 'reset_password' | 'update_password'>")
     expect(app).toContain('Passwort vergessen?')
     expect(app).toContain('resetPasswordForEmail')
+    expect(app).toContain('PASSWORD_RECOVERY')
+    expect(app).toContain('Neues Passwort setzen')
+    expect(app).toContain('updateUser({ password')
     expect(app).toContain('class="auth-theme-toggle"')
     expect(app).toContain('Link zum Zurücksetzen senden')
     expect(styles).toMatch(/\.auth-field\s+\[data-slot='label'\]\s*\{[^}]*color:\s*#243746 !important/s)
