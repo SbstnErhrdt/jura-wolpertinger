@@ -199,17 +199,18 @@ async function validateBuiltMacArtifacts(input: {
       env: input.env
     }
   )
-  const mountPoint = readMountedVolumePath(`${attachResult.stdout}\n${attachResult.stderr}`)
-
-  if (!mountPoint) {
-    throw new Error(`Unable to determine mounted volume for ${relative(input.cwd, dmgArtifact.filePath)}.`)
-  }
+  const attachedVolume = parseAttachedVolume(`${attachResult.stdout}\n${attachResult.stderr}`)
 
   let validationError: Error | null = null
+  let cleanupError: Error | null = null
 
   try {
+    if (!attachedVolume.mountPoint) {
+      throw new Error(`Unable to determine mounted volume for ${relative(input.cwd, dmgArtifact.filePath)}.`)
+    }
+
     const mountedAppPath = await resolveMountedAppPath({
-      mountPoint,
+      mountPoint: attachedVolume.mountPoint,
       dmgFileName: dmgArtifact.fileName,
       version: dmgArtifact.version
     })
@@ -248,16 +249,31 @@ async function validateBuiltMacArtifacts(input: {
   } catch (error) {
     validationError = error instanceof Error ? error : new Error(String(error))
   } finally {
-    try {
-      await input.runCommand(['hdiutil', 'detach', mountPoint], {
-        cwd: input.cwd,
-        env: input.env
-      })
-    } catch (detachError) {
-      if (!validationError) {
-        throw detachError
+    const cleanupTarget = attachedVolume.mountPoint ?? attachedVolume.deviceIdentifier
+
+    if (cleanupTarget) {
+      try {
+        await detachMountedVolume({
+          target: cleanupTarget,
+          cwd: input.cwd,
+          env: input.env,
+          runCommand: input.runCommand
+        })
+      } catch (detachError) {
+        cleanupError = detachError instanceof Error ? detachError : new Error(String(detachError))
       }
     }
+  }
+
+  if (validationError && cleanupError) {
+    throw new AggregateError(
+      [validationError, cleanupError],
+      'Mounted app validation failed and mounted-volume cleanup also failed.'
+    )
+  }
+
+  if (cleanupError) {
+    throw cleanupError
   }
 
   if (validationError) {
@@ -293,22 +309,64 @@ async function findExpectedAppExecutable(appPath: string): Promise<string> {
   return executablePath
 }
 
-function readMountedVolumePath(output: string) {
+async function detachMountedVolume(input: {
+  target: string
+  cwd: string
+  env: Record<string, string | undefined>
+  runCommand: RunCommand
+}) {
+  try {
+    await input.runCommand(['hdiutil', 'detach', input.target], {
+      cwd: input.cwd,
+      env: input.env
+    })
+  } catch (detachError) {
+    const firstError = detachError instanceof Error ? detachError : new Error(String(detachError))
+
+    try {
+      await input.runCommand(['hdiutil', 'detach', input.target, '-force'], {
+        cwd: input.cwd,
+        env: input.env
+      })
+    } catch (forceDetachError) {
+      const secondError = forceDetachError instanceof Error
+        ? forceDetachError
+        : new Error(String(forceDetachError))
+
+      throw new AggregateError(
+        [firstError, secondError],
+        `Failed to detach mounted volume ${input.target}. Normal detach failed: ${firstError.message}. Force detach failed: ${secondError.message}.`
+      )
+    }
+  }
+}
+
+function parseAttachedVolume(output: string) {
   const lines = output
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
+  let deviceIdentifier: string | null = null
+  let mountPoint: string | null = null
 
-  for (const line of lines.reverse()) {
+  for (const line of lines) {
     const segments = line.split('\t').filter((segment) => segment.length > 0)
-    const candidate = segments.at(-1)
+    const deviceCandidate = segments[0]
+    const mountCandidate = segments.at(-1)
 
-    if (candidate?.startsWith('/')) {
-      return candidate
+    if (!deviceIdentifier && deviceCandidate?.startsWith('/dev/')) {
+      deviceIdentifier = deviceCandidate
+    }
+
+    if (mountCandidate?.startsWith('/')) {
+      mountPoint = mountCandidate
     }
   }
 
-  return null
+  return {
+    deviceIdentifier,
+    mountPoint
+  }
 }
 
 function readProductNameFromDmgFileName(fileName: string, version: string) {

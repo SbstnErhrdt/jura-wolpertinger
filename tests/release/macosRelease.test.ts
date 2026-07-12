@@ -395,6 +395,135 @@ describe('runLocalMacRelease', () => {
 
     expect(commands).toContain(`hdiutil detach ${mountRoot}`)
   })
+
+  it('detaches by device identifier when attach succeeds but mount-path parsing fails', async () => {
+    const workspace = await createWorkspace()
+    const commands: string[] = []
+    const deviceIdentifier = '/dev/disk7'
+    const runCommand: RunCommand = async (command, options) => {
+      commands.push(command.join(' '))
+
+      if (command[0] === 'security') {
+        return {
+          stdout: '  1) ABCDEF1234567890 "Developer ID Application: Example Corp (ABCDE12345)"',
+          stderr: ''
+        }
+      }
+
+      if (command[0] === 'electron-builder') {
+        const outputArgument = command.find((entry) => entry.startsWith('--config.directories.output='))
+
+        if (!outputArgument) {
+          throw new Error('missing builder output argument')
+        }
+
+        const outputDirectory = outputArgument.slice('--config.directories.output='.length)
+        const arch = command.includes('--arm64') ? 'arm64' : 'x64'
+        await writeMacReleaseFixture(join(options?.cwd ?? workspace, outputDirectory), arch)
+
+        return { stdout: '', stderr: '' }
+      }
+
+      if (command[0] === 'hdiutil' && command[1] === 'attach') {
+        return {
+          stdout: `${deviceIdentifier}\tGUID_partition_scheme\n${deviceIdentifier}s1\tApple_HFS\n`,
+          stderr: ''
+        }
+      }
+
+      if (command[0] === 'hdiutil' && command[1] === 'detach') {
+        return { stdout: '', stderr: '' }
+      }
+
+      return { stdout: '', stderr: '' }
+    }
+
+    await expect(
+      runLocalMacRelease({
+        env: validEnvironment(),
+        version: VERSION,
+        cwd: workspace,
+        runCommand,
+        pathExists: async () => true
+      })
+    ).rejects.toThrow(`Unable to determine mounted volume for .release-stage/mac/arm64/${PRODUCT_NAME}-${VERSION}-arm64-mac.dmg.`)
+
+    expect(commands).toContain(`hdiutil detach ${deviceIdentifier}`)
+  })
+
+  it('retries force detach and surfaces cleanup failure together with the original validation error', async () => {
+    const workspace = await createWorkspace()
+    const commands: string[] = []
+    const mountRoot = join(workspace, '.mounts', 'arm64')
+    const runCommand: RunCommand = async (command, options) => {
+      commands.push(command.join(' '))
+
+      if (command[0] === 'security') {
+        return {
+          stdout: '  1) ABCDEF1234567890 "Developer ID Application: Example Corp (ABCDE12345)"',
+          stderr: ''
+        }
+      }
+
+      if (command[0] === 'electron-builder') {
+        const outputArgument = command.find((entry) => entry.startsWith('--config.directories.output='))
+
+        if (!outputArgument) {
+          throw new Error('missing builder output argument')
+        }
+
+        const outputDirectory = outputArgument.slice('--config.directories.output='.length)
+        const arch = command.includes('--arm64') ? 'arm64' : 'x64'
+        await writeMacReleaseFixture(join(options?.cwd ?? workspace, outputDirectory), arch)
+
+        return { stdout: '', stderr: '' }
+      }
+
+      if (command[0] === 'hdiutil' && command[1] === 'attach') {
+        await mkdir(mountRoot, { recursive: true })
+        await writeMountedAppFixture(mountRoot)
+        return { stdout: `/dev/disk4\tApple_HFS\t${mountRoot}\n`, stderr: '' }
+      }
+
+      if (
+        command[0] === 'codesign' &&
+        command.at(-1) === join(mountRoot, `${PRODUCT_NAME}.app`)
+      ) {
+        throw new Error('mounted codesign failed')
+      }
+
+      if (command[0] === 'hdiutil' && command[1] === 'detach' && command[2] === mountRoot && command.length === 3) {
+        throw new Error('normal detach failed')
+      }
+
+      if (command[0] === 'hdiutil' && command[1] === 'detach' && command[2] === mountRoot && command[3] === '-force') {
+        throw new Error('force detach failed')
+      }
+
+      if (command[0] === 'lipo') {
+        return { stdout: 'arm64', stderr: '' }
+      }
+
+      return { stdout: '', stderr: '' }
+    }
+
+    const result = await runLocalMacRelease({
+      env: validEnvironment(),
+      version: VERSION,
+      cwd: workspace,
+      runCommand,
+      pathExists: async () => true
+    }).catch((error) => error)
+
+    expect(result).toBeInstanceOf(AggregateError)
+    expect(result.errors).toHaveLength(2)
+    expect(result.errors[0]).toBeInstanceOf(Error)
+    expect(result.errors[1]).toBeInstanceOf(Error)
+    expect(result.errors[0].message).toBe('mounted codesign failed')
+    expect(result.errors[1].message).toContain('force detach failed')
+    expect(commands).toContain(`hdiutil detach ${mountRoot}`)
+    expect(commands).toContain(`hdiutil detach ${mountRoot} -force`)
+  })
 })
 
 function validEnvironment() {
