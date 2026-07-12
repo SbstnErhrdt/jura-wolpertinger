@@ -124,6 +124,7 @@ describe('runLocalMacRelease', () => {
   it('builds arm64 and x64 into separate output directories and validates signed artifacts', async () => {
     const workspace = await createWorkspace()
     const commands: string[] = []
+    const mountRoots = new Map<'arm64' | 'x64', string>()
     const runCommand: RunCommand = async (command, options) => {
       commands.push(command.join(' '))
 
@@ -149,11 +150,9 @@ describe('runLocalMacRelease', () => {
       }
 
       if (command[0] === 'hdiutil' && command[1] === 'attach') {
-        const mountRoot = join(
-          workspace,
-          '.mounts',
-          command[2]?.includes('-arm64-') ? 'arm64' : 'x64'
-        )
+        const arch = command[2]?.includes('-arm64-') ? 'arm64' : 'x64'
+        const mountRoot = join(workspace, '.mounts', arch)
+        mountRoots.set(arch, mountRoot)
         await mkdir(mountRoot, { recursive: true })
         await writeMountedAppFixture(mountRoot)
         return { stdout: `/dev/disk4\tApple_HFS\t${mountRoot}\n`, stderr: '' }
@@ -161,7 +160,7 @@ describe('runLocalMacRelease', () => {
 
       if (command[0] === 'lipo') {
         return {
-          stdout: command.at(-1)?.includes('arm64.app') ? 'arm64' : 'x86_64',
+          stdout: command.at(-1)?.includes('/.mounts/arm64/') ? 'arm64' : 'x86_64',
           stderr: ''
         }
       }
@@ -199,12 +198,40 @@ describe('runLocalMacRelease', () => {
     )
 
     expect(commands.some((command) => command.includes('--publish always'))).toBe(false)
-    expect(commands.some((command) => command.startsWith('codesign --verify --deep --strict'))).toBe(true)
-    expect(commands.some((command) => command.startsWith('spctl --assess --type exec'))).toBe(true)
-    expect(commands.some((command) => command.startsWith('xcrun stapler validate'))).toBe(true)
+    expect(commands).toContain(
+      `codesign --verify --deep --strict --verbose=2 ${join(mountRoots.get('arm64')!, `${PRODUCT_NAME}.app`)}`
+    )
+    expect(commands).toContain(
+      `codesign --verify --deep --strict --verbose=2 ${join(mountRoots.get('x64')!, `${PRODUCT_NAME}.app`)}`
+    )
+    expect(commands).toContain(
+      `spctl --assess --type exec --verbose=4 ${join(mountRoots.get('arm64')!, `${PRODUCT_NAME}.app`)}`
+    )
+    expect(commands).toContain(
+      `spctl --assess --type exec --verbose=4 ${join(mountRoots.get('x64')!, `${PRODUCT_NAME}.app`)}`
+    )
+    expect(commands).toContain(
+      `xcrun stapler validate ${join(mountRoots.get('arm64')!, `${PRODUCT_NAME}.app`)}`
+    )
+    expect(commands).toContain(
+      `xcrun stapler validate ${join(mountRoots.get('x64')!, `${PRODUCT_NAME}.app`)}`
+    )
     expect(commands.some((command) => command.startsWith('hdiutil attach'))).toBe(true)
     expect(commands.some((command) => command.startsWith('hdiutil detach'))).toBe(true)
-    expect(commands.some((command) => command.startsWith('lipo -archs'))).toBe(true)
+    expect(commands).toContain(
+      `lipo -archs ${join(mountRoots.get('arm64')!, `${PRODUCT_NAME}.app`, 'Contents', 'MacOS', PRODUCT_NAME)}`
+    )
+    expect(commands).toContain(
+      `lipo -archs ${join(mountRoots.get('x64')!, `${PRODUCT_NAME}.app`, 'Contents', 'MacOS', PRODUCT_NAME)}`
+    )
+    expect(
+      commands.some((command) =>
+        command.startsWith(`codesign --verify --deep --strict --verbose=2 ${join(workspace, '.release-stage')}`) ||
+        command.startsWith(`spctl --assess --type exec --verbose=4 ${join(workspace, '.release-stage')}`) ||
+        command.startsWith(`xcrun stapler validate ${join(workspace, '.release-stage')}`) ||
+        command.startsWith(`lipo -archs ${join(workspace, '.release-stage')}`)
+      )
+    ).toBe(false)
     expect(
       commands.some((command) =>
         command.startsWith('tsx scripts/release-stage.ts') ||
@@ -212,6 +239,51 @@ describe('runLocalMacRelease', () => {
         command.startsWith('aws s3')
       )
     ).toBe(false)
+  })
+
+  it('rejects a mounted app whose product name does not match the expected release artifact', async () => {
+    const workspace = await createWorkspace()
+    const runCommand: RunCommand = async (command, options) => {
+      if (command[0] === 'security') {
+        return {
+          stdout: '  1) ABCDEF1234567890 "Developer ID Application: Example Corp (ABCDE12345)"',
+          stderr: ''
+        }
+      }
+
+      if (command[0] === 'electron-builder') {
+        const outputArgument = command.find((entry) => entry.startsWith('--config.directories.output='))
+
+        if (!outputArgument) {
+          throw new Error('missing builder output argument')
+        }
+
+        const outputDirectory = outputArgument.slice('--config.directories.output='.length)
+        const arch = command.includes('--arm64') ? 'arm64' : 'x64'
+        await writeMacReleaseFixture(join(options?.cwd ?? workspace, outputDirectory), arch)
+
+        return { stdout: '', stderr: '' }
+      }
+
+      if (command[0] === 'hdiutil' && command[1] === 'attach') {
+        const mountRoot = join(workspace, '.mounts', 'arm64')
+        await mkdir(mountRoot, { recursive: true })
+        await writeMountedAppFixture(mountRoot, 'Wrong Product')
+        return { stdout: `/dev/disk4\tApple_HFS\t${mountRoot}\n`, stderr: '' }
+      }
+
+      return { stdout: '', stderr: '' }
+    }
+
+    await expect(
+      runLocalMacRelease({
+        env: validEnvironment(),
+        version: VERSION,
+        cwd: workspace,
+        runCommand,
+        pathExists: async () => true
+      })
+    ).rejects.toThrow(`Expected mounted app bundle ${PRODUCT_NAME}.app.`)
   })
 
   it('fails when architecture inspection does not match the expected build', async () => {
@@ -261,6 +333,67 @@ describe('runLocalMacRelease', () => {
         pathExists: async () => true
       })
     ).rejects.toThrow('Expected mac-arm64 app binary to include architecture arm64.')
+  })
+
+  it('detaches the mounted volume when mounted-app validation fails', async () => {
+    const workspace = await createWorkspace()
+    const commands: string[] = []
+    const mountRoot = join(workspace, '.mounts', 'arm64')
+    const runCommand: RunCommand = async (command, options) => {
+      commands.push(command.join(' '))
+
+      if (command[0] === 'security') {
+        return {
+          stdout: '  1) ABCDEF1234567890 "Developer ID Application: Example Corp (ABCDE12345)"',
+          stderr: ''
+        }
+      }
+
+      if (command[0] === 'electron-builder') {
+        const outputArgument = command.find((entry) => entry.startsWith('--config.directories.output='))
+
+        if (!outputArgument) {
+          throw new Error('missing builder output argument')
+        }
+
+        const outputDirectory = outputArgument.slice('--config.directories.output='.length)
+        const arch = command.includes('--arm64') ? 'arm64' : 'x64'
+        await writeMacReleaseFixture(join(options?.cwd ?? workspace, outputDirectory), arch)
+
+        return { stdout: '', stderr: '' }
+      }
+
+      if (command[0] === 'hdiutil' && command[1] === 'attach') {
+        await mkdir(mountRoot, { recursive: true })
+        await writeMountedAppFixture(mountRoot)
+        return { stdout: `/dev/disk4\tApple_HFS\t${mountRoot}\n`, stderr: '' }
+      }
+
+      if (
+        command[0] === 'codesign' &&
+        command.at(-1) === join(mountRoot, `${PRODUCT_NAME}.app`)
+      ) {
+        throw new Error('mounted codesign failed')
+      }
+
+      if (command[0] === 'lipo') {
+        return { stdout: 'arm64', stderr: '' }
+      }
+
+      return { stdout: '', stderr: '' }
+    }
+
+    await expect(
+      runLocalMacRelease({
+        env: validEnvironment(),
+        version: VERSION,
+        cwd: workspace,
+        runCommand,
+        pathExists: async () => true
+      })
+    ).rejects.toThrow('mounted codesign failed')
+
+    expect(commands).toContain(`hdiutil detach ${mountRoot}`)
   })
 })
 
@@ -312,8 +445,8 @@ async function writeMacReleaseFixture(directory: string, arch: 'arm64' | 'x64') 
   )
 }
 
-async function writeMountedAppFixture(directory: string) {
-  const appDirectory = join(directory, `${PRODUCT_NAME}.app`, 'Contents', 'MacOS')
+async function writeMountedAppFixture(directory: string, appName = PRODUCT_NAME) {
+  const appDirectory = join(directory, `${appName}.app`, 'Contents', 'MacOS')
   await mkdir(appDirectory, { recursive: true })
-  await writeFile(join(appDirectory, PRODUCT_NAME), 'mounted executable')
+  await writeFile(join(appDirectory, appName), 'mounted executable')
 }

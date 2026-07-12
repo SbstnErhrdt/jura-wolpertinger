@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
-import { access, readdir, readFile, rm } from 'node:fs/promises'
+import { access, readFile, rm } from 'node:fs/promises'
 import { constants as fsConstants } from 'node:fs'
-import { join, relative } from 'node:path'
+import { basename, join, relative } from 'node:path'
 import { collectReleaseArtifacts, type ReleasePlatform } from './model'
 
 const REQUIRED_ENVIRONMENT_VARIABLES = [
@@ -184,8 +184,6 @@ async function validateBuiltMacArtifacts(input: {
     directory: absoluteOutputDirectory,
     platform: input.platform
   })
-  const appPath = await findSingleAppBundle(absoluteOutputDirectory)
-  const executablePath = await findAppExecutable(appPath)
   const dmgArtifact = artifacts.find(
     (artifact) => artifact.kind === 'download' && artifact.fileName.endsWith('.dmg')
   )
@@ -193,38 +191,6 @@ async function validateBuiltMacArtifacts(input: {
   if (!dmgArtifact) {
     throw new Error(`${input.platform} is missing DMG.`)
   }
-
-  await input.runCommand(
-    ['codesign', '--verify', '--deep', '--strict', '--verbose=2', appPath],
-    {
-      cwd: input.cwd,
-      env: input.env
-    }
-  )
-  await input.runCommand(
-    ['spctl', '--assess', '--type', 'exec', '--verbose=4', appPath],
-    {
-      cwd: input.cwd,
-      env: input.env
-    }
-  )
-
-  const archResult = await input.runCommand(['lipo', '-archs', executablePath], {
-    cwd: input.cwd,
-    env: input.env
-  })
-  const discoveredArchitectures = archResult.stdout.trim().split(/\s+/).filter(Boolean)
-
-  if (!discoveredArchitectures.includes(input.expectedArch)) {
-    throw new Error(
-      `Expected ${input.platform} app binary to include architecture ${input.expectedArch}.`
-    )
-  }
-
-  await input.runCommand(['xcrun', 'stapler', 'validate', dmgArtifact.filePath], {
-    cwd: input.cwd,
-    env: input.env
-  })
 
   const attachResult = await input.runCommand(
     ['hdiutil', 'attach', dmgArtifact.filePath, '-nobrowse', '-readonly'],
@@ -239,63 +205,92 @@ async function validateBuiltMacArtifacts(input: {
     throw new Error(`Unable to determine mounted volume for ${relative(input.cwd, dmgArtifact.filePath)}.`)
   }
 
-  await findSingleAppBundle(mountPoint)
-  await input.runCommand(['hdiutil', 'detach', mountPoint], {
-    cwd: input.cwd,
-    env: input.env
-  })
-}
+  let validationError: Error | null = null
 
-async function findSingleAppBundle(directory: string): Promise<string> {
-  const appBundles = await findPaths(directory, (entryPath) => entryPath.endsWith('.app'))
+  try {
+    const mountedAppPath = await resolveMountedAppPath({
+      mountPoint,
+      dmgFileName: dmgArtifact.fileName,
+      version: dmgArtifact.version
+    })
+    const mountedExecutablePath = await findExpectedAppExecutable(mountedAppPath)
 
-  if (appBundles.length === 0) {
-    throw new Error(`No .app bundle found in ${directory}.`)
-  }
+    await input.runCommand(
+      ['codesign', '--verify', '--deep', '--strict', '--verbose=2', mountedAppPath],
+      {
+        cwd: input.cwd,
+        env: input.env
+      }
+    )
+    await input.runCommand(
+      ['spctl', '--assess', '--type', 'exec', '--verbose=4', mountedAppPath],
+      {
+        cwd: input.cwd,
+        env: input.env
+      }
+    )
+    await input.runCommand(['xcrun', 'stapler', 'validate', mountedAppPath], {
+      cwd: input.cwd,
+      env: input.env
+    })
 
-  if (appBundles.length > 1) {
-    throw new Error(`Expected exactly one .app bundle in ${directory}.`)
-  }
+    const archResult = await input.runCommand(['lipo', '-archs', mountedExecutablePath], {
+      cwd: input.cwd,
+      env: input.env
+    })
+    const discoveredArchitectures = archResult.stdout.trim().split(/\s+/).filter(Boolean)
 
-  return appBundles[0]
-}
-
-async function findAppExecutable(appPath: string): Promise<string> {
-  const macOsDirectory = join(appPath, 'Contents', 'MacOS')
-  const entries = await readdir(macOsDirectory, { withFileTypes: true })
-  const files = entries.filter((entry) => entry.isFile()).map((entry) => join(macOsDirectory, entry.name))
-
-  if (files.length === 0) {
-    throw new Error(`No executable found in ${macOsDirectory}.`)
-  }
-
-  if (files.length > 1) {
-    throw new Error(`Expected exactly one executable in ${macOsDirectory}.`)
-  }
-
-  return files[0]
-}
-
-async function findPaths(
-  directory: string,
-  predicate: (entryPath: string) => boolean
-): Promise<string[]> {
-  const matches: string[] = []
-  const entries = await readdir(directory, { withFileTypes: true })
-
-  for (const entry of entries) {
-    const entryPath = join(directory, entry.name)
-
-    if (predicate(entryPath)) {
-      matches.push(entryPath)
+    if (!discoveredArchitectures.includes(input.expectedArch)) {
+      throw new Error(
+        `Expected ${input.platform} app binary to include architecture ${input.expectedArch}.`
+      )
     }
-
-    if (entry.isDirectory() && !entry.name.endsWith('.app')) {
-      matches.push(...(await findPaths(entryPath, predicate)))
+  } catch (error) {
+    validationError = error instanceof Error ? error : new Error(String(error))
+  } finally {
+    try {
+      await input.runCommand(['hdiutil', 'detach', mountPoint], {
+        cwd: input.cwd,
+        env: input.env
+      })
+    } catch (detachError) {
+      if (!validationError) {
+        throw detachError
+      }
     }
   }
 
-  return matches.sort((left, right) => left.localeCompare(right))
+  if (validationError) {
+    throw validationError
+  }
+}
+
+async function resolveMountedAppPath(input: {
+  mountPoint: string
+  dmgFileName: string
+  version: string
+}) {
+  const productName = readProductNameFromDmgFileName(input.dmgFileName, input.version)
+  const mountedAppPath = join(input.mountPoint, `${productName}.app`)
+  const exists = await defaultPathExists(mountedAppPath)
+
+  if (!exists) {
+    throw new Error(`Expected mounted app bundle ${productName}.app.`)
+  }
+
+  return mountedAppPath
+}
+
+async function findExpectedAppExecutable(appPath: string): Promise<string> {
+  const executableName = basename(appPath, '.app')
+  const executablePath = join(appPath, 'Contents', 'MacOS', executableName)
+  const exists = await defaultPathExists(executablePath)
+
+  if (!exists) {
+    throw new Error(`Expected mounted app executable ${executableName}.`)
+  }
+
+  return executablePath
 }
 
 function readMountedVolumePath(output: string) {
@@ -314,6 +309,17 @@ function readMountedVolumePath(output: string) {
   }
 
   return null
+}
+
+function readProductNameFromDmgFileName(fileName: string, version: string) {
+  const suffix = `-${version}-`
+  const suffixIndex = fileName.indexOf(suffix)
+
+  if (suffixIndex <= 0) {
+    throw new Error(`Unable to derive product name from ${fileName}.`)
+  }
+
+  return fileName.slice(0, suffixIndex)
 }
 
 async function defaultPathExists(path: string) {
