@@ -61,6 +61,8 @@ describe('CI and accessibility release contract', () => {
     const windows = jobNamed(workflow, 'windows-package')
     expect(windows['runs-on']).toBe('windows-latest')
     expect(source).toContain('pnpm run dist:dir')
+    expect(source).toMatch(/^\s+release\s*$/m)
+    expect(source).not.toMatch(/^\s+dist\s*$/m)
     expect(source).toMatch(/github\.event_name == 'workflow_dispatch' \|\| github\.ref == 'refs\/heads\/main'/)
   })
 
