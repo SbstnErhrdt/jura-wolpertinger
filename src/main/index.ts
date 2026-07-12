@@ -39,7 +39,11 @@ import { exportExamPdf } from './services/pdf'
 import { resolveRuntimeDockIconPath } from './appIdentity'
 import { configureAutoUpdaterFeed, resolveUpdateFeedUrl } from './updateFeed'
 import { handleReleaseSmokeRendererReady } from './releaseSmoke'
-import { RELEASE_SMOKE_ENV, RELEASE_SMOKE_USER_DATA_ENV } from '@shared/releaseSmoke'
+import {
+  RELEASE_SMOKE_ENV,
+  RELEASE_SMOKE_READY_CHANNEL,
+  RELEASE_SMOKE_USER_DATA_ENV
+} from '@shared/releaseSmoke'
 
 let mainWindow: BrowserWindow | null = null
 let splashWindow: BrowserWindow | null = null
@@ -51,6 +55,8 @@ const APP_NAME = 'Jura Wolpertinger'
 const LEGACY_APP_NAME = 'Jura Klausuren Wolpertinger'
 const UPDATE_CHECK_DELAY_MS = 3000
 const { autoUpdater } = electronUpdater
+
+configureReleaseSmokeUserDataPath()
 
 function resolveAssetPath(...segments: string[]): string {
   const candidates = [
@@ -178,13 +184,6 @@ function createWindow(): void {
   })
 
   mainWindow.once('ready-to-show', revealMainWindow)
-  mainWindow.webContents.once('did-finish-load', () => {
-    handleReleaseSmokeRendererReady({
-      env: process.env,
-      writeMarker: (marker) => process.stdout.write(`${marker}\n`),
-      quit: () => app.quit()
-    })
-  })
   mainWindow.on('closed', () => {
     mainWindow = null
   })
@@ -197,6 +196,15 @@ function createWindow(): void {
 }
 
 function registerIpc(): void {
+  ipcMain.on(RELEASE_SMOKE_READY_CHANNEL, (event) => {
+    if (event.sender !== mainWindow?.webContents) return
+
+    handleReleaseSmokeRendererReady({
+      env: process.env,
+      writeMarker: (marker) => process.stdout.write(`${marker}\n`),
+      quit: () => app.quit()
+    })
+  })
   ipcMain.handle('users:current', () => services.getCurrentUser())
   ipcMain.handle('users:list', () => services.listUsers())
   ipcMain.handle('users:create', (_event, displayName: string) => services.createUser(displayName))
@@ -408,6 +416,14 @@ function resolveUserDataDir(): string {
   }
 
   return currentDir
+}
+
+function configureReleaseSmokeUserDataPath(): void {
+  const smokeUserDataPath = process.env[RELEASE_SMOKE_USER_DATA_ENV]
+
+  if (process.env[RELEASE_SMOKE_ENV] === '1' && smokeUserDataPath) {
+    app.setPath('userData', smokeUserDataPath)
+  }
 }
 
 function revealMainWindow(): void {

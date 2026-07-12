@@ -272,7 +272,7 @@ async function assertImmutableObjectMatches(input: {
 
   if (
     input.head.metadata.sha512 !== expectedMetadata.sha512 ||
-    Number(input.head.metadata.size) !== Number(expectedMetadata.size)
+    input.head.metadata.size !== expectedMetadata.size
   ) {
     throw immutableMismatch(input.platform, input.planned.key, 'checksum or size metadata')
   }

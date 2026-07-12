@@ -1,3 +1,5 @@
 export const RELEASE_SMOKE_ENV = 'JURA_RELEASE_SMOKE'
 export const RELEASE_SMOKE_USER_DATA_ENV = 'JURA_RELEASE_SMOKE_USER_DATA'
 export const RELEASE_SMOKE_MARKER = 'JURA_RELEASE_SMOKE_READY'
+export const RELEASE_SMOKE_READY_CHANNEL = 'release-smoke:renderer-ready'
+export const RELEASE_SMOKE_READY_EVENT = 'jura:release-smoke-ready'

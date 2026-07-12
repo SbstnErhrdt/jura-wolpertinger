@@ -21,6 +21,10 @@ import type {
   UpdateExamInput
 } from '@shared/ipc'
 import type { AttachmentRole, LearningTask } from '@shared/schemas'
+import {
+  RELEASE_SMOKE_READY_CHANNEL,
+  RELEASE_SMOKE_READY_EVENT
+} from '@shared/releaseSmoke'
 
 const api: AppApi = {
   getCurrentUser: () => ipcRenderer.invoke('users:current'),
@@ -92,3 +96,9 @@ const api: AppApi = {
 }
 
 contextBridge.exposeInMainWorld('juraApi', api)
+
+window.addEventListener(
+  RELEASE_SMOKE_READY_EVENT,
+  () => ipcRenderer.send(RELEASE_SMOKE_READY_CHANNEL),
+  { once: true }
+)

@@ -15,7 +15,12 @@
   --color-wolpi-950: #073149;
 }
 
+:root .app-breadcrumb .font-semibold > .truncate[data-slot='linkLabel'] {
+  color: inherit;
+}
+
 :root {
+  --wolpi-nav-blue: #005a84;
   --color-bg: #f2f7fa;
   --color-surface: #fff;
   --color-surface-muted: #edf7fc;
@@ -23,8 +28,8 @@
   --color-border-strong: #bdd9e6;
   --color-text: #1e3440;
   --color-text-muted: #647985;
-  --color-primary: #008bd2;
-  --color-primary-strong: #006ea8;
+  --color-primary: var(--wolpi-nav-blue);
+  --color-primary-strong: var(--wolpi-nav-blue);
   --color-danger: #a72d2d;
   --color-warning: #c56b00;
   --keycap-bg: #ffffff;
@@ -192,6 +197,15 @@ body {
 
 .app-breadcrumb span[data-slot='link'] {
   background: var(--color-primary-strong);
+  color: #fff;
+}
+
+.app-breadcrumb [data-slot='linkLabel'],
+.app-breadcrumb .truncate[data-slot='linkLabel'] {
+  color: #1e3440;
+}
+
+.app-breadcrumb .font-semibold .truncate[data-slot='linkLabel'] {
   color: #fff;
 }
 
@@ -602,7 +616,7 @@ body {
 
 .home-hero p,
 .page-header p {
-  color: #647985;
+  color: #445c68;
   font-size: var(--page-copy-size);
   margin: 10px 0 0;
 }
@@ -639,8 +653,8 @@ body {
 }
 
 .primary-action {
-  background: #008bd2;
-  border: 1px solid #008bd2;
+  background: var(--wolpi-nav-blue);
+  border: 1px solid var(--wolpi-nav-blue);
   color: #fff;
 }
 
@@ -1574,7 +1588,7 @@ button:active .key-hint,
 }
 
 .eyebrow {
-  color: #667983;
+  color: #445c68;
   font-size: 13px;
   margin: 0 0 5px;
 }

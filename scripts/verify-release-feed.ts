@@ -139,6 +139,10 @@ export function validateReleaseManifest(
     throw new Error('manifest.json is not a valid release manifest.')
   }
 
+  if (!STRICT_SEMVER_PATTERN.test(value.version)) {
+    throw new Error('manifest version must be strict semver.')
+  }
+
   if (value.releases.length !== SUPPORTED_MANIFEST_TARGETS.length) {
     throw new Error('manifest.json must contain exactly four supported release entries.')
   }
@@ -181,6 +185,8 @@ export function validateReleaseManifest(
       )
     }
 
+    assertSafeFileName(release.fileName)
+
     assertHttpsUrl(release.url, release.fileName)
 
     const expectedUrl = `${baseUrl.replace(/\/+$/, '')}/${target.directory}/${value.version}/${encodeURIComponent(release.fileName)}`
@@ -196,6 +202,21 @@ export function validateReleaseManifest(
     if (!seenTargets.has(targetKey)) {
       throw new Error(`manifest.json is missing supported target ${targetKey}.`)
     }
+  }
+}
+
+const STRICT_SEMVER_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|[0-9A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|[0-9A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/
+
+function assertSafeFileName(fileName: string) {
+  if (
+    fileName.length === 0 ||
+    fileName === '.' ||
+    fileName === '..' ||
+    fileName.includes('/') ||
+    fileName.includes('\\') ||
+    /[\u0000-\u001f\u007f]/.test(fileName)
+  ) {
+    throw new Error('manifest release file name must be a safe path segment.')
   }
 }
 

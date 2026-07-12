@@ -24,7 +24,7 @@
     </header>
 
     <div ref="importControl" class="visually-hidden">
-      <UInput type="file" accept="application/json,.json" @change="importDecks" />
+      <UInput aria-label="Karteikarten-Datei" type="file" accept="application/json,.json" @change="importDecks" />
     </div>
     <UAlert v-if="transferMessage" class="action-notice" :color="transferMessageKind === 'error' ? 'error' : 'info'" :description="transferMessage">
       <template v-if="showImportPrompt" #actions>

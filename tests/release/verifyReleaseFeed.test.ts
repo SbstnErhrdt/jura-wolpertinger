@@ -39,6 +39,28 @@ describe('validateReleaseManifest', () => {
 
     expect(() => validateReleaseManifest(manifest, BASE_URL)).toThrow(/approved feed path/i)
   })
+
+  it('rejects dot-segment artifact file names even when URL normalization would match', () => {
+    const manifest = validManifest()
+    manifest.releases[0] = {
+      ...manifest.releases[0],
+      fileName: '..',
+      url: `${BASE_URL}/mac/arm64/`
+    }
+
+    expect(() => validateReleaseManifest(manifest, BASE_URL)).toThrow(/file name.*path segment/i)
+  })
+
+  it('rejects unsafe manifest versions before constructing artifact URLs', () => {
+    const manifest = validManifest()
+    manifest.version = '%2e%2e'
+    manifest.releases = manifest.releases.map((entry) => ({
+      ...entry,
+      version: manifest.version
+    }))
+
+    expect(() => validateReleaseManifest(manifest, BASE_URL)).toThrow(/manifest version.*semver/i)
+  })
 })
 
 function validManifest() {

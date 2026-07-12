@@ -208,6 +208,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { FolderKanban, Layers, LibraryBig, Moon, Route, Settings, Sun, UserPlus } from 'lucide-vue-next'
 import type { AppUser } from '@shared/ipc'
 import { APP_VERSION } from '@shared/constants'
+import { RELEASE_SMOKE_READY_EVENT } from '@shared/releaseSmoke'
 import { api, isElectronApiAvailable } from './api'
 import { getSupabaseAuthClient, readCloudAuthState, requiresCloudAuth, type CloudAuthState } from './cloudAuth'
 import { startOnboardingTour } from './onboarding'
@@ -353,6 +354,8 @@ onMounted(async () => {
   }
   window.addEventListener('jura:start-tour', startTourListener)
   window.addEventListener('jura:users-updated', usersUpdatedListener)
+  await nextTick()
+  window.dispatchEvent(new Event(RELEASE_SMOKE_READY_EVENT))
 })
 
 onBeforeUnmount(() => {

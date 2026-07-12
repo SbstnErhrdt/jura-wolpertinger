@@ -484,16 +484,31 @@ export function createCommandRunner(): RunCommand {
           ...process.env,
           ...options?.env
         },
+        detached: Boolean(options?.timeoutMs) && process.platform !== 'win32',
         stdio: ['ignore', 'pipe', 'pipe']
       })
 
       let stdout = ''
       let stderr = ''
-      let timedOut = false
+      let settled = false
       const timeout = options?.timeoutMs
         ? setTimeout(() => {
-            timedOut = true
-            child.kill('SIGKILL')
+            if (settled) return
+            settled = true
+
+            if (child.pid && process.platform !== 'win32') {
+              try {
+                process.kill(-child.pid, 'SIGKILL')
+              } catch {
+                child.kill('SIGKILL')
+              }
+            } else {
+              child.kill('SIGKILL')
+            }
+
+            child.stdout.destroy()
+            child.stderr.destroy()
+            reject(new Error(`${file} timed out after ${options.timeoutMs}ms.`))
           }, options.timeoutMs)
         : null
 
@@ -505,14 +520,16 @@ export function createCommandRunner(): RunCommand {
         stderr += chunk.toString()
       })
 
-      child.on('error', reject)
-      child.on('close', (code) => {
+      child.on('error', (error) => {
+        if (settled) return
+        settled = true
         if (timeout) clearTimeout(timeout)
-
-        if (timedOut) {
-          reject(new Error(`${file} timed out after ${options?.timeoutMs}ms.`))
-          return
-        }
+        reject(error)
+      })
+      child.on('close', (code) => {
+        if (settled) return
+        settled = true
+        if (timeout) clearTimeout(timeout)
 
         if (code === 0) {
           resolve({ stdout, stderr })

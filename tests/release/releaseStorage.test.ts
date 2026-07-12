@@ -186,6 +186,29 @@ describe('stageRelease', () => {
     expect(storage.puts).toEqual([])
     expect(storage.operations.filter(({ type }) => type === 'head')).toHaveLength(releaseFiles('linux-x64').length)
   })
+
+  it('requires canonical immutable size metadata before any upload', async () => {
+    const directory = await createReleaseFixture('linux-x64')
+    const storage = new InMemoryReleaseStorage()
+    await stageRelease({ storage, platform: 'linux-x64', inputDirectory: directory })
+    const key = immutableObjectKey('linux-x64', VERSION, 'latest-linux.yml')
+    const body = await storage.get({ key })
+    await storage.seed(key, body, {
+      contentType: 'application/x-yaml; charset=utf-8',
+      cacheControl: IMMUTABLE_CACHE_CONTROL,
+      metadata: {
+        sha512: sha512(body),
+        size: `0${body.length}`
+      }
+    })
+    storage.clearPutLog()
+
+    await expect(
+      stageRelease({ storage, platform: 'linux-x64', inputDirectory: directory })
+    ).rejects.toThrow(/immutable.*checksum or size metadata.*mismatch/i)
+
+    expect(storage.puts).toEqual([])
+  })
 })
 
 describe('publishRelease', () => {

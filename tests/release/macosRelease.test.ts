@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  createCommandRunner,
   runLocalMacRelease,
   validateMacReleaseArtifacts,
   validateMacReleaseEnvironment,
@@ -120,6 +121,26 @@ describe('validateMacReleaseEnvironment', () => {
         pathExists: async () => true
       })
     ).rejects.toThrow('Package version must be strict semver.')
+  })
+})
+
+describe('createCommandRunner', () => {
+  it('enforces its timeout even when a spawned child keeps stdio open', async () => {
+    const runCommand = createCommandRunner()
+    const startedAt = Date.now()
+
+    await expect(
+      runCommand(
+        [
+          process.execPath,
+          '-e',
+          "require('node:child_process').spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'inherit' }); setInterval(() => {}, 1000)"
+        ],
+        { timeoutMs: 100 }
+      )
+    ).rejects.toThrow(/timed out after 100ms/i)
+
+    expect(Date.now() - startedAt).toBeLessThan(1_000)
   })
 })
 
