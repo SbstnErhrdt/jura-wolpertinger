@@ -4,30 +4,36 @@ const DOWNLOAD_BASE_PATH = '/desktop/stable/'
 export const DOWNLOAD_MANIFEST_URL = `${DOWNLOAD_BASE_ORIGIN}${DOWNLOAD_BASE_PATH}manifest.json`
 
 const OS_TARGETS = {
-  windows: { platform: 'windows', arch: 'x64' },
-  linux: { platform: 'linux', arch: 'x64' },
+  windows: { platform: 'windows', arch: 'x64', directory: 'windows/x64' },
+  linux: { platform: 'linux', arch: 'x64', directory: 'linux/x64' },
   macos: {
-    arm64: { platform: 'mac', arch: 'arm64' },
-    x64: { platform: 'mac', arch: 'x64' }
+    arm64: { platform: 'mac', arch: 'arm64', directory: 'mac/arm64' },
+    x64: { platform: 'mac', arch: 'x64', directory: 'mac/x64' }
   }
 }
+
+const SUPPORTED_TARGETS = [OS_TARGETS.windows, OS_TARGETS.macos.arm64, OS_TARGETS.macos.x64, OS_TARGETS.linux]
+const STRICT_SEMVER_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/
 
 export function readManifestEntries(manifest) {
   if (!isRecord(manifest) || typeof manifest.version !== 'string' || !Array.isArray(manifest.releases)) {
     return null
   }
+  if (!STRICT_SEMVER_PATTERN.test(manifest.version)) return null
+  if (manifest.releases.length !== SUPPORTED_TARGETS.length) return null
 
   const entries = []
   const seenKeys = new Set()
 
   for (const release of manifest.releases) {
     if (!isRecord(release)) return null
-    if (!isSupportedPlatform(release.platform, release.arch)) return null
-    if (typeof release.version !== 'string' || release.version.length === 0) return null
-    if (typeof release.fileName !== 'string' || release.fileName.length === 0) return null
+    const target = findSupportedTarget(release.platform, release.arch)
+    if (!target) return null
+    if (release.version !== manifest.version) return null
+    if (!isSafeFileName(release.fileName)) return null
     if (!isValidSize(release.size)) return null
     if (typeof release.sha512 !== 'string' || release.sha512.length === 0) return null
-    if (!isSafeHttpsUrl(release.url)) return null
+    if (!isExpectedReleaseUrl(release, target, manifest.version)) return null
 
     const key = `${release.platform}:${release.arch}`
     if (seenKeys.has(key)) return null
@@ -43,6 +49,8 @@ export function readManifestEntries(manifest) {
       url: release.url
     })
   }
+
+  if (seenKeys.size !== SUPPORTED_TARGETS.length) return null
 
   return entries
 }
@@ -118,29 +126,42 @@ function isValidSize(value) {
   return Number.isFinite(value) && value >= 0
 }
 
-function isSafeHttpsUrl(value) {
+function isExpectedReleaseUrl(release, target, version) {
+  const value = release.url
   if (typeof value !== 'string' || value.length === 0) return false
 
   try {
     const url = new URL(value)
+
+    const expectedUrl = new URL(
+      `${DOWNLOAD_BASE_ORIGIN}${DOWNLOAD_BASE_PATH}${target.directory}/${version}/${encodeURIComponent(release.fileName)}`
+    )
 
     return (
       url.protocol === 'https:' &&
       url.origin === DOWNLOAD_BASE_ORIGIN &&
       url.username === '' &&
       url.password === '' &&
-      url.pathname.startsWith(DOWNLOAD_BASE_PATH)
+      url.href === expectedUrl.href
     )
   } catch {
     return false
   }
 }
 
-function isSupportedPlatform(platform, arch) {
+function findSupportedTarget(platform, arch) {
+  return SUPPORTED_TARGETS.find((target) => target.platform === platform && target.arch === arch) ?? null
+}
+
+function isSafeFileName(fileName) {
   return (
-    (platform === 'windows' && arch === 'x64') ||
-    (platform === 'linux' && arch === 'x64') ||
-    (platform === 'mac' && (arch === 'arm64' || arch === 'x64'))
+    typeof fileName === 'string' &&
+    fileName.length > 0 &&
+    fileName !== '.' &&
+    fileName !== '..' &&
+    !fileName.includes('/') &&
+    !fileName.includes('\\') &&
+    !/[\u0000-\u001f\u007f]/.test(fileName)
   )
 }
 

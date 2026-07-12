@@ -233,6 +233,7 @@ describe('validateMacReleaseArtifacts', () => {
       inputDirectory: outputDirectory,
       platform: 'mac-arm64',
       expectedArch: 'arm64',
+      hostArch: 'arm64',
       env: {},
       runCommand,
       pathExists: async () => true
@@ -248,6 +249,42 @@ describe('validateMacReleaseArtifacts', () => {
     )
     expect(smokeCommands).toHaveLength(2)
     expect(smokeCommands.map(({ env }) => env?.JURA_RELEASE_SMOKE)).toEqual(['1', '1'])
+  })
+
+  it('statically validates but does not start a non-native architecture', async () => {
+    const workspace = await createWorkspace()
+    const outputDirectory = join(workspace, '.release-stage', 'mac', 'x64')
+    const mountRoot = join(workspace, '.mounts', 'x64')
+    const commands: string[][] = []
+    await writeMacReleaseFixture(outputDirectory, 'x64')
+    await mkdir(mountRoot, { recursive: true })
+    await writeMountedAppFixture(mountRoot)
+
+    const runCommand: RunCommand = async (command) => {
+      commands.push(command)
+
+      if (command[0] === 'hdiutil' && command[1] === 'attach') {
+        return { stdout: `/dev/disk4\tApple_HFS\t${mountRoot}\n`, stderr: '' }
+      }
+
+      if (command[0] === 'lipo') return { stdout: 'x86_64', stderr: '' }
+      return { stdout: '', stderr: '' }
+    }
+
+    await validateMacReleaseArtifacts({
+      cwd: workspace,
+      inputDirectory: outputDirectory,
+      platform: 'mac-x64',
+      expectedArch: 'x86_64',
+      hostArch: 'arm64',
+      env: {},
+      runCommand,
+      pathExists: async () => true
+    })
+
+    expect(commands.filter((command) => command.length === 1)).toEqual([])
+    expect(commands.filter((command) => command[0] === 'codesign')).toHaveLength(2)
+    expect(commands.filter((command) => command[0] === 'lipo')).toHaveLength(2)
   })
 
   it('rejects a packaged app that exits without the renderer-ready smoke marker', async () => {

@@ -101,7 +101,7 @@ Keine weiteren RustFS-Namen werden vom aktuellen Workflow gelesen. `UPDATE_PUBLI
 
 Apple-Zugangsdaten gehören nicht in diesen Workflow. macOS wird lokal mit `APPLE_API_KEY`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER`, `APPLE_TEAM_ID` und einer Keychain-Identität oder `CSC_LINK` gebaut.
 
-`release:stage` für `mac-arm64` und `mac-x64` läuft ausschließlich auf macOS. Vor dem Storage-Preflight prüft es die App-Bundles aus DMG und ZIP jeweils mit Codesign, Gatekeeper, Stapler, Architekturkontrolle und einem gepackten Renderer-Startup-Smoke.
+`release:stage` für `mac-arm64` und `mac-x64` läuft ausschließlich auf macOS. Vor dem Storage-Preflight prüft es die App-Bundles aus DMG und ZIP jeweils mit Codesign, Gatekeeper, Stapler und Architekturkontrolle. Der gepackte Renderer-Startup-Smoke läuft für DMG und ZIP nur bei der auf dem aktuellen Mac nativ ausführbaren Architektur; die fremde Architektur wird statisch vollständig geprüft.
 
 ## Live-Veröffentlichung
 

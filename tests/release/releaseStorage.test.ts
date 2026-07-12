@@ -13,6 +13,7 @@ import {
   mutableMetadataKey,
   publishRelease,
   stageRelease,
+  ReleaseObjectAlreadyExistsError,
   type ReleaseObjectStorage,
   type ReleasePutObjectInput
 } from '../../scripts/release/storage'
@@ -209,6 +210,40 @@ describe('stageRelease', () => {
 
     expect(storage.puts).toEqual([])
   })
+
+  it('does not overwrite an immutable object created after preflight', async () => {
+    const directory = await createReleaseFixture('linux-x64')
+    const backingStorage = new InMemoryReleaseStorage()
+    let raced = false
+    const storage: ReleaseObjectStorage = {
+      head: (input) => backingStorage.head(input),
+      get: (input) => backingStorage.get(input),
+      async put(input) {
+        if (!raced) {
+          raced = true
+          await backingStorage.put({
+            ...input,
+            body: new TextEncoder().encode('concurrent conflicting bytes'),
+            metadata: {
+              sha512: sha512('concurrent conflicting bytes'),
+              size: String(Buffer.byteLength('concurrent conflicting bytes'))
+            }
+          })
+          throw new ReleaseObjectAlreadyExistsError(input.key)
+        }
+
+        await backingStorage.put(input)
+      }
+    }
+
+    await expect(
+      stageRelease({ storage, platform: 'linux-x64', inputDirectory: directory })
+    ).rejects.toThrow(/immutable.*mismatch.*linux-x64/i)
+
+    expect(backingStorage.puts).toHaveLength(1)
+    expect(new TextDecoder().decode(await backingStorage.get({ key: backingStorage.puts[0].key })))
+      .toBe('concurrent conflicting bytes')
+  })
 })
 
 describe('publishRelease', () => {
@@ -386,6 +421,35 @@ describe('publishRelease', () => {
     }
   })
 
+  it('rejects normalized traversal in update metadata before publishing any live metadata', async () => {
+    const storage = await createCompleteRemoteStorage()
+    const metadataKey = immutableObjectKey('mac-arm64', VERSION, 'latest-mac.yml')
+    const body = new TextEncoder().encode(YAML.stringify({
+      version: VERSION,
+      files: [{
+        url: `${VERSION}/%2e%2e/escape.dmg`,
+        sha512: sha512('escape'),
+        size: 6
+      }]
+    }))
+    await storage.seed(metadataKey, body, {
+      contentType: 'application/x-yaml; charset=utf-8',
+      cacheControl: IMMUTABLE_CACHE_CONTROL,
+      metadata: { sha512: sha512(body), size: String(body.length) }
+    })
+
+    await expect(
+      publishRelease({
+        storage,
+        version: VERSION,
+        confirm: `publish ${VERSION}`,
+        publicBaseUrl: PUBLIC_BASE_URL
+      })
+    ).rejects.toThrow(/approved version path|metadata URL/i)
+
+    expect(storage.puts).toEqual([])
+  })
+
   it('uploads every latest metadata file before manifest.json last using mutable cache headers', async () => {
     const storage = await createCompleteRemoteStorage()
 
@@ -485,6 +549,30 @@ describe('verifyReleaseFeed', () => {
     ).rejects.toThrow(/approved version path|unsafe/i)
 
     expect(fakeFetch.calls.some(({ method, url }) => method === 'HEAD' && url.includes('escape'))).toBe(false)
+  })
+
+  it('rejects artifact-specific MIME mismatches', async () => {
+    const normalFetch = createReleaseFeedFetch()
+    const fakeFetch = Object.assign(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input)
+
+      if (init?.method === 'HEAD' && url.endsWith('.exe')) {
+        return new Response(null, {
+          status: 200,
+          headers: {
+            'content-length': String(Buffer.byteLength('windows exe bytes')),
+            'content-type': 'text/plain',
+            'cache-control': IMMUTABLE_CACHE_CONTROL
+          }
+        })
+      }
+
+      return normalFetch(input, init)
+    }, { calls: normalFetch.calls })
+
+    await expect(
+      verifyReleaseFeed(PUBLIC_BASE_URL, { fetch: fakeFetch })
+    ).rejects.toThrow(/\.exe.*content-type|content-type.*portable-executable/i)
   })
 })
 

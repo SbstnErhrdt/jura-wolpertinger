@@ -7,7 +7,7 @@ Jura Wolpertinger verteilt Desktop-Releases und Auto-Updates ausschließlich üb
 1. Version in `package.json` setzen und die vollständige Verifikationsmatrix ausführen.
 2. Den manuellen Workflow `.github/workflows/release.yml` mit derselben Version starten. Er baut und staged Windows x64 sowie Linux x64, veröffentlicht aber keine Live-Metadaten.
 3. macOS ARM64 und x64 lokal mit `corepack pnpm run release:mac:local` Developer-ID-signieren, notarisieren und prüfen.
-4. Beide macOS-Kandidaten mit `release:stage` erneut vollständig prüfen und unveränderlich in RustFS ablegen. Der Befehl läuft für macOS nur auf macOS, validiert DMG- und ZIP-App einschließlich Signatur, Gatekeeper, Stapling, Architektur und Renderer-Startup-Smoke und lädt erst nach einem vollständigen Storage-Preflight ausschließlich fehlende Versionsobjekte hoch.
+4. Beide macOS-Kandidaten mit `release:stage` erneut vollständig prüfen und unveränderlich in RustFS ablegen. Der Befehl läuft für macOS nur auf macOS, validiert DMG- und ZIP-App einschließlich Signatur, Gatekeeper, Stapling und Architektur und führt den Renderer-Startup-Smoke für die nativ ausführbare Architektur aus. Nach einem vollständigen Storage-Preflight lädt er fehlende Versionsobjekte ausschließlich mit einer serverseitigen Nicht-Überschreiben-Bedingung hoch.
 
 Normale lokale Pakete ohne Veröffentlichung entstehen mit:
 

@@ -68,6 +68,14 @@ export interface ReleasePutObjectInput {
   contentType: string
   cacheControl: string
   metadata?: Record<string, string>
+  ifNoneMatch?: '*'
+}
+
+export class ReleaseObjectAlreadyExistsError extends Error {
+  constructor(readonly key: string) {
+    super(`Release object already exists: ${key}`)
+    this.name = 'ReleaseObjectAlreadyExistsError'
+  }
 }
 
 export interface ReleaseObjectHead {
@@ -136,16 +144,29 @@ export function createS3ReleaseStorage(config: ReleaseStorageConfig): ReleaseObj
 
   return {
     async put(input) {
-      await client.send(
-        new PutObjectCommand({
-          Bucket: config.bucket,
-          Key: input.key,
-          Body: input.body,
-          ContentType: input.contentType,
-          CacheControl: input.cacheControl,
-          Metadata: input.metadata
-        })
-      )
+      try {
+        await client.send(
+          new PutObjectCommand({
+            Bucket: config.bucket,
+            Key: input.key,
+            Body: input.body,
+            ContentType: input.contentType,
+            CacheControl: input.cacheControl,
+            Metadata: input.metadata,
+            IfNoneMatch: input.ifNoneMatch
+          })
+        )
+      } catch (error) {
+        if (
+          input.ifNoneMatch === '*' &&
+          error instanceof S3ServiceException &&
+          (error.$metadata.httpStatusCode === 409 || error.$metadata.httpStatusCode === 412)
+        ) {
+          throw new ReleaseObjectAlreadyExistsError(input.key)
+        }
+
+        throw error
+      }
     },
     async head(input) {
       try {
@@ -237,8 +258,25 @@ export async function stageRelease(input: StageReleaseInput): Promise<StageResul
 
   if (!input.dryRun) {
     for (const object of missingObjects) {
-      await input.storage.put(object)
-      uploadedKeys.push(object.key)
+      try {
+        await input.storage.put({ ...object, ifNoneMatch: '*' })
+        uploadedKeys.push(object.key)
+      } catch (error) {
+        if (!(error instanceof ReleaseObjectAlreadyExistsError)) throw error
+
+        const head = await input.storage.head({ key: object.key })
+
+        if (!head) {
+          throw new Error(`Immutable upload conflict for ${input.platform} release object ${object.key}.`)
+        }
+
+        await assertImmutableObjectMatches({
+          storage: input.storage,
+          platform: input.platform,
+          planned: object,
+          head
+        })
+      }
     }
   }
 
@@ -578,6 +616,13 @@ function keyFromMetadataUrl(platform: ReleasePlatform, version: string, metadata
 
   if (!relativePath.startsWith(`${version}/`)) {
     throw new Error(`${platform} metadata URL must point inside ${version}.`)
+  }
+
+  const normalizedUrl = new URL(relativePath, 'https://release.invalid/')
+  const approvedVersionUrl = new URL(`${version}/`, 'https://release.invalid/')
+
+  if (!normalizedUrl.pathname.startsWith(approvedVersionUrl.pathname)) {
+    throw new Error(`${platform} metadata URL must stay inside the approved version path ${version}.`)
   }
 
   return `${platformPrefix(platform)}/${relativePath}`

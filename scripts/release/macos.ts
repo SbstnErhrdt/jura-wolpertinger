@@ -183,6 +183,7 @@ export interface ValidateMacReleaseArtifactsInput {
   inputDirectory: string
   platform: ReleasePlatform
   expectedArch: 'arm64' | 'x86_64'
+  hostArch?: NodeJS.Architecture
   runCommand?: RunCommand
   env: Record<string, string | undefined>
   pathExists?: (path: string) => Promise<boolean>
@@ -238,6 +239,7 @@ export async function validateMacReleaseArtifacts(input: ValidateMacReleaseArtif
       cwd: input.cwd,
       env: input.env,
       expectedArch: input.expectedArch,
+      runStartupSmoke: isNativeMacArchitecture(input.expectedArch, input.hostArch ?? process.arch),
       platform: input.platform,
       runCommand,
       pathExists
@@ -294,6 +296,7 @@ export async function validateMacReleaseArtifacts(input: ValidateMacReleaseArtif
       cwd: input.cwd,
       env: input.env,
       expectedArch: input.expectedArch,
+      runStartupSmoke: isNativeMacArchitecture(input.expectedArch, input.hostArch ?? process.arch),
       platform: input.platform,
       runCommand,
       pathExists
@@ -308,6 +311,7 @@ async function validateAppBundle(input: {
   cwd: string
   env: Record<string, string | undefined>
   expectedArch: 'arm64' | 'x86_64'
+  runStartupSmoke: boolean
   platform: ReleasePlatform
   runCommand: RunCommand
   pathExists: (path: string) => Promise<boolean>
@@ -339,6 +343,8 @@ async function validateAppBundle(input: {
     )
   }
 
+  if (!input.runStartupSmoke) return
+
   const smokeUserDataDirectory = await mkdtemp(join(tmpdir(), 'jura-release-smoke-'))
   let smokeResult: CommandResult
 
@@ -359,6 +365,16 @@ async function validateAppBundle(input: {
   if (!smokeResult.stdout.split(/\r?\n/).includes(RELEASE_SMOKE_MARKER)) {
     throw new Error(`${input.platform} packaged startup smoke did not emit the renderer-ready marker.`)
   }
+}
+
+function isNativeMacArchitecture(
+  expectedArch: 'arm64' | 'x86_64',
+  hostArch: NodeJS.Architecture
+) {
+  return (
+    (expectedArch === 'arm64' && hostArch === 'arm64') ||
+    (expectedArch === 'x86_64' && hostArch === 'x64')
+  )
 }
 
 async function resolveAppPath(input: {

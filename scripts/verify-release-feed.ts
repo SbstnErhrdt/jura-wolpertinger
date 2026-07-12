@@ -100,9 +100,12 @@ async function verifyArtifactHead(input: {
   }
 
   const contentType = response.headers.get('content-type')
+  const expectedContentType = expectedArtifactContentType(input.url)
 
-  if (!contentType || contentType.includes('text/html')) {
-    throw new Error(`${input.url} has an unsafe or missing MIME type.`)
+  if (!contentType || contentType.split(';', 1)[0].trim().toLowerCase() !== expectedContentType) {
+    throw new Error(
+      `${input.url} has unexpected content-type ${contentType ?? '<missing>'}; expected ${expectedContentType}.`
+    )
   }
 
   const acceptRanges = response.headers.get('accept-ranges')
@@ -122,6 +125,16 @@ async function verifyArtifactHead(input: {
       throw new Error(`${input.url} advertises byte ranges but did not return 206 for a range request.`)
     }
   }
+}
+
+function expectedArtifactContentType(urlValue: string) {
+  const pathname = new URL(urlValue).pathname.toLowerCase()
+
+  if (pathname.endsWith('.dmg')) return 'application/x-apple-diskimage'
+  if (pathname.endsWith('.zip')) return 'application/zip'
+  if (pathname.endsWith('.exe')) return 'application/vnd.microsoft.portable-executable'
+
+  return 'application/octet-stream'
 }
 
 const SUPPORTED_MANIFEST_TARGETS = [

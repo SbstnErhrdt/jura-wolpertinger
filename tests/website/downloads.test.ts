@@ -122,6 +122,29 @@ describe('download manifest adapter', () => {
     expect(selectDownload(manifest, 'windows', 'x64')).toBeNull()
   })
 
+  it('rejects a manifest when any supported target is missing', async () => {
+    const { readManifestEntries } = await loadDownloadsCore()
+    const manifest = createManifest({ releases: createManifest().releases.slice(0, 3) })
+
+    expect(readManifestEntries(manifest)).toBeNull()
+  })
+
+  it('rejects cross-version and cross-target artifact URLs', async () => {
+    const { readManifestEntries } = await loadDownloadsCore()
+
+    for (const releaseOverride of [
+      { version: '1.2.2' },
+      {
+        url: 'https://downloads.jura-wolpi.de/desktop/stable/mac/arm64/1.2.3/Jura%20Wolpertinger-x64-win.exe'
+      }
+    ]) {
+      const manifest = createManifest()
+      manifest.releases[0] = { ...manifest.releases[0], ...releaseOverride }
+
+      expect(readManifestEntries(manifest)).toBeNull()
+    }
+  })
+
   it('rejects manifests with unsafe URLs', async () => {
     const { selectDownload } = await loadDownloadsCore()
     const manifest = createManifest({
