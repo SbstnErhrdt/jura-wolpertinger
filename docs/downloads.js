@@ -1,4 +1,10 @@
-import { DOWNLOAD_MANIFEST_URL, formatDownloadLabel, readManifestEntries, selectDownload } from './downloads-core.js'
+import {
+  detectMacArchitecture,
+  DOWNLOAD_MANIFEST_URL,
+  formatDownloadLabel,
+  readManifestEntries,
+  selectDownload
+} from './downloads-core.js'
 
 const osLabels = {
   windows: 'Windows',
@@ -15,23 +21,6 @@ function detectOs() {
   if (value.includes('win')) return 'windows'
   if (value.includes('mac')) return 'macos'
   if (value.includes('linux') || value.includes('x11')) return 'linux'
-  return null
-}
-
-function detectMacArchitecture() {
-  const architecture = (navigator.userAgentData?.architecture || '').toLowerCase()
-  const userAgent = navigator.userAgent.toLowerCase()
-  const platform = (navigator.platform || '').toLowerCase()
-  const value = `${architecture} ${userAgent} ${platform}`
-
-  if (value.includes('arm64') || value.includes('aarch64')) return 'arm64'
-  if (
-    value.includes('x64') ||
-    value.includes('x86_64') ||
-    value.includes('amd64') ||
-    value.includes('intel')
-  ) return 'x64'
-
   return null
 }
 
@@ -60,14 +49,13 @@ function markUnavailable(card, detail) {
 }
 
 const detectedOs = detectOs()
-const detectedMacArchitecture = detectedOs === 'macos' ? detectMacArchitecture() : null
 
 function getRecommendedDownloadKeys() {
   if (detectedOs === 'macos') return ['macosArm', 'macosIntel']
   return detectedOs ? [detectedOs] : []
 }
 
-function getDetectedDownloadKey() {
+function getDetectedDownloadKey(detectedMacArchitecture) {
   if (detectedOs === 'macos') {
     if (detectedMacArchitecture === 'arm64') return 'macosArm'
     if (detectedMacArchitecture === 'x64') return 'macosIntel'
@@ -82,6 +70,7 @@ async function loadDownloads() {
   const detectedDownload = document.querySelector('#detected-download')
   const detectedDownloadLink = document.querySelector('#detected-download-link')
   const detectedLabel = document.querySelector('#detected-label')
+  const detectedMacArchitecture = detectedOs === 'macos' ? await detectMacArchitecture() : null
 
   try {
     const response = await fetch(DOWNLOAD_MANIFEST_URL, { cache: 'no-cache' })
@@ -104,7 +93,7 @@ async function loadDownloads() {
       updateCard(card, assetsByOs[os], os)
     }
 
-    const detectedKey = getDetectedDownloadKey()
+    const detectedKey = getDetectedDownloadKey(detectedMacArchitecture)
     const detectedAsset = detectedKey ? assetsByOs[detectedKey] : null
 
     if (detectedAsset && detectedKey) {

@@ -1,4 +1,7 @@
-export const DOWNLOAD_MANIFEST_URL = 'https://downloads.jura-wolpi.de/desktop/stable/manifest.json'
+const DOWNLOAD_BASE_ORIGIN = 'https://downloads.jura-wolpi.de'
+const DOWNLOAD_BASE_PATH = '/desktop/stable/'
+
+export const DOWNLOAD_MANIFEST_URL = `${DOWNLOAD_BASE_ORIGIN}${DOWNLOAD_BASE_PATH}manifest.json`
 
 const OS_TARGETS = {
   windows: { platform: 'windows', arch: 'x64' },
@@ -53,6 +56,28 @@ export function selectDownload(manifest, os, arch) {
   return entries.find((entry) => entry.platform === target.platform && entry.arch === target.arch) ?? null
 }
 
+export async function detectMacArchitecture(navigatorLike = globalThis.navigator) {
+  if (!navigatorLike) return null
+
+  const userAgentData = navigatorLike.userAgentData
+
+  if (typeof userAgentData?.getHighEntropyValues === 'function') {
+    try {
+      const highEntropyValues = await userAgentData.getHighEntropyValues(['architecture'])
+      const highEntropyArchitecture = normalizeArchitecture(highEntropyValues?.architecture)
+
+      if (highEntropyArchitecture) return highEntropyArchitecture
+    } catch {
+      return null
+    }
+  }
+
+  const explicitArchitecture = normalizeArchitecture(userAgentData?.architecture)
+  if (explicitArchitecture) return explicitArchitecture
+
+  return readArchitectureFromUserAgent(navigatorLike.userAgent)
+}
+
 export function formatDownloadLabel(asset) {
   if (!isRecord(asset) || typeof asset.fileName !== 'string' || asset.fileName.length === 0) {
     return 'Direkter Download'
@@ -97,7 +122,15 @@ function isSafeHttpsUrl(value) {
   if (typeof value !== 'string' || value.length === 0) return false
 
   try {
-    return new URL(value).protocol === 'https:'
+    const url = new URL(value)
+
+    return (
+      url.protocol === 'https:' &&
+      url.origin === DOWNLOAD_BASE_ORIGIN &&
+      url.username === '' &&
+      url.password === '' &&
+      url.pathname.startsWith(DOWNLOAD_BASE_PATH)
+    )
   } catch {
     return false
   }
@@ -113,4 +146,31 @@ function isSupportedPlatform(platform, arch) {
 
 function isRecord(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function normalizeArchitecture(value) {
+  if (typeof value !== 'string' || value.length === 0) return null
+
+  const normalizedValue = value.toLowerCase()
+
+  if (normalizedValue === 'arm64' || normalizedValue === 'aarch64' || normalizedValue === 'arm') return 'arm64'
+  if (
+    normalizedValue === 'x64' ||
+    normalizedValue === 'x86_64' ||
+    normalizedValue === 'amd64' ||
+    normalizedValue === 'x86'
+  ) return 'x64'
+
+  return null
+}
+
+function readArchitectureFromUserAgent(userAgent) {
+  if (typeof userAgent !== 'string' || userAgent.length === 0) return null
+
+  const normalizedUserAgent = userAgent.toLowerCase()
+
+  if (/\b(arm64|aarch64|arm)\b/.test(normalizedUserAgent)) return 'arm64'
+  if (/\b(x64|x86_64|amd64|x86)\b/.test(normalizedUserAgent)) return 'x64'
+
+  return null
 }
