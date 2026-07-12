@@ -2,17 +2,17 @@
 @import "@nuxt/ui";
 
 @theme static {
-  --color-wolpi-50: #eff9fe;
-  --color-wolpi-100: #dff3fc;
-  --color-wolpi-200: #b9e7f8;
-  --color-wolpi-300: #82d5f2;
-  --color-wolpi-400: #43bce8;
-  --color-wolpi-500: #159fd8;
-  --color-wolpi-600: #008bd2;
-  --color-wolpi-700: #006ea8;
-  --color-wolpi-800: #075d88;
-  --color-wolpi-900: #0c4d70;
-  --color-wolpi-950: #073149;
+  --color-wolpi-50: #f1f5f9;
+  --color-wolpi-100: #e2ebf3;
+  --color-wolpi-200: #c8d8e6;
+  --color-wolpi-300: #9fb9d0;
+  --color-wolpi-400: #6f93b3;
+  --color-wolpi-500: #005a84;
+  --color-wolpi-600: #005a84;
+  --color-wolpi-700: #005a84;
+  --color-wolpi-800: #005a84;
+  --color-wolpi-900: #00476a;
+  --color-wolpi-950: #003750;
 }
 
 :root .app-breadcrumb .font-semibold > .truncate[data-slot='linkLabel'] {
