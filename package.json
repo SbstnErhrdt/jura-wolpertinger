@@ -22,6 +22,9 @@
     "release:linux": "pnpm run build:icons && pnpm run build && pnpm run rebuild:native && electron-builder --linux --publish always",
     "release:mac": "pnpm run build:icons && pnpm run build && pnpm run rebuild:native && electron-builder --mac --publish always",
     "release:win": "pnpm run build:icons && pnpm run build && pnpm run rebuild:native && electron-builder --win --publish always",
+    "release:stage": "tsx scripts/release-stage.ts",
+    "release:publish": "tsx scripts/release-publish.ts",
+    "release:verify": "tsx scripts/verify-release-feed.ts",
     "test": "pnpm rebuild better-sqlite3 && vitest run",
     "test:e2e": "electron-rebuild -f -w better-sqlite3 && pnpm run build && playwright test",
     "test:watch": "vitest"

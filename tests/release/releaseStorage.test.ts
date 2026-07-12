@@ -1,0 +1,347 @@
+import { createHash } from 'node:crypto'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it } from 'vitest'
+import YAML from 'yaml'
+import { readReleaseStorageConfig } from '../../scripts/release/config'
+import {
+  IMMUTABLE_CACHE_CONTROL,
+  MUTABLE_METADATA_CACHE_CONTROL,
+  immutableObjectKey,
+  mutableMetadataKey,
+  publishRelease,
+  stageRelease,
+  type ReleaseObjectStorage,
+  type ReleasePutObjectInput
+} from '../../scripts/release/storage'
+
+const VERSION = '1.2.3'
+const PRODUCT_NAME = 'Jura Wolpertinger'
+const PUBLIC_BASE_URL = 'https://downloads.jura-wolpi.de/desktop/stable'
+
+const temporaryDirectories: string[] = []
+
+afterEach(async () => {
+  await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })))
+})
+
+describe('readReleaseStorageConfig', () => {
+  it('validates all required variables without exposing secret values', () => {
+    const env = {
+      UPDATE_S3_ENDPOINT: 'https://rustfs.internal.example',
+      UPDATE_S3_BUCKET: '',
+      UPDATE_S3_ACCESS_KEY_ID: 'do-not-print-access-key',
+      UPDATE_S3_SECRET_ACCESS_KEY: 'do-not-print-secret',
+      UPDATE_PUBLIC_BASE_URL: ''
+    }
+
+    expect(() => readReleaseStorageConfig(env)).toThrowError(
+      /UPDATE_S3_BUCKET.*UPDATE_PUBLIC_BASE_URL/i
+    )
+
+    try {
+      readReleaseStorageConfig(env)
+    } catch (error) {
+      const message = String((error as Error).message)
+
+      expect(message).not.toContain('do-not-print-access-key')
+      expect(message).not.toContain('do-not-print-secret')
+      expect(message).not.toContain('rustfs.internal.example')
+    }
+  })
+})
+
+describe('release object keys', () => {
+  it('builds immutable and mutable keys under the stable desktop feed prefix', () => {
+    expect(immutableObjectKey('mac-arm64', VERSION, `${PRODUCT_NAME}-${VERSION}-arm64-mac.dmg`)).toBe(
+      `desktop/stable/mac/arm64/${VERSION}/${encodeURIComponent(`${PRODUCT_NAME}-${VERSION}-arm64-mac.dmg`)}`
+    )
+    expect(mutableMetadataKey('windows-x64', 'latest.yml')).toBe('desktop/stable/windows/x64/latest.yml')
+  })
+})
+
+describe('stageRelease', () => {
+  it('uploads only immutable versioned objects with immutable cache headers', async () => {
+    const directory = await createReleaseFixture('mac-arm64')
+    const storage = new InMemoryReleaseStorage()
+
+    const result = await stageRelease({
+      storage,
+      platform: 'mac-arm64',
+      inputDirectory: directory
+    })
+
+    expect(result.uploadedKeys.length).toBeGreaterThan(0)
+    expect(storage.puts.map(({ key }) => key).sort()).toEqual(result.uploadedKeys.sort())
+    expect(storage.puts.every(({ key }) => key.startsWith('desktop/stable/mac/arm64/1.2.3/'))).toBe(true)
+    expect(storage.puts.map(({ cacheControl }) => cacheControl)).toEqual(
+      Array.from({ length: storage.puts.length }, () => IMMUTABLE_CACHE_CONTROL)
+    )
+    expect(storage.puts.some(({ key }) => key.endsWith('/latest-mac.yml'))).toBe(true)
+    expect(storage.puts.some(({ key }) => key === 'desktop/stable/mac/arm64/latest-mac.yml')).toBe(false)
+  })
+
+  it('performs no writes during a dry run', async () => {
+    const directory = await createReleaseFixture('linux-x64')
+    const storage = new InMemoryReleaseStorage()
+
+    const result = await stageRelease({
+      storage,
+      platform: 'linux-x64',
+      inputDirectory: directory,
+      dryRun: true
+    })
+
+    expect(result.uploadedKeys).toEqual([])
+    expect(result.plannedKeys.every((key) => key.startsWith('desktop/stable/linux/x64/1.2.3/'))).toBe(true)
+    expect(storage.puts).toEqual([])
+  })
+})
+
+describe('publishRelease', () => {
+  it('requires exact confirmation text before publishing', async () => {
+    const storage = await createCompleteRemoteStorage()
+
+    await expect(
+      publishRelease({
+        storage,
+        version: VERSION,
+        confirm: `publish ${VERSION} `,
+        publicBaseUrl: PUBLIC_BASE_URL,
+        publishedAt: '2026-07-12T10:00:00.000Z'
+      })
+    ).rejects.toThrow(/confirm.*publish 1\.2\.3/i)
+
+    expect(storage.puts).toEqual([])
+  })
+
+  it('refuses incomplete remote platform sets', async () => {
+    const storage = await createCompleteRemoteStorage()
+    await storage.delete(immutableObjectKey('linux-x64', VERSION, 'latest-linux.yml'))
+
+    await expect(
+      publishRelease({
+        storage,
+        version: VERSION,
+        confirm: `publish ${VERSION}`,
+        publicBaseUrl: PUBLIC_BASE_URL,
+        publishedAt: '2026-07-12T10:00:00.000Z'
+      })
+    ).rejects.toThrow(/linux-x64.*latest-linux\.yml/i)
+
+    expect(storage.puts).toEqual([])
+  })
+
+  it('refuses checksum mismatches before mutable writes', async () => {
+    const storage = await createCompleteRemoteStorage()
+    const key = immutableObjectKey('windows-x64', VERSION, `${PRODUCT_NAME}-${VERSION}-x64-win.exe`)
+    const existing = await storage.get({ key })
+    await storage.seed(key, existing, {
+      contentType: 'application/vnd.microsoft.portable-executable',
+      cacheControl: IMMUTABLE_CACHE_CONTROL,
+      metadata: {
+        sha512: sha512('tampered'),
+        size: String(existing.length)
+      }
+    })
+
+    await expect(
+      publishRelease({
+        storage,
+        version: VERSION,
+        confirm: `publish ${VERSION}`,
+        publicBaseUrl: PUBLIC_BASE_URL,
+        publishedAt: '2026-07-12T10:00:00.000Z'
+      })
+    ).rejects.toThrow(/checksum.*windows-x64/i)
+
+    expect(storage.puts).toEqual([])
+  })
+
+  it('uploads every latest metadata file before manifest.json last using mutable cache headers', async () => {
+    const storage = await createCompleteRemoteStorage()
+
+    const result = await publishRelease({
+      storage,
+      version: VERSION,
+      confirm: `publish ${VERSION}`,
+      publicBaseUrl: PUBLIC_BASE_URL,
+      publishedAt: '2026-07-12T10:00:00.000Z'
+    })
+
+    expect(storage.puts.map(({ key }) => key)).toEqual([
+      'desktop/stable/mac/arm64/latest-mac.yml',
+      'desktop/stable/mac/x64/latest-mac.yml',
+      'desktop/stable/windows/x64/latest.yml',
+      'desktop/stable/linux/x64/latest-linux.yml',
+      'desktop/stable/manifest.json'
+    ])
+    expect(storage.puts.map(({ cacheControl }) => cacheControl)).toEqual([
+      MUTABLE_METADATA_CACHE_CONTROL,
+      MUTABLE_METADATA_CACHE_CONTROL,
+      MUTABLE_METADATA_CACHE_CONTROL,
+      MUTABLE_METADATA_CACHE_CONTROL,
+      MUTABLE_METADATA_CACHE_CONTROL
+    ])
+    expect(result.manifestKey).toBe('desktop/stable/manifest.json')
+    expect(result.publishedMetadataKeys).toEqual(storage.puts.slice(0, 4).map(({ key }) => key))
+  })
+})
+
+async function createCompleteRemoteStorage() {
+  const storage = new InMemoryReleaseStorage()
+
+  for (const platform of ['mac-arm64', 'mac-x64', 'windows-x64', 'linux-x64'] as const) {
+    const directory = await createReleaseFixture(platform)
+    await stageRelease({
+      storage,
+      platform,
+      inputDirectory: directory
+    })
+  }
+
+  storage.clearPutLog()
+
+  return storage
+}
+
+async function createReleaseFixture(platform: 'mac-arm64' | 'mac-x64' | 'windows-x64' | 'linux-x64') {
+  const directory = await mkdtemp(join(tmpdir(), 'release-storage-'))
+  temporaryDirectories.push(directory)
+  await mkdir(directory, { recursive: true })
+
+  for (const file of releaseFiles(platform)) {
+    await writeFile(join(directory, file.fileName), file.content)
+  }
+
+  return directory
+}
+
+function releaseFiles(platform: 'mac-arm64' | 'mac-x64' | 'windows-x64' | 'linux-x64') {
+  if (platform === 'mac-arm64') {
+    return macFiles('arm64')
+  }
+
+  if (platform === 'mac-x64') {
+    return macFiles('x64')
+  }
+
+  if (platform === 'windows-x64') {
+    const exe = artifact(`${PRODUCT_NAME}-${VERSION}-x64-win.exe`, 'windows exe bytes')
+
+    return [
+      exe,
+      artifact(`${PRODUCT_NAME}-${VERSION}-x64-win.exe.blockmap`, 'windows blockmap bytes'),
+      metadata('latest.yml', [exe])
+    ]
+  }
+
+  const appImage = artifact(`${PRODUCT_NAME}-${VERSION}-x64-linux.AppImage`, 'linux appimage bytes')
+
+  return [
+    appImage,
+    artifact(`${PRODUCT_NAME}-${VERSION}-x64-linux.AppImage.blockmap`, 'linux blockmap bytes'),
+    metadata('latest-linux.yml', [appImage])
+  ]
+}
+
+function macFiles(arch: 'arm64' | 'x64') {
+  const dmg = artifact(`${PRODUCT_NAME}-${VERSION}-${arch}-mac.dmg`, `mac ${arch} dmg bytes`)
+  const zip = artifact(`${PRODUCT_NAME}-${VERSION}-${arch}-mac.zip`, `mac ${arch} zip bytes`)
+
+  return [
+    dmg,
+    zip,
+    artifact(`${PRODUCT_NAME}-${VERSION}-${arch}-mac.zip.blockmap`, `mac ${arch} blockmap bytes`),
+    metadata('latest-mac.yml', [zip, dmg])
+  ]
+}
+
+function artifact(fileName: string, content: string) {
+  return {
+    fileName,
+    content
+  }
+}
+
+function metadata(fileName: string, files: Array<{ fileName: string; content: string }>) {
+  return {
+    fileName,
+    content: YAML.stringify({
+      version: VERSION,
+      path: files[0].fileName,
+      files: files.map((file) => ({
+        url: file.fileName,
+        sha512: sha512(file.content),
+        size: Buffer.byteLength(file.content)
+      })),
+      releaseDate: '2026-07-12T10:00:00.000Z'
+    })
+  }
+}
+
+function sha512(content: string | Uint8Array) {
+  return createHash('sha512').update(content).digest('base64')
+}
+
+class InMemoryReleaseStorage implements ReleaseObjectStorage {
+  readonly puts: ReleasePutObjectInput[] = []
+  private readonly objects = new Map<string, ReleasePutObjectInput>()
+
+  async put(input: ReleasePutObjectInput): Promise<void> {
+    this.puts.push(input)
+    this.objects.set(input.key, input)
+  }
+
+  async head({ key }: { key: string }) {
+    const object = this.objects.get(key)
+
+    if (!object) {
+      return null
+    }
+
+    return {
+      contentLength: object.body.length,
+      contentType: object.contentType,
+      cacheControl: object.cacheControl,
+      metadata: object.metadata ?? {}
+    }
+  }
+
+  async get({ key }: { key: string }) {
+    const object = this.objects.get(key)
+
+    if (!object) {
+      throw new Error(`Missing object: ${key}`)
+    }
+
+    return object.body
+  }
+
+  async seed(
+    key: string,
+    body: Uint8Array,
+    options: {
+      contentType: string
+      cacheControl: string
+      metadata: Record<string, string>
+    }
+  ) {
+    this.objects.set(key, {
+      key,
+      body,
+      contentType: options.contentType,
+      cacheControl: options.cacheControl,
+      metadata: options.metadata
+    })
+  }
+
+  async delete(key: string) {
+    this.objects.delete(key)
+  }
+
+  clearPutLog() {
+    this.puts.length = 0
+  }
+}
