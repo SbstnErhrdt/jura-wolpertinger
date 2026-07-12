@@ -26,6 +26,7 @@ export function readReleaseStorageConfig(env: Record<string, string | undefined>
 
   validateUrl('UPDATE_S3_ENDPOINT', endpoint)
   validateUrl('UPDATE_PUBLIC_BASE_URL', publicBaseUrl)
+  validateHttpsUrl('UPDATE_PUBLIC_BASE_URL', publicBaseUrl)
 
   return {
     endpoint,
@@ -41,5 +42,11 @@ function validateUrl(name: string, value: string) {
     new URL(value)
   } catch {
     throw new Error(`${name} must be a valid URL.`)
+  }
+}
+
+function validateHttpsUrl(name: string, value: string) {
+  if (new URL(value).protocol !== 'https:') {
+    throw new Error(`${name} must use HTTPS.`)
   }
 }

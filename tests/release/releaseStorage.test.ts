@@ -2,9 +2,10 @@ import { createHash } from 'node:crypto'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import YAML from 'yaml'
 import { readReleaseStorageConfig } from '../../scripts/release/config'
+import { verifyReleaseFeed } from '../../scripts/verify-release-feed'
 import {
   IMMUTABLE_CACHE_CONTROL,
   MUTABLE_METADATA_CACHE_CONTROL,
@@ -24,6 +25,7 @@ const temporaryDirectories: string[] = []
 
 afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })))
+  vi.unstubAllGlobals()
 })
 
 describe('readReleaseStorageConfig', () => {
@@ -49,6 +51,18 @@ describe('readReleaseStorageConfig', () => {
       expect(message).not.toContain('do-not-print-secret')
       expect(message).not.toContain('rustfs.internal.example')
     }
+  })
+
+  it('requires the public base URL to use HTTPS', () => {
+    expect(() =>
+      readReleaseStorageConfig({
+        UPDATE_S3_ENDPOINT: 'https://rustfs.internal.example',
+        UPDATE_S3_BUCKET: 'release-bucket',
+        UPDATE_S3_ACCESS_KEY_ID: 'do-not-print-access-key',
+        UPDATE_S3_SECRET_ACCESS_KEY: 'do-not-print-secret',
+        UPDATE_PUBLIC_BASE_URL: 'http://downloads.jura-wolpi.de/desktop/stable'
+      })
+    ).toThrow(/UPDATE_PUBLIC_BASE_URL.*HTTPS/i)
   })
 })
 
@@ -130,20 +144,25 @@ describe('publishRelease', () => {
       })
     ).rejects.toThrow(/linux-x64.*latest-linux\.yml/i)
 
-    expect(storage.puts).toEqual([])
+    expect(storage.puts.map(({ key: putKey }) => putKey)).toEqual([
+      'desktop/stable/mac/arm64/latest-mac.yml',
+      'desktop/stable/mac/x64/latest-mac.yml',
+      'desktop/stable/windows/x64/latest.yml'
+    ])
   })
 
-  it('refuses checksum mismatches before mutable writes', async () => {
+  it('refuses checksum mismatches before writing the affected platform latest metadata', async () => {
     const storage = await createCompleteRemoteStorage()
     const key = immutableObjectKey('windows-x64', VERSION, `${PRODUCT_NAME}-${VERSION}-x64-win.exe`)
     const existing = await storage.get({ key })
-    await storage.seed(key, existing, {
+    await storage.seed(key, new TextEncoder().encode('WINDOWS EXE BYTES'), {
       contentType: 'application/vnd.microsoft.portable-executable',
       cacheControl: IMMUTABLE_CACHE_CONTROL,
       metadata: {
-        sha512: sha512('tampered'),
+        sha512: sha512(existing),
         size: String(existing.length)
-      }
+      },
+      contentLength: existing.length
     })
 
     await expect(
@@ -156,7 +175,117 @@ describe('publishRelease', () => {
       })
     ).rejects.toThrow(/checksum.*windows-x64/i)
 
+    expect(storage.puts.map(({ key: putKey }) => putKey)).toEqual([
+      'desktop/stable/mac/arm64/latest-mac.yml',
+      'desktop/stable/mac/x64/latest-mac.yml'
+    ])
+  })
+
+  it('refuses downloaded byte-length mismatches even when HEAD metadata matches', async () => {
+    const storage = await createCompleteRemoteStorage()
+    const key = immutableObjectKey('mac-arm64', VERSION, `${PRODUCT_NAME}-${VERSION}-arm64-mac.dmg`)
+    const existing = await storage.get({ key })
+
+    await storage.seed(key, existing.slice(0, -1), {
+      contentType: 'application/x-apple-diskimage',
+      cacheControl: IMMUTABLE_CACHE_CONTROL,
+      metadata: {
+        sha512: sha512(existing),
+        size: String(existing.length)
+      },
+      contentLength: existing.length
+    })
+
+    await expect(
+      publishRelease({
+        storage,
+        version: VERSION,
+        confirm: `publish ${VERSION}`,
+        publicBaseUrl: PUBLIC_BASE_URL,
+        publishedAt: '2026-07-12T10:00:00.000Z'
+      })
+    ).rejects.toThrow(/byte length.*mac-arm64/i)
+
     expect(storage.puts).toEqual([])
+  })
+
+  it('validates blockmap bytes and size against staged object data', async () => {
+    const storage = await createCompleteRemoteStorage()
+    const key = immutableObjectKey('linux-x64', VERSION, `${PRODUCT_NAME}-${VERSION}-x64-linux.AppImage.blockmap`)
+    const existing = await storage.get({ key })
+
+    await storage.seed(key, new TextEncoder().encode('LINUX BLOCKMAP BYTES'), {
+      contentType: 'application/octet-stream',
+      cacheControl: IMMUTABLE_CACHE_CONTROL,
+      metadata: {
+        sha512: sha512(existing),
+        size: String(existing.length)
+      },
+      contentLength: existing.length
+    })
+
+    await expect(
+      publishRelease({
+        storage,
+        version: VERSION,
+        confirm: `publish ${VERSION}`,
+        publicBaseUrl: PUBLIC_BASE_URL,
+        publishedAt: '2026-07-12T10:00:00.000Z'
+      })
+    ).rejects.toThrow(/blockmap.*linux-x64/i)
+
+    expect(storage.puts.map(({ key: putKey }) => putKey)).toEqual([
+      'desktop/stable/mac/arm64/latest-mac.yml',
+      'desktop/stable/mac/x64/latest-mac.yml',
+      'desktop/stable/windows/x64/latest.yml'
+    ])
+  })
+
+  it('publishes each platform latest only after that platform immutable objects pass and keeps manifest final', async () => {
+    const storage = await createCompleteRemoteStorage()
+    const key = immutableObjectKey('linux-x64', VERSION, `${PRODUCT_NAME}-${VERSION}-x64-linux.AppImage`)
+    const existing = await storage.get({ key })
+
+    await storage.seed(key, new TextEncoder().encode('LINUX APPIMAGE BYTES'), {
+      contentType: 'application/octet-stream',
+      cacheControl: IMMUTABLE_CACHE_CONTROL,
+      metadata: {
+        sha512: sha512(existing),
+        size: String(existing.length)
+      },
+      contentLength: existing.length
+    })
+
+    await expect(
+      publishRelease({
+        storage,
+        version: VERSION,
+        confirm: `publish ${VERSION}`,
+        publicBaseUrl: PUBLIC_BASE_URL,
+        publishedAt: '2026-07-12T10:00:00.000Z'
+      })
+    ).rejects.toThrow(/checksum.*linux-x64/i)
+
+    expect(storage.puts.map(({ key: putKey }) => putKey)).toEqual([
+      'desktop/stable/mac/arm64/latest-mac.yml',
+      'desktop/stable/mac/x64/latest-mac.yml',
+      'desktop/stable/windows/x64/latest.yml'
+    ])
+    expect(storage.puts.some(({ key: putKey }) => putKey === 'desktop/stable/linux/x64/latest-linux.yml')).toBe(false)
+    expect(storage.puts.some(({ key: putKey }) => putKey === 'desktop/stable/manifest.json')).toBe(false)
+
+    for (const put of storage.puts) {
+      const platformPrefix = put.key.split('/').slice(0, 4).join('/')
+      const verificationOperations = storage.operations.filter(
+        (operation) =>
+          (operation.type === 'head' || operation.type === 'get') &&
+          operation.key.startsWith(`${platformPrefix}/${VERSION}/`)
+      )
+      const putIndex = storage.operations.findIndex((operation) => operation.type === 'put' && operation.key === put.key)
+
+      expect(verificationOperations.length).toBeGreaterThan(0)
+      expect(verificationOperations.every((operation) => operation.index < putIndex)).toBe(true)
+    }
   })
 
   it('uploads every latest metadata file before manifest.json last using mutable cache headers', async () => {
@@ -186,6 +315,53 @@ describe('publishRelease', () => {
     ])
     expect(result.manifestKey).toBe('desktop/stable/manifest.json')
     expect(result.publishedMetadataKeys).toEqual(storage.puts.slice(0, 4).map(({ key }) => key))
+  })
+})
+
+describe('verifyReleaseFeed', () => {
+  it('parses latest metadata and HEAD-verifies every referenced artifact through injected fetch', async () => {
+    const fakeFetch = createReleaseFeedFetch()
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      throw new Error('real network must not be used')
+    }))
+
+    await verifyReleaseFeed(PUBLIC_BASE_URL, {
+      fetch: fakeFetch
+    })
+
+    expect(fakeFetch.calls.filter(({ method }) => method === 'HEAD').map(({ url }) => url).sort()).toEqual([
+      `${PUBLIC_BASE_URL}/linux/x64/${VERSION}/${encodeURIComponent(`${PRODUCT_NAME}-${VERSION}-x64-linux.AppImage`)}`,
+      `${PUBLIC_BASE_URL}/mac/arm64/${VERSION}/${encodeURIComponent(`${PRODUCT_NAME}-${VERSION}-arm64-mac.dmg`)}`,
+      `${PUBLIC_BASE_URL}/mac/arm64/${VERSION}/${encodeURIComponent(`${PRODUCT_NAME}-${VERSION}-arm64-mac.zip`)}`,
+      `${PUBLIC_BASE_URL}/mac/x64/${VERSION}/${encodeURIComponent(`${PRODUCT_NAME}-${VERSION}-x64-mac.dmg`)}`,
+      `${PUBLIC_BASE_URL}/mac/x64/${VERSION}/${encodeURIComponent(`${PRODUCT_NAME}-${VERSION}-x64-mac.zip`)}`,
+      `${PUBLIC_BASE_URL}/windows/x64/${VERSION}/${encodeURIComponent(`${PRODUCT_NAME}-${VERSION}-x64-win.exe`)}`
+    ].sort())
+  })
+
+  it('rejects unsafe latest metadata artifact URLs before issuing artifact HEAD requests', async () => {
+    const fakeFetch = createReleaseFeedFetch({
+      metadataOverrides: {
+        'mac/arm64': YAML.stringify({
+          version: VERSION,
+          files: [
+            {
+              url: '../escape.dmg',
+              sha512: sha512('escape'),
+              size: 6
+            }
+          ]
+        })
+      }
+    })
+
+    await expect(
+      verifyReleaseFeed(PUBLIC_BASE_URL, {
+        fetch: fakeFetch
+      })
+    ).rejects.toThrow(/relative object path|unsafe/i)
+
+    expect(fakeFetch.calls.some(({ method, url }) => method === 'HEAD' && url.includes('escape'))).toBe(false)
   })
 })
 
@@ -285,16 +461,161 @@ function sha512(content: string | Uint8Array) {
   return createHash('sha512').update(content).digest('base64')
 }
 
+function createReleaseFeedFetch(options?: {
+  metadataOverrides?: Record<string, string>
+}) {
+  const calls: Array<{ url: string; method: string }> = []
+  const manifest = {
+    version: VERSION,
+    publishedAt: '2026-07-12T10:00:00.000Z',
+    releases: [
+      manifestRelease('mac', 'arm64', `${PRODUCT_NAME}-${VERSION}-arm64-mac.dmg`, 'mac arm64 dmg bytes'),
+      manifestRelease('mac', 'x64', `${PRODUCT_NAME}-${VERSION}-x64-mac.dmg`, 'mac x64 dmg bytes'),
+      manifestRelease('windows', 'x64', `${PRODUCT_NAME}-${VERSION}-x64-win.exe`, 'windows exe bytes'),
+      manifestRelease('linux', 'x64', `${PRODUCT_NAME}-${VERSION}-x64-linux.AppImage`, 'linux appimage bytes')
+    ]
+  }
+  const metadata: Record<string, string> = {
+    'mac/arm64': latestYaml([
+      artifact(`${PRODUCT_NAME}-${VERSION}-arm64-mac.zip`, 'mac arm64 zip bytes'),
+      artifact(`${PRODUCT_NAME}-${VERSION}-arm64-mac.dmg`, 'mac arm64 dmg bytes')
+    ]),
+    'mac/x64': latestYaml([
+      artifact(`${PRODUCT_NAME}-${VERSION}-x64-mac.zip`, 'mac x64 zip bytes'),
+      artifact(`${PRODUCT_NAME}-${VERSION}-x64-mac.dmg`, 'mac x64 dmg bytes')
+    ]),
+    'windows/x64': latestYaml([
+      artifact(`${PRODUCT_NAME}-${VERSION}-x64-win.exe`, 'windows exe bytes')
+    ]),
+    'linux/x64': latestYaml([
+      artifact(`${PRODUCT_NAME}-${VERSION}-x64-linux.AppImage`, 'linux appimage bytes')
+    ]),
+    ...options?.metadataOverrides
+  }
+  const artifacts = new Map<string, { size: number; contentType: string }>()
+
+  for (const release of manifest.releases) {
+    artifacts.set(release.url, {
+      size: release.size,
+      contentType: contentTypeForFixture(release.fileName)
+    })
+  }
+  artifacts.set(`${PUBLIC_BASE_URL}/mac/arm64/${VERSION}/${encodeURIComponent(`${PRODUCT_NAME}-${VERSION}-arm64-mac.zip`)}`, {
+    size: Buffer.byteLength('mac arm64 zip bytes'),
+    contentType: 'application/zip'
+  })
+  artifacts.set(`${PUBLIC_BASE_URL}/mac/x64/${VERSION}/${encodeURIComponent(`${PRODUCT_NAME}-${VERSION}-x64-mac.zip`)}`, {
+    size: Buffer.byteLength('mac x64 zip bytes'),
+    contentType: 'application/zip'
+  })
+
+  const fakeFetch = async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input)
+    const method = init?.method ?? 'GET'
+    calls.push({ url, method })
+
+    if (url === `${PUBLIC_BASE_URL}/manifest.json`) {
+      return new Response(JSON.stringify(manifest), {
+        status: 200,
+        headers: {
+          'content-type': 'application/json; charset=utf-8',
+          'cache-control': MUTABLE_METADATA_CACHE_CONTROL
+        }
+      })
+    }
+
+    for (const [directory, body] of Object.entries(metadata)) {
+      const fileName = directory === 'windows/x64'
+        ? 'latest.yml'
+        : directory === 'linux/x64'
+          ? 'latest-linux.yml'
+          : 'latest-mac.yml'
+
+      if (url === `${PUBLIC_BASE_URL}/${directory}/${fileName}`) {
+        return new Response(body, {
+          status: 200,
+          headers: {
+            'content-type': 'application/x-yaml; charset=utf-8',
+            'cache-control': MUTABLE_METADATA_CACHE_CONTROL
+          }
+        })
+      }
+    }
+
+    const artifactInfo = artifacts.get(url)
+
+    if (artifactInfo && method === 'HEAD') {
+      return new Response(null, {
+        status: 200,
+        headers: {
+          'content-length': String(artifactInfo.size),
+          'content-type': artifactInfo.contentType,
+          'cache-control': IMMUTABLE_CACHE_CONTROL,
+          'accept-ranges': 'bytes'
+        }
+      })
+    }
+
+    if (artifactInfo && init?.headers && new Headers(init.headers).get('Range') === 'bytes=0-0') {
+      return new Response(new Uint8Array([0]), {
+        status: 206,
+        headers: {
+          'content-range': `bytes 0-0/${artifactInfo.size}`
+        }
+      })
+    }
+
+    return new Response('not found', { status: 404 })
+  }
+
+  return Object.assign(fakeFetch, { calls })
+}
+
+function latestYaml(files: Array<{ fileName: string; content: string }>) {
+  return YAML.stringify({
+    version: VERSION,
+    files: files.map((file) => ({
+      url: `${VERSION}/${encodeURIComponent(file.fileName)}`,
+      sha512: sha512(file.content),
+      size: Buffer.byteLength(file.content)
+    }))
+  })
+}
+
+function manifestRelease(platform: 'mac' | 'windows' | 'linux', arch: 'arm64' | 'x64', fileName: string, content: string) {
+  return {
+    platform,
+    arch,
+    version: VERSION,
+    fileName,
+    size: Buffer.byteLength(content),
+    sha512: sha512(content),
+    url: `${PUBLIC_BASE_URL}/${platform}/${arch}/${VERSION}/${encodeURIComponent(fileName)}`
+  }
+}
+
+function contentTypeForFixture(fileName: string) {
+  if (fileName.endsWith('.dmg')) return 'application/x-apple-diskimage'
+  if (fileName.endsWith('.zip')) return 'application/zip'
+  if (fileName.endsWith('.exe')) return 'application/vnd.microsoft.portable-executable'
+
+  return 'application/octet-stream'
+}
+
 class InMemoryReleaseStorage implements ReleaseObjectStorage {
   readonly puts: ReleasePutObjectInput[] = []
-  private readonly objects = new Map<string, ReleasePutObjectInput>()
+  readonly operations: Array<{ index: number; type: 'put' | 'head' | 'get'; key: string }> = []
+  private operationIndex = 0
+  private readonly objects = new Map<string, ReleasePutObjectInput & { contentLength?: number }>()
 
   async put(input: ReleasePutObjectInput): Promise<void> {
+    this.record('put', input.key)
     this.puts.push(input)
     this.objects.set(input.key, input)
   }
 
   async head({ key }: { key: string }) {
+    this.record('head', key)
     const object = this.objects.get(key)
 
     if (!object) {
@@ -302,7 +623,7 @@ class InMemoryReleaseStorage implements ReleaseObjectStorage {
     }
 
     return {
-      contentLength: object.body.length,
+      contentLength: object.contentLength ?? object.body.length,
       contentType: object.contentType,
       cacheControl: object.cacheControl,
       metadata: object.metadata ?? {}
@@ -310,6 +631,7 @@ class InMemoryReleaseStorage implements ReleaseObjectStorage {
   }
 
   async get({ key }: { key: string }) {
+    this.record('get', key)
     const object = this.objects.get(key)
 
     if (!object) {
@@ -326,6 +648,7 @@ class InMemoryReleaseStorage implements ReleaseObjectStorage {
       contentType: string
       cacheControl: string
       metadata: Record<string, string>
+      contentLength?: number
     }
   ) {
     this.objects.set(key, {
@@ -333,7 +656,8 @@ class InMemoryReleaseStorage implements ReleaseObjectStorage {
       body,
       contentType: options.contentType,
       cacheControl: options.cacheControl,
-      metadata: options.metadata
+      metadata: options.metadata,
+      contentLength: options.contentLength
     })
   }
 
@@ -343,5 +667,16 @@ class InMemoryReleaseStorage implements ReleaseObjectStorage {
 
   clearPutLog() {
     this.puts.length = 0
+    this.operations.length = 0
+    this.operationIndex = 0
+  }
+
+  private record(type: 'put' | 'head' | 'get', key: string) {
+    this.operations.push({
+      index: this.operationIndex,
+      type,
+      key
+    })
+    this.operationIndex += 1
   }
 }

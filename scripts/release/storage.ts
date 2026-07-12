@@ -114,7 +114,7 @@ export interface PublishResult {
 interface MetadataFileEntry {
   url: string
   sha512: string
-  size?: number
+  size: number
 }
 
 interface VerifiedPlatform {
@@ -227,16 +227,17 @@ export async function publishRelease(input: PublishReleaseInput): Promise<Publis
     throw new Error(`Refusing to publish. Confirmation must exactly equal "publish ${input.version}".`)
   }
 
-  const verifiedPlatforms = await Promise.all(
-    RELEASE_PLATFORM_ORDER.map((platform) => verifyRemotePlatform({
+  assertHttpsUrl(input.publicBaseUrl)
+
+  const verifiedPlatforms: VerifiedPlatform[] = []
+  const publishedMetadataKeys: string[] = []
+
+  for (const platform of RELEASE_PLATFORM_ORDER) {
+    const verified = await verifyRemotePlatform({
       storage: input.storage,
       platform,
       version: input.version
-    }))
-  )
-  const publishedMetadataKeys: string[] = []
-
-  for (const verified of verifiedPlatforms) {
+    })
     const metadataKey = mutableMetadataKey(
       verified.platform,
       RELEASE_PLATFORM_CONFIGS[verified.platform].metadataFileName
@@ -250,6 +251,7 @@ export async function publishRelease(input: PublishReleaseInput): Promise<Publis
       metadata: objectMetadata(verified.metadataBody)
     })
     publishedMetadataKeys.push(metadataKey)
+    verifiedPlatforms.push(verified)
   }
 
   const manifest = buildPublicManifest({
@@ -310,12 +312,13 @@ async function verifyRemotePlatform(input: {
     const head = await input.storage.head({ key: objectKey })
 
     assertRemoteHead(input.platform, objectKey, head)
-    await verifyRemoteChecksum({
+    await verifyRemoteObjectBody({
       storage: input.storage,
       platform: input.platform,
       key: objectKey,
       expectedSha512: entry.sha512,
       expectedSize: entry.size,
+      context: 'release artifact',
       head
     })
   }
@@ -357,6 +360,17 @@ async function verifyExpectedBlockmaps(input: {
   const blockmapHead = await input.storage.head({ key: blockmapKey })
 
   assertRemoteHead(input.platform, blockmapKey, blockmapHead)
+  const expected = readExpectedObjectMetadata(input.platform, blockmapKey, blockmapHead)
+
+  await verifyRemoteObjectBody({
+    storage: input.storage,
+    platform: input.platform,
+    key: blockmapKey,
+    expectedSha512: expected.sha512,
+    expectedSize: expected.size,
+    context: 'blockmap',
+    head: blockmapHead
+  })
 }
 
 function selectDownloadArtifact(input: {
@@ -383,7 +397,7 @@ function selectDownloadArtifact(input: {
     fileName,
     filePath: '',
     remotePath,
-    size: entry.size ?? 0,
+    size: entry.size,
     sha512: entry.sha512
   }
 }
@@ -398,31 +412,41 @@ function assertRemoteHead(platform: ReleasePlatform, key: string, head: ReleaseO
   }
 }
 
-async function verifyRemoteChecksum(input: {
+async function verifyRemoteObjectBody(input: {
   storage: ReleaseObjectStorage
   platform: ReleasePlatform
   key: string
   expectedSha512: string
-  expectedSize?: number
+  expectedSize: number
+  context: string
   head: ReleaseObjectHead
 }) {
-  const remoteSha512 = input.head.metadata.sha512
-
-  if (remoteSha512 && remoteSha512 !== input.expectedSha512) {
-    throw new Error(`Checksum mismatch for ${input.platform} release object ${input.key}.`)
+  if (input.head.contentLength !== input.expectedSize) {
+    throw new Error(`${input.context} byte length mismatch for ${input.platform} release object ${input.key}.`)
   }
 
-  if (input.expectedSize !== undefined && input.head.contentLength !== input.expectedSize) {
-    throw new Error(`${input.platform} size mismatch for ${input.key}.`)
+  const body = await input.storage.get({ key: input.key })
+
+  if (body.length !== input.expectedSize) {
+    throw new Error(`${input.context} downloaded byte length mismatch for ${input.platform} release object ${input.key}.`)
   }
 
-  if (!remoteSha512) {
-    const body = await input.storage.get({ key: input.key })
-    const bodySha512 = hashBytes(body)
+  if (hashBytes(body) !== input.expectedSha512) {
+    throw new Error(`${input.context} checksum mismatch for ${input.platform} release object ${input.key}.`)
+  }
+}
 
-    if (bodySha512 !== input.expectedSha512) {
-      throw new Error(`Checksum mismatch for ${input.platform} release object ${input.key}.`)
-    }
+function readExpectedObjectMetadata(platform: ReleasePlatform, key: string, head: ReleaseObjectHead) {
+  const sha512 = head.metadata.sha512
+  const size = Number(head.metadata.size)
+
+  if (!sha512 || !Number.isSafeInteger(size) || size < 0) {
+    throw new Error(`${platform} remote release object ${key} is missing staged checksum or size metadata.`)
+  }
+
+  return {
+    sha512,
+    size
   }
 }
 
@@ -438,6 +462,12 @@ function parseMetadataDocument(platform: ReleasePlatform, version: string, body:
   }
 
   return document
+}
+
+function assertHttpsUrl(value: string) {
+  if (new URL(value).protocol !== 'https:') {
+    throw new Error('Release public base URL must use HTTPS before publishing.')
+  }
 }
 
 function readMetadataFileEntries(platform: ReleasePlatform, document: Record<string, unknown>): MetadataFileEntry[] {

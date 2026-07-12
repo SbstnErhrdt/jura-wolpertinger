@@ -1,3 +1,6 @@
+import { pathToFileURL } from 'node:url'
+import YAML from 'yaml'
+import { assertRelativeObjectPath } from './release/files'
 import {
   IMMUTABLE_CACHE_CONTROL,
   MUTABLE_METADATA_CACHE_CONTROL,
@@ -5,6 +8,12 @@ import {
   RELEASE_PLATFORM_ORDER
 } from './release/storage'
 import { type ReleaseManifest, type ReleaseManifestEntry } from './release/model'
+
+type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>
+
+export interface VerifyReleaseFeedOptions {
+  fetch?: FetchLike
+}
 
 async function main() {
   const args = readArgs(process.argv.slice(2))
@@ -15,9 +24,10 @@ async function main() {
   console.log(`Verified release feed at ${baseUrl}.`)
 }
 
-export async function verifyReleaseFeed(baseUrl: string) {
+export async function verifyReleaseFeed(baseUrl: string, options?: VerifyReleaseFeedOptions) {
+  const fetchImpl = options?.fetch ?? fetch
   const manifestUrl = `${baseUrl}/manifest.json`
-  const manifestResponse = await fetch(manifestUrl)
+  const manifestResponse = await fetchImpl(manifestUrl)
 
   assertOk(manifestResponse, manifestUrl)
   assertHeaderIncludes(manifestResponse, 'content-type', 'json', manifestUrl)
@@ -25,57 +35,90 @@ export async function verifyReleaseFeed(baseUrl: string) {
 
   const manifest = await manifestResponse.json() as ReleaseManifest
   assertManifest(manifest)
+  const artifactChecks = new Map<string, { size: number; label: string }>()
 
   for (const platform of RELEASE_PLATFORM_ORDER) {
     const config = RELEASE_PLATFORM_CONFIGS[platform]
     const metadataUrl = `${baseUrl}/${config.directory}/${config.metadataFileName}`
-    const metadataResponse = await fetch(metadataUrl)
+    const metadataResponse = await fetchImpl(metadataUrl)
 
     assertOk(metadataResponse, metadataUrl)
     assertHeaderIncludes(metadataResponse, 'content-type', 'yaml', metadataUrl)
     assertCacheControl(metadataResponse, MUTABLE_METADATA_CACHE_CONTROL, metadataUrl)
+
+    const metadata = parseLatestMetadata({
+      body: await metadataResponse.text(),
+      url: metadataUrl,
+      version: manifest.version,
+      baseUrl,
+      directory: config.directory
+    })
+
+    for (const entry of metadata.files) {
+      artifactChecks.set(entry.url, {
+        size: entry.size,
+        label: metadataUrl
+      })
+    }
   }
 
   for (const release of manifest.releases) {
-    await verifyManifestRelease(release)
+    artifactChecks.set(release.url, {
+      size: release.size,
+      label: release.fileName
+    })
+  }
+
+  for (const [url, check] of artifactChecks) {
+    await verifyArtifactHead({
+      fetch: fetchImpl,
+      url,
+      size: check.size,
+      label: check.label
+    })
   }
 }
 
-async function verifyManifestRelease(release: ReleaseManifestEntry) {
-  assertHttpsUrl(release.url, release.fileName)
+async function verifyArtifactHead(input: {
+  fetch: FetchLike
+  url: string
+  size: number
+  label: string
+}) {
+  assertHttpsUrl(input.url, input.label)
 
-  const response = await fetch(release.url, { method: 'HEAD' })
+  const response = await input.fetch(input.url, { method: 'HEAD' })
 
-  assertOk(response, release.url)
-  assertCacheControl(response, IMMUTABLE_CACHE_CONTROL, release.url)
+  assertOk(response, input.url)
+  assertCacheControl(response, IMMUTABLE_CACHE_CONTROL, input.url)
 
   const contentLength = response.headers.get('content-length')
 
-  if (contentLength !== String(release.size)) {
-    throw new Error(`${release.url} content-length ${contentLength ?? '<missing>'} does not match ${release.size}.`)
+  if (contentLength !== String(input.size)) {
+    throw new Error(`${input.url} content-length ${contentLength ?? '<missing>'} does not match ${input.size}.`)
   }
 
   const contentType = response.headers.get('content-type')
 
   if (!contentType || contentType.includes('text/html')) {
-    throw new Error(`${release.url} has an unsafe or missing MIME type.`)
+    throw new Error(`${input.url} has an unsafe or missing MIME type.`)
   }
 
   const acceptRanges = response.headers.get('accept-ranges')
 
   if (acceptRanges && acceptRanges !== 'bytes') {
-    throw new Error(`${release.url} advertises unsupported range handling: ${acceptRanges}.`)
+    throw new Error(`${input.url} advertises unsupported range handling: ${acceptRanges}.`)
   }
 
-  if (acceptRanges === 'bytes' && release.size > 0) {
-    const rangeResponse = await fetch(release.url, {
+  if (acceptRanges === 'bytes' && input.size > 0) {
+    const rangeResponse = await input.fetch(input.url, {
       headers: {
         Range: 'bytes=0-0'
       }
     })
 
     if (rangeResponse.status !== 206) {
-      throw new Error(`${release.url} advertises byte ranges but did not return 206 for a range request.`)
+      throw new Error(`${input.url} advertises byte ranges but did not return 206 for a range request.`)
     }
   }
 }
@@ -94,6 +137,55 @@ function assertManifest(value: ReleaseManifest) {
     ) {
       throw new Error('manifest.json contains an invalid release entry.')
     }
+
+    assertHttpsUrl(release.url, release.fileName)
+  }
+}
+
+function parseLatestMetadata(input: {
+  body: string
+  url: string
+  version: string
+  baseUrl: string
+  directory: string
+}) {
+  const document = YAML.parse(input.body)
+
+  if (!isRecord(document)) {
+    throw new Error(`${input.url} must be a YAML object.`)
+  }
+
+  if (document.version !== input.version) {
+    throw new Error(`${input.url} version does not match manifest version ${input.version}.`)
+  }
+
+  if (!Array.isArray(document.files) || document.files.length === 0) {
+    throw new Error(`${input.url} must contain release files.`)
+  }
+
+  return {
+    files: document.files.map((entry, index) => {
+      if (
+        !isRecord(entry) ||
+        typeof entry.url !== 'string' ||
+        typeof entry.sha512 !== 'string' ||
+        typeof entry.size !== 'number'
+      ) {
+        throw new Error(`${input.url} file entry ${index + 1} must include url, sha512, and size.`)
+      }
+
+      const relativePath = assertRelativeObjectPath(entry.url)
+
+      if (!relativePath.startsWith(`${input.version}/`)) {
+        throw new Error(`${input.url} contains unsafe artifact URL ${entry.url}.`)
+      }
+
+      return {
+        url: `${input.baseUrl}/${input.directory}/${relativePath}`,
+        sha512: entry.sha512,
+        size: entry.size
+      }
+    })
   }
 }
 
@@ -153,7 +245,13 @@ function readRequiredValue(value: string | undefined, name: string) {
   return value
 }
 
-main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : String(error))
-  process.exitCode = 1
-})
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : String(error))
+    process.exitCode = 1
+  })
+}
