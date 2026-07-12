@@ -2,6 +2,7 @@
   <section v-if="exam" class="exam-view" :class="{ 'focus-view': focusMode }">
     <header v-if="!focusMode" class="page-header">
       <div>
+        <AppBreadcrumb :items="breadcrumbItems" />
         <p class="eyebrow">{{ exam.folderName ?? 'Ohne Ordner' }}</p>
         <input v-model="title" class="title-input" @blur="saveMeta" />
         <div class="exam-header-meta">
@@ -250,7 +251,7 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowLeft,
@@ -272,6 +273,7 @@ import { EMPTY_TIPTAP_DOCUMENT } from '@shared/constants'
 import { api } from '../api'
 import ExamEditor from '../components/ExamEditor.vue'
 import TagInput from '../components/TagInput.vue'
+import AppBreadcrumb, { type BreadcrumbItem } from '../components/ui/AppBreadcrumb.vue'
 import { useTheme } from '../theme'
 
 defineProps<{ focusMode?: boolean }>()
@@ -299,8 +301,15 @@ const autosaveLabel = ref('Entwurf lokal gespeichert')
 const showSubmitDialog = ref(false)
 const showSubmissionOverlay = ref(false)
 const { isDark, toggleTheme } = useTheme()
-let submissionOverlayTimer: ReturnType<typeof window.setTimeout> | null = null
+let submissionOverlayTimer: number | null = null
 const SUBMISSION_OVERLAY_MS = 10_000
+const breadcrumbItems = computed<BreadcrumbItem[]>(() => [
+  { label: 'Home', to: { name: 'home' } },
+  { label: 'Prüfungen', to: { name: 'exams' } },
+  { label: 'Bibliothek', to: { name: 'dashboard' } },
+  { label: exam.value?.folderName ?? 'Ohne Ordner' },
+  { label: title.value || exam.value?.title || 'Klausur' }
+])
 
 const confettiPieces = Array.from({ length: 24 }, (_value, index) => ({
   id: index,

@@ -30,6 +30,8 @@ function applyTheme(): void {
   if (typeof document === 'undefined') return
   document.documentElement.dataset.theme = theme.value
   document.documentElement.style.colorScheme = theme.value
+  document.documentElement.classList.toggle('dark', theme.value === 'dark')
+  document.documentElement.classList.toggle('light', theme.value === 'light')
   localStorage.setItem(STORAGE_KEY, theme.value)
 }
 

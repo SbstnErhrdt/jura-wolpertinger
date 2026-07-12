@@ -2,10 +2,12 @@
 .dev-data
 .superpowers/
 references
+science/
 node_modules
 dist
 out
 coverage
+test-results
 release
 build/icon.icns
 build/icon.png
@@ -16,6 +18,8 @@ build/icon.iconset
 *.sqlite-shm
 *.sqlite-wal
 *.tsbuildinfo
+src/renderer/auto-imports.d.ts
+src/renderer/components.d.ts
 certs
 *.env
 .env.local

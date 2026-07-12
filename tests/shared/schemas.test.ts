@@ -5,10 +5,19 @@ import {
   correctionSchema,
   examListItemSchema,
   juraManifestSchema,
+  learningCardSchema,
+  learningCollectionSchema,
+  learningDashboardSchema,
+  learningReviewEventSchema,
   learningTaskSchema,
   revisionSchema,
+  reviewCardSchema,
+  reviewRatingSchema,
   scoreSchema,
-  submissionSchema
+  submissionSchema,
+  syncAuthInputSchema,
+  syncRunResultSchema,
+  syncStatusSchema
 } from '@shared/schemas'
 import {
   APP_VERSION,
@@ -177,6 +186,38 @@ describe('shared schemas', () => {
     ).toBe('other')
   })
 
+  it('validates sync status and results', () => {
+    const syncedAt = new Date().toISOString()
+
+    expect(
+      syncStatusSchema.parse({
+        connected: true,
+        remoteUserId: crypto.randomUUID(),
+        remoteEmail: 'lerner@example.test',
+        lastSyncedAt: syncedAt,
+        lastSyncSummary: 'Alles aktuell.'
+      }).connected
+    ).toBe(true)
+
+    expect(
+      syncAuthInputSchema.parse({
+        email: 'lerner@example.test',
+        password: 'secret'
+      }).email
+    ).toBe('lerner@example.test')
+
+    expect(
+      syncRunResultSchema.parse({
+        action: 'upload',
+        syncedAt,
+        summary: 'Lokale Daten online gesichert.',
+        uploadedFiles: 1,
+        downloadedFiles: 0,
+        tableCounts: { exams: 2, attachments: 1 }
+      }).tableCounts.exams
+    ).toBe(2)
+  })
+
   it('validates AI correction drafts and learning tasks', () => {
     const userId = crypto.randomUUID()
     const submissionId = crypto.randomUUID()
@@ -237,5 +278,81 @@ describe('shared schemas', () => {
         updatedAt: new Date().toISOString()
       }).status
     ).toBe('open')
+  })
+
+  it('validates learning cards, review ratings and dashboard summaries', () => {
+    const now = new Date().toISOString()
+    const userId = crypto.randomUUID()
+    const collectionId = crypto.randomUUID()
+    const cardId = crypto.randomUUID()
+
+    expect(reviewRatingSchema.parse(1)).toBe(1)
+    expect(reviewRatingSchema.parse(4)).toBe(4)
+    expect(() => reviewRatingSchema.parse(5)).toThrow()
+
+    expect(
+      learningCollectionSchema.parse({
+        schemaVersion: 1,
+        id: collectionId,
+        userId,
+        name: 'Strafrecht AT',
+        description: '',
+        subject: 'Strafrecht',
+        source: null,
+        cardCount: 12,
+        dueCount: 3,
+        createdAt: now,
+        updatedAt: now
+      }).name
+    ).toBe('Strafrecht AT')
+
+    const card = learningCardSchema.parse({
+      schemaVersion: 1,
+      id: cardId,
+      userId,
+      collectionId,
+      externalId: 'card-1',
+      title: 'Rücktritt',
+      frontMarkdown: 'Wann ist ein Rücktritt möglich?',
+      backMarkdown: 'Nach § 24 StGB bei Aufgabe der weiteren Tatausführung.',
+      tags: ['strafrecht', 'rücktritt'],
+      isArchived: false,
+      dueAt: now,
+      lastRating: null,
+      reps: 0,
+      lapses: 0,
+      createdAt: now,
+      updatedAt: now
+    })
+    expect(card.tags).toContain('rücktritt')
+
+    expect(
+      reviewCardSchema.parse({
+        ...card
+      }).reps
+    ).toBe(0)
+
+    expect(
+      learningReviewEventSchema.parse({
+        schemaVersion: 1,
+        id: crypto.randomUUID(),
+        userId,
+        cardId,
+        rating: 3,
+        reviewedAt: now,
+        elapsedMs: 1200
+      }).rating
+    ).toBe(3)
+
+    expect(
+      learningDashboardSchema.parse({
+        dueCount: 3,
+        totalCards: 12,
+        collectionCount: 1,
+        streakDays: 4,
+        freeDaysRemainingThisWeek: 2,
+        learnedToday: true
+      }).learnedToday
+    ).toBe(true)
   })
 })

@@ -2,21 +2,22 @@
   <section class="dashboard">
     <header class="page-header">
       <div>
+        <UBreadcrumb class="app-breadcrumb" :items="withHomeIcon(breadcrumbItems)" />
         <p class="eyebrow">Lokale Bibliothek</p>
         <h1>Bibliothek</h1>
       </div>
       <div class="header-actions">
-        <button class="secondary" @click="importPackage">
+        <UButton color="neutral" variant="outline" @click="importPackage">
           <Upload :size="17" />
           Importieren
-        </button>
+        </UButton>
       </div>
     </header>
 
     <section class="metric-row">
       <div class="metric">
         <span>Prüfungen</span>
-        <strong>{{ store.exams.length }}</strong>
+        <strong>{{ store.examTotal }}</strong>
       </div>
       <div class="metric">
         <span>Abgegeben</span>
@@ -36,42 +37,42 @@
       <aside class="panel">
         <div class="panel-header">
           <h2>Ordner</h2>
-          <button class="secondary compact-button" title="Ordner erstellen" @click="openCreateFolderDialog">
+          <UButton class="compact-button" color="neutral" variant="outline" title="Ordner erstellen" @click="openCreateFolderDialog">
             <FolderPlus :size="16" />
             Neuer Ordner
-          </button>
+          </UButton>
         </div>
-        <button
+        <UButton
           class="folder-row"
           :class="{ active: selectedFolderId === null }"
-          @click="selectedFolderId = null"
+          @click="selectFolder(null)"
         >
           Alle Einträge
-        </button>
-        <button
+        </UButton>
+        <UButton
           class="folder-row"
           :class="{ active: selectedFolderId === UNASSIGNED_FOLDER_ID, 'drop-target': dropFolderId === null }"
-          @click="selectedFolderId = UNASSIGNED_FOLDER_ID"
+          @click="selectFolder(UNASSIGNED_FOLDER_ID)"
           @dragover.prevent="onFolderDragOver(null)"
           @dragleave="onFolderDragLeave(null)"
           @drop.prevent="dropOnFolder(null)"
         >
           Ohne Ordner
-        </button>
-        <button
+        </UButton>
+        <UButton
           v-for="folder in store.folders"
           v-show="!folder.trashedAt"
           :key="folder.id"
           class="folder-row"
           :class="{ active: selectedFolderId === folder.id, 'drop-target': dropFolderId === folder.id }"
-          @click="selectedFolderId = folder.id"
+          @click="selectFolder(folder.id)"
           @contextmenu.prevent="openFolderMenu($event, folder.id)"
           @dragover.prevent="onFolderDragOver(folder.id)"
           @dragleave="onFolderDragLeave(folder.id)"
           @drop.prevent="dropOnFolder(folder.id)"
         >
           {{ folder.name }}
-        </button>
+        </UButton>
         <p class="folder-drop-hint">Eintrag auf einen Ordner ziehen, um ihn zu verschieben.</p>
 
         <div class="folder-actions-divider" />
@@ -92,20 +93,20 @@
                 <strong>{{ exam.title }}</strong>
                 <span>Klausur · {{ formatDate(exam.updatedAt) }}</span>
               </div>
-              <button class="secondary" @click="restoreExam(exam.id)">
+              <UButton color="neutral" variant="outline" @click="restoreExam(exam.id)">
                 <RotateCcw :size="15" />
                 Wiederherstellen
-              </button>
+              </UButton>
             </div>
             <div v-for="folder in trashedFolders" :key="folder.id" class="trash-row">
               <div class="trash-row-meta">
                 <strong>{{ folder.name }}</strong>
                 <span>Ordner · {{ formatDate(folder.trashedAt) }}</span>
               </div>
-              <button class="secondary" @click="restoreFolder(folder.id)">
+              <UButton color="neutral" variant="outline" @click="restoreFolder(folder.id)">
                 <RotateCcw :size="15" />
                 Wiederherstellen
-              </button>
+              </UButton>
             </div>
           </div>
           <p v-else class="empty-state">Klausur hierher ziehen, um sie in den Papierkorb zu legen.</p>
@@ -115,13 +116,29 @@
       <section class="panel">
         <div class="panel-header">
           <h2>Klausuren</h2>
-          <button @click="openCreateExamDialog">
+          <span v-if="store.refreshing" class="list-loading-indicator">
+            <span class="loading-spinner" aria-hidden="true" />
+            <span>Lade Einträge</span>
+          </span>
+          <UButton @click="openCreateExamDialog">
             <Plus :size="17" />
             Neue Klausur
-          </button>
+          </UButton>
         </div>
 
-        <div class="exam-list">
+        <div v-if="store.loading" class="skeleton-list" aria-hidden="true">
+          <UCard v-for="index in 5" :key="index" class="skeleton-tile"><USkeleton class="h-5 w-2/5" /><USkeleton class="mt-3 h-4 w-full" /></UCard>
+        </div>
+        <p v-else-if="store.error" class="action-notice error">
+          <span>{{ store.error }}</span>
+          <UButton type="button" color="neutral" variant="outline" @click="reloadExams">Erneut versuchen</UButton>
+        </p>
+        <div
+          v-else
+          class="exam-list"
+          :class="{ 'paginated-list-refreshing': store.refreshing }"
+          :aria-busy="store.refreshing"
+        >
           <RouterLink
             v-for="exam in filteredExams"
             :key="exam.id"
@@ -149,6 +166,15 @@
           </RouterLink>
           <p v-if="!filteredExams.length" class="empty-state">Noch keine Einträge in dieser Ansicht.</p>
         </div>
+        <nav
+          v-if="!store.loading && !store.error && store.examTotal > 0"
+          class="app-pagination"
+          label="Klausurseiten"
+        >
+          <span>{{ (store.examPage - 1) * store.examPageSize + 1 }}-{{ Math.min(store.examTotal, store.examPage * store.examPageSize) }} von {{ store.examTotal }}</span>
+          <UPagination :model-value="store.examPage" :total="store.examTotal" :items-per-page="store.examPageSize" :disabled="store.refreshing" @update:model-value="setExamPage" />
+          <USelect :model-value="store.examPageSize" :items="pageSizeOptions" :disabled="store.refreshing" @update:model-value="setExamPageSize" />
+        </nav>
       </section>
     </section>
 
@@ -159,14 +185,14 @@
       :style="{ left: `${folderMenu.x}px`, top: `${folderMenu.y}px` }"
       @click.stop
     >
-      <button @click="startRenameFolder(menuFolder.id)">
+      <UButton @click="startRenameFolder(menuFolder.id)">
         <Pencil :size="15" />
         Umbenennen
-      </button>
-      <button class="context-menu-danger" @click="startTrashFolder(menuFolder.id)">
+      </UButton>
+      <UButton class="context-menu-danger" @click="startTrashFolder(menuFolder.id)">
         <Trash2 :size="15" />
         In Papierkorb
-      </button>
+      </UButton>
     </div>
 
     <div v-if="examMenu" class="context-menu-backdrop" @click="closeExamMenu" @contextmenu.prevent="closeExamMenu" />
@@ -176,110 +202,105 @@
       :style="{ left: `${examMenu.x}px`, top: `${examMenu.y}px` }"
       @click.stop
     >
-      <button @click="openExam(menuExam.id)">
+      <UButton @click="openExam(menuExam.id)">
         <FileText :size="15" />
         Anzeigen
-      </button>
-      <button @click="openExam(menuExam.id)">
+      </UButton>
+      <UButton @click="openExam(menuExam.id)">
         <Pencil :size="15" />
         Bearbeiten
-      </button>
-      <button @click="startRenameExam(menuExam.id)">
+      </UButton>
+      <UButton @click="startRenameExam(menuExam.id)">
         <Pencil :size="15" />
         Umbenennen
-      </button>
-      <button @click="downloadExam(menuExam.id)">
+      </UButton>
+      <UButton @click="downloadExam(menuExam.id)">
         <Download :size="15" />
         Download
-      </button>
-      <button class="context-menu-danger" @click="trashExam(menuExam.id)">
+      </UButton>
+      <UButton class="context-menu-danger" @click="trashExam(menuExam.id)">
         <Trash2 :size="15" />
         In Papierkorb
-      </button>
+      </UButton>
     </div>
 
-    <div v-if="showCreateFolderDialog" class="dialog-backdrop" @click="cancelCreateFolder">
-      <div class="dialog-card" @click.stop>
+    <UModal :open="showCreateFolderDialog" @update:open="showCreateFolderDialog = $event">
+      <template #content><div class="dialog-card">
         <h2>Neuer Ordner</h2>
         <form class="dialog-form" @submit.prevent="createFolder">
           <label class="dialog-field">
             Name
-            <input v-model="folderName" placeholder="Ordnername" autofocus />
+            <UInput v-model="folderName" placeholder="Ordnername" autofocus />
           </label>
           <div class="dialog-actions">
-            <button type="button" class="secondary" @click="cancelCreateFolder">Abbrechen</button>
-            <button type="submit">
+            <UButton type="button" color="neutral" variant="outline" @click="cancelCreateFolder">Abbrechen</UButton>
+            <UButton type="submit">
               <FolderPlus :size="16" />
               Erstellen
-            </button>
+            </UButton>
           </div>
         </form>
-      </div>
-    </div>
+      </div></template>
+    </UModal>
 
-    <div v-if="showCreateExamDialog" class="dialog-backdrop" @click="cancelCreateExam">
-      <div class="dialog-card dialog-card-wide" @click.stop>
+    <UModal :open="showCreateExamDialog" @update:open="showCreateExamDialog = $event">
+      <template #content><div class="dialog-card dialog-card-wide">
         <h2>Neue Klausur</h2>
         <form class="dialog-form" @submit.prevent="createExam">
           <label class="dialog-field">
             Titel
-            <input v-model="examTitle" placeholder="Titel" autofocus />
+            <UInput v-model="examTitle" placeholder="Titel" autofocus />
           </label>
           <label class="dialog-field">
             Ordner
-            <select v-model="examFolderId">
-              <option :value="null">Kein Ordner</option>
-              <option v-for="folder in activeFolders" :key="folder.id" :value="folder.id">
-                {{ folder.name }}
-              </option>
-            </select>
+            <USelect v-model="examFolderId" :items="folderOptions" value-key="value" />
           </label>
           <div class="dialog-field">
             <span>Tags</span>
             <TagInput v-model="tagValues" :suggestions="tagSuggestions" placeholder="Tags hinzufügen" />
           </div>
           <div class="dialog-actions">
-            <button type="button" class="secondary" @click="cancelCreateExam">Abbrechen</button>
-            <button type="submit">
+            <UButton type="button" color="neutral" variant="outline" @click="cancelCreateExam">Abbrechen</UButton>
+            <UButton type="submit">
               <Plus :size="17" />
               Erstellen
-            </button>
+            </UButton>
           </div>
         </form>
-      </div>
-    </div>
+      </div></template>
+    </UModal>
 
-    <div v-if="renameExam" class="dialog-backdrop" @click="cancelRenameExam">
-      <div class="dialog-card" @click.stop>
+    <UModal :open="Boolean(renameExam)" @update:open="!$event && cancelRenameExam()">
+      <template #content><div class="dialog-card">
         <h2>Klausur umbenennen</h2>
         <form class="dialog-form" @submit.prevent="submitRenameExam">
           <label class="dialog-field">
             Titel
-            <input v-model="renameExamTitle" placeholder="Titel" autofocus />
+            <UInput v-model="renameExamTitle" placeholder="Titel" autofocus />
           </label>
           <div class="dialog-actions">
-            <button type="button" class="secondary" @click="cancelRenameExam">Abbrechen</button>
-            <button type="submit">Speichern</button>
+            <UButton type="button" color="neutral" variant="outline" @click="cancelRenameExam">Abbrechen</UButton>
+            <UButton type="submit">Speichern</UButton>
           </div>
         </form>
-      </div>
-    </div>
+      </div></template>
+    </UModal>
 
-    <div v-if="renameFolder" class="dialog-backdrop" @click="cancelRenameFolder">
-      <div class="dialog-card" @click.stop>
+    <UModal :open="Boolean(renameFolder)" @update:open="!$event && cancelRenameFolder()">
+      <template #content><div class="dialog-card">
         <h2>Ordner umbenennen</h2>
         <form class="dialog-form" @submit.prevent="submitRenameFolder">
-          <input v-model="renameFolderName" placeholder="Ordnername" />
+          <UInput v-model="renameFolderName" placeholder="Ordnername" />
           <div class="dialog-actions">
-            <button type="button" class="secondary" @click="cancelRenameFolder">Abbrechen</button>
-            <button type="submit">Speichern</button>
+            <UButton type="button" color="neutral" variant="outline" @click="cancelRenameFolder">Abbrechen</UButton>
+            <UButton type="submit">Speichern</UButton>
           </div>
         </form>
-      </div>
-    </div>
+      </div></template>
+    </UModal>
 
-    <div v-if="trashFolderState" class="dialog-backdrop" @click="cancelTrashFolder">
-      <div class="dialog-card" @click.stop>
+    <UModal :open="Boolean(trashFolderState)" @update:open="!$event && cancelTrashFolder()">
+      <template #content><div class="dialog-card">
         <h2>Ordner in Papierkorb verschieben</h2>
         <p class="dialog-copy">
           Der Ordner wird nicht gelöscht. Lege fest, wohin die enthaltenen Einträge verschoben
@@ -287,21 +308,16 @@
         </p>
         <label class="dialog-field">
           Zielordner für Einträge
-          <select v-model="trashMoveTargetId">
-            <option :value="null">Ohne Ordner</option>
-            <option v-for="folder in trashTargetFolders" :key="folder.id" :value="folder.id">
-              {{ folder.name }}
-            </option>
-          </select>
+          <USelect v-model="trashMoveTargetId" :items="trashTargetOptions" value-key="value" />
         </label>
         <div class="dialog-actions">
-          <button type="button" class="secondary" @click="cancelTrashFolder">Abbrechen</button>
-          <button type="button" class="danger-button" @click="submitTrashFolder">
+          <UButton type="button" color="neutral" variant="outline" @click="cancelTrashFolder">Abbrechen</UButton>
+          <UButton type="button" color="error" @click="submitTrashFolder">
             In Papierkorb
-          </button>
+          </UButton>
         </div>
-      </div>
-    </div>
+      </div></template>
+    </UModal>
   </section>
 </template>
 
@@ -311,6 +327,7 @@ import { useRouter } from 'vue-router'
 import { Download, FileText, FolderPlus, Pencil, Plus, RotateCcw, Trash2, Upload } from 'lucide-vue-next'
 import type { ExamStatus } from '@shared/schemas'
 import TagInput from '../components/TagInput.vue'
+import { type AppBreadcrumbItem, withHomeIcon } from '../ui/breadcrumbs'
 import { useLibraryStore } from '../stores/library'
 
 const store = useLibraryStore()
@@ -334,14 +351,15 @@ const renameExamId = ref<string | null>(null)
 const renameExamTitle = ref('')
 const trashFolderId = ref<string | null>(null)
 const trashMoveTargetId = ref<string | null>(null)
+const pageSizeOptions = [10, 25, 50, 100]
 
 onMounted(() => store.load())
 
 const activeFolders = computed(() => store.folders.filter((folder) => !folder.trashedAt))
 const trashedFolders = computed(() => store.folders.filter((folder) => folder.trashedAt))
-const activeExams = computed(() => store.exams.filter((exam) => exam.status !== 'archived'))
-const trashedExams = computed(() => store.exams.filter((exam) => exam.status === 'archived'))
-const trashCount = computed(() => trashedFolders.value.length + trashedExams.value.length)
+const activeExams = computed(() => store.exams)
+const trashedExams = computed(() => store.archivedExams)
+const trashCount = computed(() => trashedFolders.value.length + store.archivedExamTotal)
 const menuFolder = computed(
   () => store.folders.find((folder) => folder.id === folderMenu.value?.folderId) ?? null
 )
@@ -360,14 +378,27 @@ const trashFolderState = computed(
 const trashTargetFolders = computed(() =>
   activeFolders.value.filter((folder) => folder.id !== trashFolderId.value)
 )
-
-const filteredExams = computed(() => {
-  if (!selectedFolderId.value) return activeExams.value
-  if (selectedFolderId.value === UNASSIGNED_FOLDER_ID) {
-    return activeExams.value.filter((exam) => !exam.folderId)
-  }
-  return activeExams.value.filter((exam) => exam.folderId === selectedFolderId.value)
+const folderOptions = computed(() => [
+  { label: 'Kein Ordner', value: null },
+  ...activeFolders.value.map((folder) => ({ label: folder.name, value: folder.id }))
+])
+const trashTargetOptions = computed(() => [
+  { label: 'Ohne Ordner', value: null },
+  ...trashTargetFolders.value.map((folder) => ({ label: folder.name, value: folder.id }))
+])
+const selectedFolderLabel = computed(() => {
+  if (!selectedFolderId.value) return null
+  if (selectedFolderId.value === UNASSIGNED_FOLDER_ID) return 'Ohne Ordner'
+  return activeFolders.value.find((folder) => folder.id === selectedFolderId.value)?.name ?? null
 })
+const breadcrumbItems = computed<AppBreadcrumbItem[]>(() => [
+  { label: 'Home', to: { name: 'home' } },
+  { label: 'Prüfungen', to: { name: 'exams' } },
+  { label: 'Bibliothek' },
+  ...(selectedFolderLabel.value ? [{ label: selectedFolderLabel.value }] : [])
+])
+
+const filteredExams = computed(() => activeExams.value)
 
 const tagSuggestions = computed(() =>
   [...new Set(store.exams.flatMap((exam) => exam.tags.map((tag) => tag.trim())).filter(Boolean))].sort((left, right) =>
@@ -387,6 +418,29 @@ watch(activeFolders, (folders) => {
     examFolderId.value = null
   }
 })
+
+function selectedFolderFilter(): string | null | undefined {
+  if (!selectedFolderId.value) return undefined
+  if (selectedFolderId.value === UNASSIGNED_FOLDER_ID) return null
+  return selectedFolderId.value
+}
+
+async function selectFolder(folderId: string | null): Promise<void> {
+  selectedFolderId.value = folderId
+  await store.loadExamPage({ page: 1, folderId: selectedFolderFilter() })
+}
+
+async function setExamPage(page: number): Promise<void> {
+  await store.loadExamPage({ page, folderId: selectedFolderFilter() })
+}
+
+async function setExamPageSize(pageSize: number): Promise<void> {
+  await store.loadExamPage({ page: 1, pageSize, folderId: selectedFolderFilter() })
+}
+
+async function reloadExams(): Promise<void> {
+  await store.loadExamPage({ folderId: selectedFolderFilter() })
+}
 
 function openCreateFolderDialog(): void {
   folderName.value = ''

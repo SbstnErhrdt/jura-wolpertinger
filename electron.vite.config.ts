@@ -2,6 +2,8 @@ import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import vue from '@vitejs/plugin-vue'
+import ui from '@nuxt/ui/vite'
+import { NuxtIconBundle } from '@nuxt/icon/vite'
 import type { Plugin } from 'vite'
 
 const rendererAssets = [
@@ -70,6 +72,37 @@ export default defineConfig({
         '@shared': resolve('src/shared')
       }
     },
-    plugins: [vue(), syncRendererAssetsPlugin()]
+    plugins: [
+      vue(),
+      ui({
+        colorMode: false,
+        ui: {
+          colors: {
+            primary: 'wolpi',
+            secondary: 'sky',
+            neutral: 'slate'
+          }
+        }
+      }),
+      NuxtIconBundle({
+        scan: true,
+        icons: [
+          'lucide:check',
+          'lucide:chevron-down',
+          'lucide:chevron-left',
+          'lucide:chevron-right',
+          'lucide:chevrons-left',
+          'lucide:chevrons-right',
+          'lucide:ellipsis',
+          'lucide:loader-circle',
+          'lucide:minus',
+          'lucide:pencil',
+          'lucide:plus',
+          'lucide:search',
+          'lucide:x'
+        ]
+      }),
+      syncRendererAssetsPlugin()
+    ]
   }
 })

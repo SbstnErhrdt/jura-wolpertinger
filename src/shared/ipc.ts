@@ -10,11 +10,29 @@ import type {
   ExamStatus,
   Folder as SchemaFolder,
   InlineComment,
+  LearningCard,
+  LearningCollection,
+  LearningDashboard,
+  LearningImportResult,
+  LearningReviewEvent,
   LearningTask,
   LegalArea,
+  ReviewCard,
+  ReviewRating,
+  SyncAuthInput,
+  SyncRunInput,
+  SyncRunResult,
+  SyncStatus,
   Submission
 } from './schemas'
 import type { User } from './schemas'
+
+export type {
+  SyncAuthInput,
+  SyncRunInput,
+  SyncRunResult,
+  SyncStatus
+} from './schemas'
 
 export type FolderDto = SchemaFolder
 export type ExamListItem = SchemaExamListItem
@@ -72,6 +90,23 @@ export type UpdateExamInput = Omit<CreateExamInput, 'title'> & {
   notes?: string
 }
 
+export type PaginatedResult<T> = {
+  items: T[]
+  total: number
+  page: number
+  pageSize: number
+  pageCount: number
+}
+
+export type ListExamsInput = {
+  page?: number
+  pageSize?: number
+  folderId?: string | null
+  status?: 'active' | 'archived' | 'all'
+  search?: string
+  sort?: 'updated' | 'title' | 'score'
+}
+
 export type SaveRevisionInput = {
   examId: string
   content: Record<string, unknown>
@@ -124,6 +159,52 @@ export type GenerateAiCorrectionInput = {
   submissionId: string
 }
 
+export type CreateLearningCollectionInput = {
+  name: string
+  description?: string
+  subject?: string | null
+  source?: string | null
+}
+
+export type CreateLearningCardInput = {
+  collectionId: string
+  title: string
+  frontMarkdown: string
+  backMarkdown: string
+  tags: string[]
+}
+
+export type UpdateLearningCardInput = CreateLearningCardInput & {
+  id: string
+}
+
+export type ListLearningCardsInput = {
+  collectionId?: string | null
+  page?: number
+  pageSize?: number
+  search?: string
+  sort?: 'updated' | 'title' | 'due' | 'rating'
+}
+
+export type GetReviewBatchInput = {
+  collectionId?: string | null
+  tag?: string | null
+  limit?: number
+  excludeCardIds?: string[]
+}
+
+export type RecordReviewInput = {
+  cardId: string
+  rating: ReviewRating
+  elapsedMs?: number | null
+}
+
+export type RecordReviewResult = {
+  event: LearningReviewEvent
+  nextDueAt: string
+  intervalLabel: string
+}
+
 export type SaveAiCorrectionDraftInput = {
   submissionId: string
   provider: 'openai'
@@ -165,6 +246,7 @@ export type AppApi = {
   trashFolder(input: TrashFolderInput): Promise<FolderDto>
   restoreFolder(folderId: string): Promise<FolderDto>
   listExams(): Promise<ExamListItem[]>
+  listExamsPage(input?: ListExamsInput): Promise<PaginatedResult<ExamListItem>>
   createExam(input: CreateExamInput): Promise<ExamDetails>
   getExam(id: string): Promise<ExamDetails>
   updateExam(input: UpdateExamInput): Promise<ExamDetails>
@@ -184,6 +266,17 @@ export type AppApi = {
   rejectAiCorrectionDraft(draftId: string): Promise<AiCorrectionDraft>
   listLearningTasks(): Promise<LearningTask[]>
   updateLearningTaskStatus(taskId: string, status: 'open' | 'in_progress' | 'done'): Promise<LearningTask>
+  getLearningDashboard(): Promise<LearningDashboard>
+  exportLearningDecksJson(): Promise<string>
+  importLearningDecksJson(json: string): Promise<LearningImportResult>
+  listLearningCollections(): Promise<LearningCollection[]>
+  createLearningCollection(input: CreateLearningCollectionInput): Promise<LearningCollection>
+  listLearningCards(collectionId?: string | null): Promise<LearningCard[]>
+  listLearningCardsPage(input?: ListLearningCardsInput): Promise<PaginatedResult<LearningCard>>
+  createLearningCard(input: CreateLearningCardInput): Promise<LearningCard>
+  updateLearningCard(input: UpdateLearningCardInput): Promise<LearningCard>
+  getReviewBatch(input?: GetReviewBatchInput): Promise<ReviewCard[]>
+  recordReview(input: RecordReviewInput): Promise<RecordReviewResult>
   addAttachment(examId: string, role?: AttachmentRole): Promise<Attachment | null>
   openAttachment(id: string): Promise<void>
   exportExamPackage(examId: string): Promise<string | null>
@@ -192,4 +285,8 @@ export type AppApi = {
   createCorrection(submissionId: string): Promise<Correction>
   updateCorrection(input: UpdateCorrectionInput): Promise<Correction>
   addInlineComment(input: AddInlineCommentInput): Promise<InlineComment>
+  getSyncStatus(): Promise<SyncStatus>
+  connectSyncAccount(input: SyncAuthInput): Promise<SyncStatus>
+  disconnectSyncAccount(): Promise<SyncStatus>
+  runSync(input: SyncRunInput): Promise<SyncRunResult>
 }

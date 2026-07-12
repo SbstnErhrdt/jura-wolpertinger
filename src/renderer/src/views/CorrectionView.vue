@@ -36,20 +36,21 @@
       <template v-if="submission && correction">
         <header class="page-header correction-detail-header">
           <div>
+            <UBreadcrumb class="app-breadcrumb" :items="withHomeIcon(detailBreadcrumbItems)" />
             <p class="eyebrow">Korrektur · {{ formatDate(submission.submittedAt) }}</p>
             <h1>{{ submission.examTitle }}</h1>
           </div>
           <div class="header-actions">
-            <RouterLink class="secondary" :to="{ name: 'exam', params: { id: submission.examId } }">
+            <UButton color="neutral" variant="outline" :to="{ name: 'exam', params: { id: submission.examId } }">
               Zur Prüfung
-            </RouterLink>
-            <button type="button" class="secondary" @click="showAiSettings = !showAiSettings">
+            </UButton>
+            <UButton type="button" color="neutral" variant="outline" @click="showAiSettings = !showAiSettings">
               KI einrichten
-            </button>
-            <button type="button" :disabled="aiBusy || !aiSettings.configured" @click="generateAiDraft">
-              {{ aiBusy ? 'KI arbeitet...' : 'KI-Korrektur vorschlagen' }}
-            </button>
-            <button :disabled="aiBusy" @click="saveCorrection">Speichern</button>
+            </UButton>
+            <UButton type="button" :disabled="aiBusy || !aiSettings.configured || cloudAiDisabled" @click="generateAiDraft">
+              {{ cloudAiDisabled ? 'Cloud-KI noch nicht freigeschaltet' : aiBusy ? 'KI arbeitet...' : 'KI-Korrektur vorschlagen' }}
+            </UButton>
+            <UButton :disabled="aiBusy" @click="saveCorrection">Speichern</UButton>
           </div>
         </header>
 
@@ -77,65 +78,68 @@
                 </span>
               </div>
               <div v-if="!showAiKeyForm" class="dialog-actions">
-                <button type="button" @click="openAiKeyForm">{{ aiSetupButtonLabel }}</button>
-                <button
+                <UButton type="button" @click="openAiKeyForm">{{ aiSetupButtonLabel }}</UButton>
+                <UButton
                   type="button"
-                  class="secondary"
+                  color="neutral"
+                  variant="outline"
                   :disabled="!aiSettings.configured || aiBusy"
                   @click="testAiConnection"
                 >
                   {{ aiBusy ? 'Prüft ...' : 'Verbindung testen' }}
-                </button>
-                <button
+                </UButton>
+                <UButton
                   v-if="storedKeyOverridesEnvironment"
                   type="button"
-                  class="secondary"
+                  color="neutral"
+                  variant="outline"
                   :disabled="aiBusy"
                   @click="testEnvironmentConnection"
                 >
                   .env-Key testen
-                </button>
-                <button
+                </UButton>
+                <UButton
                   v-if="effectiveAiSource === 'stored'"
                   type="button"
-                  class="secondary danger-secondary"
+                  color="error"
+                  variant="outline"
                   :disabled="aiBusy"
                   @click="startRemoveAiSettings"
                 >
                   App-Key entfernen
-                </button>
+                </UButton>
               </div>
               <div v-if="confirmRemoveAiKey" class="settings-confirm-remove">
                 <strong>App-Key entfernen?</strong>
                 <p>KI-Korrekturen nutzen danach keinen gespeicherten App-Key mehr.</p>
                 <div class="dialog-actions">
-                  <button type="button" class="danger-button" :disabled="aiBusy" @click="removeAiSettings">
+                  <UButton type="button" color="error" :disabled="aiBusy" @click="removeAiSettings">
                     Entfernen
-                  </button>
-                  <button type="button" class="secondary" :disabled="aiBusy" @click="cancelRemoveAiSettings">
+                  </UButton>
+                  <UButton type="button" color="neutral" variant="outline" :disabled="aiBusy" @click="cancelRemoveAiSettings">
                     Abbrechen
-                  </button>
+                  </UButton>
                 </div>
               </div>
               <form v-if="showAiKeyForm" class="settings-key-form" @submit.prevent="saveAiSettings">
                 <label>
                   OpenAI API-Key
-                  <input v-model="aiApiKeyInput" type="password" :placeholder="aiKeyPlaceholder" />
+                  <UInput v-model="aiApiKeyInput" type="password" :placeholder="aiKeyPlaceholder" />
                   <span v-if="effectiveAiSource === 'stored'" class="settings-field-note">
                     Der gespeicherte Key bleibt erhalten, wenn du hier nichts eingibst.
                   </span>
                 </label>
                 <label>
                   Modell
-                  <input v-model="aiModelInput" :placeholder="DEFAULT_AI_MODEL" />
+                  <UInput v-model="aiModelInput" :placeholder="DEFAULT_AI_MODEL" />
                 </label>
                 <div class="dialog-actions">
-                  <button type="submit" :disabled="aiBusy">
+                  <UButton type="submit" :disabled="aiBusy">
                     {{ aiBusy ? 'Speichert ...' : 'Speichern' }}
-                  </button>
-                  <button type="button" class="secondary" :disabled="aiBusy" @click="cancelAiKeyForm">
+                  </UButton>
+                  <UButton type="button" color="neutral" variant="outline" :disabled="aiBusy" @click="cancelAiKeyForm">
                     Abbrechen
-                  </button>
+                  </UButton>
                 </div>
               </form>
             </div>
@@ -147,7 +151,7 @@
               <div class="correction-score-grid">
                 <label>
                   Punkte
-                  <input
+                  <UInput
                     v-model="scoreInput"
                     inputmode="decimal"
                     placeholder="0 bis 18, z. B. 12,5"
@@ -158,7 +162,7 @@
               </div>
               <label>
                 Bewertungskommentar
-                <textarea v-model="gradingComment" rows="4" />
+                <UTextarea v-model="gradingComment" :rows="4" />
               </label>
             </div>
           </section>
@@ -232,12 +236,12 @@
               </div>
 
               <div class="dialog-actions">
-                <button type="button" class="secondary" :disabled="aiBusy" @click="rejectAiDraft(selectedAiDraft.id)">
+                <UButton type="button" color="neutral" variant="outline" :disabled="aiBusy" @click="rejectAiDraft(selectedAiDraft.id)">
                   Verwerfen
-                </button>
-                <button type="button" :disabled="aiBusy" @click="acceptAiDraft(selectedAiDraft.id)">
+                </UButton>
+                <UButton type="button" :disabled="aiBusy" @click="acceptAiDraft(selectedAiDraft.id)">
                   Übernehmen
-                </button>
+                </UButton>
               </div>
             </div>
           </section>
@@ -265,20 +269,20 @@
                 </div>
                 <label class="comment-input-label">
                   Kommentar
-                  <textarea
+                  <UTextarea
                     v-model="commentBody"
-                    rows="3"
+                    :rows="3"
                     placeholder="Hinweis oder Korrektur zur markierten Passage"
                     autofocus
                   />
                 </label>
                 <div class="comment-actions">
-                  <button type="button" class="secondary" @click="clearSelectedText">
+                  <UButton type="button" color="neutral" variant="outline" @click="clearSelectedText">
                     Abbrechen
-                  </button>
-                  <button type="button" :disabled="!canAddComment" @click="addComment">
+                  </UButton>
+                  <UButton type="button" :disabled="!canAddComment" @click="addComment">
                     Kommentar setzen
-                  </button>
+                  </UButton>
                 </div>
               </div>
             </main>
@@ -309,6 +313,7 @@
       </template>
       <div v-else class="correction-empty-detail">
         <div class="correction-start-panel">
+          <UBreadcrumb class="app-breadcrumb" :items="withHomeIcon(listBreadcrumbItems)" />
           <p class="eyebrow">Bewertung</p>
           <h2>Abgabe auswählen</h2>
           <p>Wähle links eine abgegebene Prüfung aus, um die Bewertung zu starten.</p>
@@ -344,6 +349,8 @@ import { aiConnectionFallbackMessage, type AiConnectionTestSource } from '@share
 import type { AiSettingsStatus, SubmissionDetails } from '@shared/ipc'
 import type { AiCorrectionDraft, Correction, InlineComment } from '@shared/schemas'
 import { api } from '../api'
+import { requiresCloudAuth } from '../cloudAuth'
+import { type AppBreadcrumbItem, withHomeIcon } from '../ui/breadcrumbs'
 import { renderTiptapHtml } from '../utils/renderTiptap'
 
 type SubmittedItem = {
@@ -389,6 +396,7 @@ const aiBusy = ref(false)
 const aiNotice = ref('')
 const aiConnectionMessage = ref('')
 const aiConnectionOk = ref(false)
+const cloudAiDisabled = requiresCloudAuth()
 const effectiveAiSource = computed(() =>
   aiSettings.value.source ?? (aiSettings.value.configured ? 'stored' : null)
 )
@@ -409,6 +417,17 @@ const gradedSubmissionCount = computed(
 const nextOpenSubmission = computed(
   () => submittedItems.value.find((item) => item.scorePoints === null) ?? submittedItems.value[0] ?? null
 )
+const listBreadcrumbItems: AppBreadcrumbItem[] = [
+  { label: 'Home', to: { name: 'home' } },
+  { label: 'Prüfungen', to: { name: 'exams' } },
+  { label: 'Bewertung' }
+]
+const detailBreadcrumbItems = computed<AppBreadcrumbItem[]>(() => [
+  { label: 'Home', to: { name: 'home' } },
+  { label: 'Prüfungen', to: { name: 'exams' } },
+  { label: 'Bewertung', to: { name: 'correction' } },
+  { label: submission.value?.examTitle ?? 'Abgabe' }
+])
 const selectedAiDraft = computed(
   () => aiDrafts.value.find((draft) => draft.status === 'draft') ?? null
 )
@@ -419,11 +438,13 @@ const storedKeyOverridesEnvironment = computed(
   () => effectiveAiSource.value === 'stored' && Boolean(aiSettings.value.environmentAvailable)
 )
 const aiStatusTitle = computed(() => {
+  if (cloudAiDisabled) return 'Cloud-KI noch nicht freigeschaltet'
   if (effectiveAiSource.value === 'stored') return 'OpenAI-Key gespeichert'
   if (effectiveAiSource.value === 'environment') return 'Entwicklungs-Key aktiv'
   return 'OpenAI-Key fehlt'
 })
 const aiStatusDescription = computed(() => {
+  if (cloudAiDisabled) return 'KI-Korrektur ist in der Cloud-Version sichtbar, aber noch deaktiviert.'
   if (effectiveAiSource.value === 'stored') return 'KI-Korrekturen nutzen den lokal gespeicherten App-Key.'
   if (effectiveAiSource.value === 'environment') return 'Der Key kommt aus deiner lokalen .env-Datei.'
   return 'Richte einen eigenen OpenAI-Key ein, bevor KI-Korrekturen gestartet werden.'
@@ -631,6 +652,10 @@ async function testEnvironmentConnection(): Promise<void> {
 
 async function generateAiDraft(): Promise<void> {
   if (!submission.value) return
+  if (cloudAiDisabled) {
+    actionError.value = 'KI-Korrektur ist in der Cloud-Version noch nicht freigeschaltet.'
+    return
+  }
   actionError.value = ''
   aiNotice.value = ''
   aiBusy.value = true

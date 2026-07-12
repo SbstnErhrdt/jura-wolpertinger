@@ -162,11 +162,12 @@ describe('AppServices', () => {
     expect(tableExists(services.db, 'ai_correction_drafts')).toBe(true)
     expect(tableExists(services.db, 'learning_tasks')).toBe(true)
     expect(tableExists(services.db, 'ai_settings')).toBe(true)
+    expectLearningTables(services.db)
     expect(services.listFolders()).toEqual([expect.objectContaining({ id: folderId, userId: currentUser.id })])
     expect(services.listExams()).toEqual([expect.objectContaining({ id: examId, userId: currentUser.id })])
   })
 
-  it('migrates legacy v1 databases to schema 3 with AI tables and metadata columns', async () => {
+  it('migrates legacy v1 databases to current schema with AI and learning tables', async () => {
     services.close()
     await rm(dataDir, { recursive: true, force: true })
     dataDir = await mkdtemp(join(tmpdir(), 'jura-services-v1-'))
@@ -174,16 +175,17 @@ describe('AppServices', () => {
 
     services = new AppServices(dataDir)
 
-    expect(schemaVersion(services.db)).toBe(3)
+    expect(schemaVersion(services.db)).toBe(DATABASE_SCHEMA_VERSION)
     expect(columnExists(services.db, 'exams', 'user_id')).toBe(true)
     expect(columnExists(services.db, 'exams', 'legal_area')).toBe(true)
     expect(columnExists(services.db, 'attachments', 'role')).toBe(true)
     expect(tableExists(services.db, 'ai_correction_drafts')).toBe(true)
     expect(tableExists(services.db, 'learning_tasks')).toBe(true)
     expect(tableExists(services.db, 'ai_settings')).toBe(true)
+    expectLearningTables(services.db)
   })
 
-  it('migrates legacy v2 databases to schema 3 with AI tables and metadata columns', async () => {
+  it('migrates legacy v2 databases to current schema with AI and learning tables', async () => {
     services.close()
     await rm(dataDir, { recursive: true, force: true })
     dataDir = await mkdtemp(join(tmpdir(), 'jura-services-v2-'))
@@ -191,12 +193,13 @@ describe('AppServices', () => {
 
     services = new AppServices(dataDir)
 
-    expect(schemaVersion(services.db)).toBe(3)
+    expect(schemaVersion(services.db)).toBe(DATABASE_SCHEMA_VERSION)
     expect(columnExists(services.db, 'exams', 'legal_area')).toBe(true)
     expect(columnExists(services.db, 'attachments', 'role')).toBe(true)
     expect(tableExists(services.db, 'ai_correction_drafts')).toBe(true)
     expect(tableExists(services.db, 'learning_tasks')).toBe(true)
     expect(tableExists(services.db, 'ai_settings')).toBe(true)
+    expectLearningTables(services.db)
   })
 
   it('isolates local data per user and stores onboarding status per user', () => {
@@ -224,6 +227,52 @@ describe('AppServices', () => {
     expect(services.listExams()).toEqual([expect.objectContaining({ id: secondExam.id, userId: secondUser.id })])
   })
 
+  it('returns paginated exam lists after applying folder, status and search filters', () => {
+    const targetFolder = services.createFolder('Zivilrecht')
+    const otherFolder = services.createFolder('Strafrecht')
+    for (const title of [
+      'Alpha Anspruch',
+      'Beta Anspruch',
+      'Gamma Anspruch',
+      'Kappa Anspruch',
+      'Lambda Anspruch',
+      'Mu Anspruch',
+      'Nu Anspruch',
+      'Pi Anspruch',
+      'Rho Anspruch',
+      'Sigma Anspruch',
+      'Tau Anspruch'
+    ]) {
+      services.createExam({ title, folderId: targetFolder.id, tags: ['zivil'] })
+    }
+    const archived = services.createExam({ title: 'Delta Anspruch', folderId: targetFolder.id, tags: ['zivil'] })
+    services.createExam({ title: 'Omega Anspruch', folderId: otherFolder.id, tags: ['straf'] })
+    services.trashExam(archived.id)
+
+    const firstPage = services.listExamsPage({
+      folderId: targetFolder.id,
+      status: 'active',
+      search: 'anspruch',
+      sort: 'title',
+      page: 1,
+      pageSize: 10
+    })
+    const secondPage = services.listExamsPage({
+      folderId: targetFolder.id,
+      status: 'active',
+      search: 'anspruch',
+      sort: 'title',
+      page: 2,
+      pageSize: 10
+    })
+
+    expect(firstPage).toMatchObject({ total: 11, page: 1, pageSize: 10, pageCount: 2 })
+    expect(firstPage.items).toHaveLength(10)
+    expect(firstPage.items[0].title).toBe('Alpha Anspruch')
+    expect(secondPage).toMatchObject({ total: 11, page: 2, pageSize: 10, pageCount: 2 })
+    expect(secondPage.items.map((exam) => exam.title)).toEqual(['Tau Anspruch'])
+  })
+
   it('renames the current user without changing their workspace', () => {
     const user = services.getCurrentUser()
     const exam = services.createExam({ title: 'Nutzername Klausur' })
@@ -235,6 +284,161 @@ describe('AppServices', () => {
     expect(services.getCurrentUser().displayName).toBe('Sebastian')
     expect(services.listExams()).toEqual([expect.objectContaining({ id: exam.id, userId: user.id })])
     expect(services.updateUser({ id: user.id, displayName: ' ' }).displayName).toBe('Lokaler Nutzer')
+  })
+
+  it('creates flashcards, returns due review cards and records spaced repetition ratings', () => {
+    const dashboardBefore = services.getLearningDashboard()
+    expect(dashboardBefore.totalCards).toBe(0)
+
+    const collection = services.createLearningCollection({
+      name: 'Strafrecht AT',
+      subject: 'Strafrecht',
+      source: 'Test'
+    })
+    const card = services.createLearningCard({
+      collectionId: collection.id,
+      title: 'Rücktritt',
+      frontMarkdown: 'Wann ist ein Rücktritt möglich?',
+      backMarkdown: 'Nach § 24 StGB.',
+      tags: ['strafrecht', 'rücktritt']
+    })
+
+    expect(services.listLearningCollections()).toEqual([
+      expect.objectContaining({ id: collection.id, cardCount: 1, dueCount: 1 })
+    ])
+    expect(services.listLearningCards(collection.id)).toEqual([
+      expect.objectContaining({ id: card.id, tags: ['rücktritt', 'strafrecht'] })
+    ])
+    expect(services.getReviewBatch({ limit: 5 })).toEqual([
+      expect.objectContaining({ id: card.id, lastRating: null, reps: 0 })
+    ])
+
+    const again = services.recordReview({ cardId: card.id, rating: 1, elapsedMs: 1000 })
+    expect(again.event.rating).toBe(1)
+    expect(again.intervalLabel).toBe('gleich nochmal')
+    expect(services.getReviewBatch({ limit: 5 })).toEqual([])
+
+    const dashboardAfter = services.getLearningDashboard()
+    expect(dashboardAfter.totalCards).toBe(1)
+    expect(dashboardAfter.learnedToday).toBe(true)
+  })
+
+  it('returns paginated learning cards after applying collection and search filters', () => {
+    const targetCollection = services.createLearningCollection({
+      name: 'Zivilrecht AT',
+      subject: 'Zivilrecht'
+    })
+    const otherCollection = services.createLearningCollection({
+      name: 'Strafrecht AT',
+      subject: 'Strafrecht'
+    })
+    for (const title of [
+      'Alpha Anspruch',
+      'Beta Anspruch',
+      'Gamma Anspruch',
+      'Kappa Anspruch',
+      'Lambda Anspruch',
+      'Mu Anspruch',
+      'Nu Anspruch',
+      'Pi Anspruch',
+      'Rho Anspruch',
+      'Sigma Anspruch',
+      'Tau Anspruch'
+    ]) {
+      services.createLearningCard({
+        collectionId: targetCollection.id,
+        title,
+        frontMarkdown: 'Anspruchsgrundlage finden',
+        backMarkdown: 'Norm sauber zitieren.',
+        tags: ['zivil']
+      })
+    }
+    services.createLearningCard({
+      collectionId: otherCollection.id,
+      title: 'Omega Anspruch',
+      frontMarkdown: 'Strafrechtliche Prüfung',
+      backMarkdown: 'Nicht Teil der Ziel-Sammlung.',
+      tags: ['straf']
+    })
+
+    const page = services.listLearningCardsPage({
+      collectionId: targetCollection.id,
+      search: 'anspruch',
+      sort: 'title',
+      page: 2,
+      pageSize: 10
+    })
+
+    expect(page).toMatchObject({ total: 11, page: 2, pageSize: 10, pageCount: 2 })
+    expect(page.items.map((card) => card.title)).toEqual(['Tau Anspruch'])
+  })
+
+  it('exports and imports flashcard collections as portable JSON', async () => {
+    const collection = services.createLearningCollection({
+      name: 'Strafrecht AT',
+      description: 'Examensrelevante Grundlagen',
+      subject: 'Strafrecht',
+      source: 'Eigene Karten'
+    })
+    services.createLearningCard({
+      collectionId: collection.id,
+      title: 'Rücktritt',
+      frontMarkdown: 'Wann ist ein Rücktritt möglich?',
+      backMarkdown: 'Nach § 24 StGB.',
+      tags: ['strafrecht', 'rücktritt']
+    })
+
+    const exported = services.exportLearningDecks()
+    const payload = JSON.parse(exported)
+
+    expect(payload).toEqual({
+      format: 'jura-wolpertinger.learning-export',
+      formatVersion: 1,
+      exportedAt: expect.any(String),
+      collections: [
+        {
+          externalId: collection.id,
+          name: 'Strafrecht AT',
+          description: 'Examensrelevante Grundlagen',
+          subject: 'Strafrecht',
+          source: 'Eigene Karten',
+          cards: [
+            {
+              externalId: expect.any(String),
+              title: 'Rücktritt',
+              frontMarkdown: 'Wann ist ein Rücktritt möglich?',
+              backMarkdown: 'Nach § 24 StGB.',
+              tags: ['rücktritt', 'strafrecht']
+            }
+          ]
+        }
+      ]
+    })
+
+    services.close()
+    const importedDataDir = await mkdtemp(join(tmpdir(), 'jura-services-learning-import-'))
+    const importedServices = new AppServices(importedDataDir)
+    try {
+      const result = importedServices.importLearningDecksFromJson(exported)
+      const secondResult = importedServices.importLearningDecksFromJson(exported)
+
+      expect(result).toEqual({ collectionsImported: 1, cardsImported: 1, cardsSkipped: 0 })
+      expect(secondResult).toEqual({ collectionsImported: 0, cardsImported: 0, cardsSkipped: 1 })
+      expect(importedServices.listLearningCollections()).toEqual([
+        expect.objectContaining({ name: 'Strafrecht AT', cardCount: 1, dueCount: 1 })
+      ])
+      expect(importedServices.listLearningCards()).toEqual([
+        expect.objectContaining({
+          title: 'Rücktritt',
+          frontMarkdown: 'Wann ist ein Rücktritt möglich?',
+          backMarkdown: 'Nach § 24 StGB.',
+          tags: ['rücktritt', 'strafrecht']
+        })
+      ])
+    } finally {
+      importedServices.close()
+      await rm(importedDataDir, { recursive: true, force: true })
+    }
   })
 
   it('creates, moves, tags, submits and corrects an exam', async () => {
@@ -1157,6 +1361,14 @@ function tableExists(db: Database.Database, table: string): boolean {
 function columnExists(db: Database.Database, table: string, column: string): boolean {
   const rows = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
   return rows.some((row) => row.name === column)
+}
+
+function expectLearningTables(db: Database.Database): void {
+  expect(tableExists(db, 'learning_collections')).toBe(true)
+  expect(tableExists(db, 'learning_cards')).toBe(true)
+  expect(tableExists(db, 'learning_card_tags')).toBe(true)
+  expect(tableExists(db, 'learning_review_events')).toBe(true)
+  expect(tableExists(db, 'learning_card_schedules')).toBe(true)
 }
 
 function seedLegacyDatabase(targetDataDir: string, version: 1 | 2): void {

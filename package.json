@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "electron-rebuild -f -w better-sqlite3 && electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
+    "build:web:production": "node scripts/verify-production-web-env.mjs && npm run build && node scripts/verify-production-web-build.mjs",
     "build:icons": "node scripts/prepare-icons.mjs",
     "rebuild:native": "electron-rebuild -f -w better-sqlite3",
     "preview": "electron-vite preview",
@@ -26,6 +27,9 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@iconify/vue": "^5.0.1",
+    "@nuxt/ui": "^4.9.0",
+    "@supabase/supabase-js": "^2.110.0",
     "@tiptap/core": "^2.11.5",
     "@tiptap/extension-highlight": "^2.11.5",
     "@tiptap/extension-text-align": "^2.11.5",
@@ -39,12 +43,16 @@
     "jszip": "^3.10.1",
     "lucide-vue-next": "^0.468.0",
     "pinia": "^2.3.0",
+    "reka-ui": "^2.10.1",
+    "tailwindcss": "^4.3.2",
     "vue": "^3.5.13",
     "vue-router": "^4.5.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
     "@electron/rebuild": "^3.7.1",
+    "@iconify-json/lucide": "^1.2.116",
+    "@nuxt/icon": "^2.3.1",
     "@playwright/test": "^1.49.1",
     "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^22.10.2",

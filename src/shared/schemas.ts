@@ -43,6 +43,12 @@ export const improvementCategorySchema = z.enum([
 ])
 export const learningTaskStatusSchema = z.enum(['open', 'in_progress', 'done'])
 export const learningTaskPrioritySchema = z.enum(['low', 'medium', 'high'])
+export const reviewRatingSchema = z.union([
+  z.literal(1),
+  z.literal(2),
+  z.literal(3),
+  z.literal(4)
+])
 
 const nullableDefaultSchema = <Schema extends z.ZodTypeAny>(schema: Schema) =>
   z.preprocess((value) => value ?? null, schema.nullable())
@@ -252,6 +258,118 @@ export const learningTaskSchema = z.object({
   updatedAt: isoDateSchema
 })
 
+export const learningCollectionSchema = z.object({
+  schemaVersion: z.literal(1),
+  id: uuidSchema,
+  userId: uuidSchema,
+  name: z.string().min(1),
+  description: z.string(),
+  subject: z.string().nullable(),
+  source: z.string().nullable(),
+  cardCount: z.number().int().nonnegative(),
+  dueCount: z.number().int().nonnegative(),
+  createdAt: isoDateSchema,
+  updatedAt: isoDateSchema
+})
+
+export const learningCardSchema = z.object({
+  schemaVersion: z.literal(1),
+  id: uuidSchema,
+  userId: uuidSchema,
+  collectionId: uuidSchema,
+  externalId: z.string().nullable(),
+  title: z.string().min(1),
+  frontMarkdown: z.string().min(1),
+  backMarkdown: z.string().min(1),
+  tags: z.array(z.string()),
+  isArchived: z.boolean(),
+  dueAt: isoDateSchema,
+  lastRating: reviewRatingSchema.nullable(),
+  reps: z.number().int().nonnegative(),
+  lapses: z.number().int().nonnegative(),
+  createdAt: isoDateSchema,
+  updatedAt: isoDateSchema
+})
+
+export const reviewCardSchema = learningCardSchema
+
+export const learningExportCardSchema = z.object({
+  externalId: z.string().min(1),
+  title: z.string().min(1),
+  frontMarkdown: z.string().min(1),
+  backMarkdown: z.string().min(1),
+  tags: z.array(z.string())
+})
+
+export const learningExportCollectionSchema = z.object({
+  externalId: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string(),
+  subject: z.string().nullable(),
+  source: z.string().nullable(),
+  cards: z.array(learningExportCardSchema)
+})
+
+export const learningExportFileSchema = z.object({
+  format: z.literal('jura-wolpertinger.learning-export'),
+  formatVersion: z.literal(1),
+  exportedAt: isoDateSchema,
+  collections: z.array(learningExportCollectionSchema)
+})
+
+export const learningImportResultSchema = z.object({
+  collectionsImported: z.number().int().nonnegative(),
+  cardsImported: z.number().int().nonnegative(),
+  cardsSkipped: z.number().int().nonnegative()
+})
+
+export const learningReviewEventSchema = z.object({
+  schemaVersion: z.literal(1),
+  id: uuidSchema,
+  userId: uuidSchema,
+  cardId: uuidSchema,
+  rating: reviewRatingSchema,
+  reviewedAt: isoDateSchema,
+  elapsedMs: z.number().int().nonnegative().nullable()
+})
+
+export const learningDashboardSchema = z.object({
+  dueCount: z.number().int().nonnegative(),
+  totalCards: z.number().int().nonnegative(),
+  collectionCount: z.number().int().nonnegative(),
+  streakDays: z.number().int().nonnegative(),
+  freeDaysRemainingThisWeek: z.number().int().min(0).max(2),
+  learnedToday: z.boolean()
+})
+
+export const syncStatusSchema = z.object({
+  connected: z.boolean(),
+  remoteUserId: z.string().nullable(),
+  remoteEmail: z.string().nullable(),
+  lastSyncedAt: isoDateSchema.nullable(),
+  lastSyncSummary: z.string().nullable()
+})
+
+export const syncAuthInputSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(1)
+})
+
+export const syncRunActionSchema = z.enum(['upload', 'download', 'merge'])
+
+export const syncRunInputSchema = z.object({
+  action: syncRunActionSchema
+})
+
+export const syncRunResultSchema = z.object({
+  action: syncRunActionSchema,
+  syncedAt: isoDateSchema,
+  summary: z.string(),
+  uploadedFiles: z.number().int().nonnegative(),
+  downloadedFiles: z.number().int().nonnegative(),
+  tableCounts: z.record(z.number().int().nonnegative())
+})
+
 export const attachmentSchema = z.object({
   schemaVersion: z.literal(1),
   id: uuidSchema,
@@ -275,6 +393,7 @@ export type AiConfidence = z.infer<typeof aiConfidenceSchema>
 export type ImprovementCategory = z.infer<typeof improvementCategorySchema>
 export type LearningTaskStatus = z.infer<typeof learningTaskStatusSchema>
 export type LearningTaskPriority = z.infer<typeof learningTaskPrioritySchema>
+export type ReviewRating = z.infer<typeof reviewRatingSchema>
 export type User = z.infer<typeof userSchema>
 export type Folder = z.infer<typeof folderSchema>
 export type ExamListItem = z.infer<typeof examListItemSchema>
@@ -288,6 +407,18 @@ export type InlineComment = z.infer<typeof inlineCommentSchema>
 export type Correction = z.infer<typeof correctionSchema>
 export type AiCorrectionDraft = z.infer<typeof aiCorrectionDraftSchema>
 export type LearningTask = z.infer<typeof learningTaskSchema>
+export type LearningCollection = z.infer<typeof learningCollectionSchema>
+export type LearningCard = z.infer<typeof learningCardSchema>
+export type ReviewCard = z.infer<typeof reviewCardSchema>
+export type LearningExportFile = z.infer<typeof learningExportFileSchema>
+export type LearningImportResult = z.infer<typeof learningImportResultSchema>
+export type LearningReviewEvent = z.infer<typeof learningReviewEventSchema>
+export type LearningDashboard = z.infer<typeof learningDashboardSchema>
+export type SyncStatus = z.infer<typeof syncStatusSchema>
+export type SyncAuthInput = z.infer<typeof syncAuthInputSchema>
+export type SyncRunAction = z.infer<typeof syncRunActionSchema>
+export type SyncRunInput = z.infer<typeof syncRunInputSchema>
+export type SyncRunResult = z.infer<typeof syncRunResultSchema>
 export type ImprovementSuggestion = z.infer<typeof improvementSuggestionSchema>
 export type AiInlineCommentSuggestion = z.infer<typeof aiInlineCommentSuggestionSchema>
 export type Attachment = z.infer<typeof attachmentSchema>

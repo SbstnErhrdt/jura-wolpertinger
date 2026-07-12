@@ -14,10 +14,18 @@ import {
 import electronUpdater from 'electron-updater'
 import type {
   AddInlineCommentInput,
+  CreateLearningCardInput,
+  CreateLearningCollectionInput,
   CreateExamInput,
   GenerateAiCorrectionInput,
+  GetReviewBatchInput,
+  ListExamsInput,
+  ListLearningCardsInput,
+  RecordReviewInput,
   SaveRevisionInput,
   SaveAiSettingsInput,
+  SyncAuthInput,
+  SyncRunInput,
   TestAiConnectionInput,
   TrashFolderInput,
   UpdateCorrectionInput,
@@ -28,6 +36,7 @@ import type { AttachmentRole, LearningTask } from '@shared/schemas'
 import { AppServices } from './services/services'
 import { seedDemoDataIfEnabled } from './services/demoData'
 import { exportExamPdf } from './services/pdf'
+import { resolveRuntimeDockIconPath } from './appIdentity'
 
 let mainWindow: BrowserWindow | null = null
 let splashWindow: BrowserWindow | null = null
@@ -49,15 +58,6 @@ function resolveAssetPath(...segments: string[]): string {
   return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0]
 }
 
-function resolveAppIconPath(): string {
-  const candidates =
-    process.platform === 'darwin'
-      ? [resolveAssetPath('build', 'icon.icns'), resolveAssetPath('build', 'icon.png'), resolveAssetPath('assets', 'icon.png')]
-      : [resolveAssetPath('build', 'icon.png'), resolveAssetPath('assets', 'icon.png')]
-
-  return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0]
-}
-
 function resolveDisplayIconPath(): string {
   const candidates = [resolveAssetPath('build', 'icon.png'), resolveAssetPath('assets', 'icon.png')]
   return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0]
@@ -66,9 +66,12 @@ function resolveDisplayIconPath(): string {
 function configureApplicationIdentity(): void {
   app.setName(APP_NAME)
 
-  if (process.platform !== 'darwin') return
-
-  const iconPath = resolveAppIconPath()
+  const iconPath = resolveRuntimeDockIconPath({
+    platform: process.platform,
+    isPackaged: app.isPackaged,
+    resolveAssetPath
+  })
+  if (!iconPath) return
   const icon = nativeImage.createFromPath(iconPath)
   if (!icon.isEmpty()) {
     app.dock.setIcon(icon)
@@ -198,6 +201,7 @@ function registerIpc(): void {
   ipcMain.handle('folders:restore', (_event, folderId: string) => services.restoreFolder(folderId))
 
   ipcMain.handle('exams:list', () => services.listExams())
+  ipcMain.handle('exams:listPage', (_event, input?: ListExamsInput) => services.listExamsPage(input))
   ipcMain.handle('exams:create', (_event, input: CreateExamInput) => services.createExam(input))
   ipcMain.handle('exams:get', (_event, id: string) => services.getExam(id))
   ipcMain.handle('exams:update', (_event, input: UpdateExamInput) => services.updateExam(input))
@@ -238,6 +242,31 @@ function registerIpc(): void {
     'learningTasks:updateStatus',
     (_event, taskId: string, status: LearningTask['status']) =>
       services.updateLearningTaskStatus(taskId, status)
+  )
+  ipcMain.handle('learning:dashboard', () => services.getLearningDashboard())
+  ipcMain.handle('learning:exportDecksJson', () => services.exportLearningDecks())
+  ipcMain.handle('learning:importDecksJson', (_event, json: string) => services.importLearningDecksFromJson(json))
+  ipcMain.handle('learning:collections', () => services.listLearningCollections())
+  ipcMain.handle('learning:createCollection', (_event, input: CreateLearningCollectionInput) =>
+    services.createLearningCollection(input)
+  )
+  ipcMain.handle('learning:cards', (_event, collectionId?: string | null) =>
+    services.listLearningCards(collectionId ?? null)
+  )
+  ipcMain.handle('learning:cardsPage', (_event, input?: ListLearningCardsInput) =>
+    services.listLearningCardsPage(input)
+  )
+  ipcMain.handle('learning:createCard', (_event, input: CreateLearningCardInput) =>
+    services.createLearningCard(input)
+  )
+  ipcMain.handle('learning:updateCard', (_event, input: CreateLearningCardInput & { id: string }) =>
+    services.updateLearningCard(input)
+  )
+  ipcMain.handle('learning:reviewBatch', (_event, input?: GetReviewBatchInput) =>
+    services.getReviewBatch(input)
+  )
+  ipcMain.handle('learning:recordReview', (_event, input: RecordReviewInput) =>
+    services.recordReview(input)
   )
 
   ipcMain.handle('attachments:add', async (_event, examId: string, role: AttachmentRole = 'other') => {
@@ -299,6 +328,10 @@ function registerIpc(): void {
   ipcMain.handle('comments:add', (_event, input: AddInlineCommentInput) =>
     services.addInlineComment(input)
   )
+  ipcMain.handle('sync:status', () => services.getSyncStatus())
+  ipcMain.handle('sync:connect', (_event, input: SyncAuthInput) => services.connectSyncAccount(input))
+  ipcMain.handle('sync:disconnect', () => services.disconnectSyncAccount())
+  ipcMain.handle('sync:run', (_event, input: SyncRunInput) => services.runSync(input))
 }
 
 app.whenReady().then(() => {
