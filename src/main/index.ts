@@ -288,6 +288,9 @@ function registerIpc(): void {
   ipcMain.handle('learning:updateCard', (_event, input: CreateLearningCardInput & { id: string }) =>
     services.updateLearningCard(input)
   )
+  ipcMain.handle('learning:deleteCard', (_event, input: { id: string }) =>
+    services.deleteLearningCard(input)
+  )
   ipcMain.handle('learning:reviewBatch', (_event, input?: GetReviewBatchInput) =>
     services.getReviewBatch(input)
   )

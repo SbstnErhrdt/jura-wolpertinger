@@ -178,6 +178,10 @@ export type UpdateLearningCardInput = CreateLearningCardInput & {
   id: string
 }
 
+export type DeleteLearningCardInput = {
+  id: string
+}
+
 export type ListLearningCardsInput = {
   collectionId?: string | null
   page?: number
@@ -275,6 +279,7 @@ export type AppApi = {
   listLearningCardsPage(input?: ListLearningCardsInput): Promise<PaginatedResult<LearningCard>>
   createLearningCard(input: CreateLearningCardInput): Promise<LearningCard>
   updateLearningCard(input: UpdateLearningCardInput): Promise<LearningCard>
+  deleteLearningCard(input: DeleteLearningCardInput): Promise<void>
   getReviewBatch(input?: GetReviewBatchInput): Promise<ReviewCard[]>
   recordReview(input: RecordReviewInput): Promise<RecordReviewResult>
   addAttachment(examId: string, role?: AttachmentRole): Promise<Attachment | null>

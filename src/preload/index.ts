@@ -78,6 +78,7 @@ const api: AppApi = {
   createLearningCard: (input: CreateLearningCardInput) => ipcRenderer.invoke('learning:createCard', input),
   updateLearningCard: (input: CreateLearningCardInput & { id: string }) =>
     ipcRenderer.invoke('learning:updateCard', input),
+  deleteLearningCard: (input) => ipcRenderer.invoke('learning:deleteCard', input),
   getReviewBatch: (input?: GetReviewBatchInput) => ipcRenderer.invoke('learning:reviewBatch', input),
   recordReview: (input: RecordReviewInput) => ipcRenderer.invoke('learning:recordReview', input),
   addAttachment: (examId: string, role?: AttachmentRole) =>

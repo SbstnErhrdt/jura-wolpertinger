@@ -311,7 +311,7 @@ erDiagram
 | Nutzer | `users` | lokale, Demo- und später Remote-verknüpfte Nutzer | `current_user_id` liegt in `meta`; Onboarding-Status ist pro Nutzer |
 | Organisation | `folders` | Ordnerbaum und Papierkorb für Ordner | `trashed_at` ist Soft-Delete |
 | Prüfung | `exams` | Hauptobjekt mit Titel, Status, Tags, Notizen und Metadaten | `legal_area`, `exam_type`, `source_name`, `source_url` beschreiben die Prüfung; `status = archived` ist Papierkorb |
-| Inhalt | `exam_revisions` | unveränderliche Editor-Versionen | Autosave und manuelles Speichern erzeugen neue Zeilen |
+| Inhalt | `exam_revisions` | unveränderliche Editor-Versionen | Autosave und manuelles Speichern erzeugen neue Zeilen; alte Autosaves werden ausgedünnt, aktuelle, initiale, manuelle und abgegebene Revisionen bleiben erhalten |
 | Abgabe | `submissions` | Snapshot einer Revision | referenziert eine Revision und bleibt unverändert |
 | Bewertung | `corrections` | Gesamtbewertung und Bewertungskommentar | Punkte werden per Zod auf `0-18` in `0.5` Schritten validiert |
 | Inline-Kommentare | `inline_comments` | Kommentare auf Textauswahl | Anker speichern ProseMirror-Positionen plus Kontext |

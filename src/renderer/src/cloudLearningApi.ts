@@ -1,16 +1,28 @@
 import type { SupabaseClient, User as SupabaseUser } from '@supabase/supabase-js'
 import type {
+  AddInlineCommentInput,
   AppApi,
   CreateLearningCardInput,
   CreateLearningCollectionInput,
+  CreateExamInput,
+  DeleteLearningCardInput,
   GetReviewBatchInput,
   ListLearningCardsInput,
   PaginatedResult,
   RecordReviewInput,
   RecordReviewResult,
+  TrashFolderInput,
+  UpdateCorrectionInput,
+  UpdateExamInput,
+  UpdateFolderInput,
   UpdateLearningCardInput
 } from '@shared/ipc'
 import type {
+  Attachment,
+  Correction,
+  ExamRevision,
+  Folder,
+  InlineComment,
   LearningCard,
   LearningCollection,
   LearningDashboard,
@@ -18,6 +30,7 @@ import type {
   LearningReviewEvent,
   ReviewCard,
   ReviewRating,
+  Submission,
   User
 } from '@shared/schemas'
 import {
@@ -85,6 +98,30 @@ type CloudReviewBatchRow = {
 }
 
 const CLOUD_QUERY_CHUNK_SIZE = 50
+const BROWSER_STORE_KEY = 'jura-wolpertinger-browser-dev-v1'
+const CLOUD_BROWSER_SNAPSHOT_MARKER_KEY = 'jura-wolpertinger-cloud-browser-snapshot-v1'
+
+type CloudBrowserStore = {
+  users: User[]
+  currentUserId: string | null
+  folders: Folder[]
+  exams: Array<Record<string, unknown>>
+  revisions: ExamRevision[]
+  submissions: Submission[]
+  attachments: Attachment[]
+  corrections: Correction[]
+  inlineComments?: InlineComment[]
+  aiSettings: unknown | null
+  aiCorrectionDrafts: unknown[]
+  learningTasks: unknown[]
+  learningCollections: unknown[]
+  learningCards: unknown[]
+  learningReviewEvents: unknown[]
+  learningSchedules: unknown[]
+}
+
+let cloudBrowserSnapshotUploadPromise: Promise<void> | null = null
+let cloudBrowserSnapshotUploadQueued = false
 
 export function createCloudLearningApi(localApi: AppApi): AppApi {
   return {
@@ -120,6 +157,108 @@ export function createCloudLearningApi(localApi: AppApi): AppApi {
     async resetTour() {
       const { user } = await requireCloudContext()
       return cloudUserFromSupabaseUser(user)
+    },
+    async listFolders() {
+      await ensureCloudBrowserWorkspaceLoaded()
+      return localApi.listFolders()
+    },
+    async createFolder(name: string, parentId?: string | null) {
+      await ensureCloudBrowserWorkspaceLoaded()
+      const folder = await localApi.createFolder(name, parentId)
+      queueCloudBrowserSnapshotUpload()
+      return folder
+    },
+    async updateFolder(input: UpdateFolderInput) {
+      await ensureCloudBrowserWorkspaceLoaded()
+      const folder = await localApi.updateFolder(input)
+      queueCloudBrowserSnapshotUpload()
+      return folder
+    },
+    async trashFolder(input: TrashFolderInput) {
+      await ensureCloudBrowserWorkspaceLoaded()
+      const folder = await localApi.trashFolder(input)
+      queueCloudBrowserSnapshotUpload()
+      return folder
+    },
+    async restoreFolder(folderId: string) {
+      await ensureCloudBrowserWorkspaceLoaded()
+      const folder = await localApi.restoreFolder(folderId)
+      queueCloudBrowserSnapshotUpload()
+      return folder
+    },
+    async listExams() {
+      await ensureCloudBrowserWorkspaceLoaded()
+      return localApi.listExams()
+    },
+    async listExamsPage(input = {}) {
+      await ensureCloudBrowserWorkspaceLoaded()
+      return localApi.listExamsPage(input)
+    },
+    async createExam(input: CreateExamInput) {
+      await ensureCloudBrowserWorkspaceLoaded()
+      const exam = await localApi.createExam(input)
+      queueCloudBrowserSnapshotUpload()
+      return exam
+    },
+    async getExam(id: string) {
+      await ensureCloudBrowserWorkspaceLoaded()
+      return localApi.getExam(id)
+    },
+    async updateExam(input: UpdateExamInput) {
+      await ensureCloudBrowserWorkspaceLoaded()
+      const exam = await localApi.updateExam(input)
+      queueCloudBrowserSnapshotUpload()
+      return exam
+    },
+    async trashExam(id: string) {
+      await ensureCloudBrowserWorkspaceLoaded()
+      const exam = await localApi.trashExam(id)
+      queueCloudBrowserSnapshotUpload()
+      return exam
+    },
+    async restoreExam(id: string) {
+      await ensureCloudBrowserWorkspaceLoaded()
+      const exam = await localApi.restoreExam(id)
+      queueCloudBrowserSnapshotUpload()
+      return exam
+    },
+    async saveRevision(input) {
+      await ensureCloudBrowserWorkspaceLoaded()
+      const revision = await localApi.saveRevision(input)
+      queueCloudBrowserSnapshotUpload()
+      return revision
+    },
+    async submitExam(examId: string) {
+      await ensureCloudBrowserWorkspaceLoaded()
+      const submission = await localApi.submitExam(examId)
+      queueCloudBrowserSnapshotUpload()
+      return submission
+    },
+    async getSubmission(id: string) {
+      await ensureCloudBrowserWorkspaceLoaded()
+      return localApi.getSubmission(id)
+    },
+    async listAnalyticsEntries() {
+      await ensureCloudBrowserWorkspaceLoaded()
+      return localApi.listAnalyticsEntries()
+    },
+    async createCorrection(submissionId: string) {
+      await ensureCloudBrowserWorkspaceLoaded()
+      const correction = await localApi.createCorrection(submissionId)
+      queueCloudBrowserSnapshotUpload()
+      return correction
+    },
+    async updateCorrection(input: UpdateCorrectionInput) {
+      await ensureCloudBrowserWorkspaceLoaded()
+      const correction = await localApi.updateCorrection(input)
+      queueCloudBrowserSnapshotUpload()
+      return correction
+    },
+    async addInlineComment(input: AddInlineCommentInput) {
+      await ensureCloudBrowserWorkspaceLoaded()
+      const comment = await localApi.addInlineComment(input)
+      queueCloudBrowserSnapshotUpload()
+      return comment
     },
     async getLearningDashboard() {
       const [summary, reviewDays] = await Promise.all([
@@ -224,6 +363,9 @@ export function createCloudLearningApi(localApi: AppApi): AppApi {
     async updateLearningCard(input: UpdateLearningCardInput) {
       return updateCloudCard(input)
     },
+    async deleteLearningCard(input: DeleteLearningCardInput) {
+      return deleteCloudCard(input)
+    },
     async getReviewBatch(input: GetReviewBatchInput = {}) {
       if (!input.tag) return listCloudReviewBatch(input)
       const cards = await listCloudCards(input.collectionId ?? null)
@@ -298,6 +440,356 @@ function cloudUserFromSupabaseUser(user: SupabaseUser): User {
     createdAt,
     updatedAt: user.updated_at ?? createdAt
   }
+}
+
+async function ensureCloudBrowserWorkspaceLoaded(): Promise<void> {
+  const { client, user } = await requireCloudContext()
+  const cloudUser = cloudUserFromSupabaseUser(user)
+  const existingStore = readCloudBrowserStore()
+  const marker = readCloudBrowserSnapshotMarker()
+
+  if (existingStore && marker?.userId === user.id) {
+    writeCloudBrowserStore(ensureCloudBrowserUser(existingStore, cloudUser))
+    return
+  }
+
+  const { data, error } = await client
+    .from('user_sync_snapshots')
+    .select('payload_json,file_manifest_json,local_user_id,updated_at')
+    .eq('user_id', user.id)
+    .eq('local_user_id', user.id)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) throw error
+
+  const payload = data?.payload_json as { browserStore?: unknown } | null | undefined
+  const snapshotStore = parseCloudBrowserStore(payload?.browserStore)
+  const store = ensureCloudBrowserUser(snapshotStore ?? existingStore ?? createEmptyCloudBrowserStore(), cloudUser)
+  writeCloudBrowserStore(store)
+  writeCloudBrowserSnapshotMarker({
+    userId: user.id,
+    updatedAt: String((data as { updated_at?: unknown } | null)?.updated_at ?? nowIso())
+  })
+}
+
+function queueCloudBrowserSnapshotUpload(): void {
+  if (cloudBrowserSnapshotUploadPromise) {
+    cloudBrowserSnapshotUploadQueued = true
+    return
+  }
+  cloudBrowserSnapshotUploadPromise = uploadCloudBrowserSnapshot()
+    .catch((error: unknown) => {
+      console.error('Online-Sicherung der Klausur ist fehlgeschlagen.', error)
+    })
+    .finally(() => {
+      cloudBrowserSnapshotUploadPromise = null
+      if (cloudBrowserSnapshotUploadQueued) {
+        cloudBrowserSnapshotUploadQueued = false
+        queueCloudBrowserSnapshotUpload()
+      }
+    })
+}
+
+async function uploadCloudBrowserSnapshot(): Promise<void> {
+  const { client, user } = await requireCloudContext()
+  const cloudUser = cloudUserFromSupabaseUser(user)
+  const store = ensureCloudBrowserUser(
+    readCloudBrowserStore() ?? createEmptyCloudBrowserStore(),
+    cloudUser
+  )
+  writeCloudBrowserStore(store)
+
+  const exportedAt = nowIso()
+  const payload = {
+    exportedAt,
+    browserStore: sanitizeCloudBrowserStore(store),
+    tables: buildCloudBrowserSnapshotTables(store, cloudUser)
+  }
+  const { error } = await client
+    .from('user_sync_snapshots')
+    .upsert(
+      {
+        user_id: user.id,
+        local_user_id: user.id,
+        snapshot_version: 1,
+        payload_json: payload,
+        file_manifest_json: []
+      },
+      { onConflict: 'user_id,local_user_id' }
+    )
+  if (error) throw error
+  writeCloudBrowserSnapshotMarker({ userId: user.id, updatedAt: exportedAt })
+}
+
+function readCloudBrowserStore(): CloudBrowserStore | null {
+  try {
+    const raw = localStorage.getItem(BROWSER_STORE_KEY)
+    if (!raw) return null
+    return parseCloudBrowserStore(JSON.parse(raw))
+  } catch {
+    return null
+  }
+}
+
+function writeCloudBrowserStore(store: CloudBrowserStore): void {
+  localStorage.setItem(BROWSER_STORE_KEY, JSON.stringify(store))
+}
+
+function readCloudBrowserSnapshotMarker(): { userId: string; updatedAt: string } | null {
+  try {
+    const raw = localStorage.getItem(CLOUD_BROWSER_SNAPSHOT_MARKER_KEY)
+    if (!raw) return null
+    const marker = JSON.parse(raw) as { userId?: unknown; updatedAt?: unknown }
+    if (typeof marker.userId !== 'string') return null
+    return {
+      userId: marker.userId,
+      updatedAt: typeof marker.updatedAt === 'string' ? marker.updatedAt : ''
+    }
+  } catch {
+    return null
+  }
+}
+
+function writeCloudBrowserSnapshotMarker(marker: { userId: string; updatedAt: string }): void {
+  localStorage.setItem(CLOUD_BROWSER_SNAPSHOT_MARKER_KEY, JSON.stringify(marker))
+}
+
+function parseCloudBrowserStore(value: unknown): CloudBrowserStore | null {
+  if (!value || typeof value !== 'object') return null
+  const record = value as Partial<CloudBrowserStore>
+  return {
+    users: Array.isArray(record.users) ? record.users : [],
+    currentUserId: typeof record.currentUserId === 'string' ? record.currentUserId : null,
+    folders: Array.isArray(record.folders) ? record.folders : [],
+    exams: Array.isArray(record.exams) ? record.exams as Array<Record<string, unknown>> : [],
+    revisions: Array.isArray(record.revisions) ? record.revisions : [],
+    submissions: Array.isArray(record.submissions) ? record.submissions : [],
+    attachments: Array.isArray(record.attachments) ? record.attachments : [],
+    corrections: Array.isArray(record.corrections) ? record.corrections : [],
+    inlineComments: Array.isArray(record.inlineComments) ? record.inlineComments : [],
+    aiSettings: record.aiSettings ?? null,
+    aiCorrectionDrafts: Array.isArray(record.aiCorrectionDrafts) ? record.aiCorrectionDrafts : [],
+    learningTasks: Array.isArray(record.learningTasks) ? record.learningTasks : [],
+    learningCollections: Array.isArray(record.learningCollections) ? record.learningCollections : [],
+    learningCards: Array.isArray(record.learningCards) ? record.learningCards : [],
+    learningReviewEvents: Array.isArray(record.learningReviewEvents) ? record.learningReviewEvents : [],
+    learningSchedules: Array.isArray(record.learningSchedules) ? record.learningSchedules : []
+  }
+}
+
+function createEmptyCloudBrowserStore(): CloudBrowserStore {
+  return {
+    users: [],
+    currentUserId: null,
+    folders: [],
+    exams: [],
+    revisions: [],
+    submissions: [],
+    attachments: [],
+    corrections: [],
+    inlineComments: [],
+    aiSettings: null,
+    aiCorrectionDrafts: [],
+    learningTasks: [],
+    learningCollections: [],
+    learningCards: [],
+    learningReviewEvents: [],
+    learningSchedules: []
+  }
+}
+
+function ensureCloudBrowserUser(store: CloudBrowserStore, cloudUser: User): CloudBrowserStore {
+  const oldUserId = store.currentUserId && store.currentUserId !== cloudUser.id
+    ? store.currentUserId
+    : null
+  const next = {
+    ...store,
+    users: [
+      cloudUser,
+      ...store.users.filter((user) => user.id !== cloudUser.id && user.id !== oldUserId)
+    ],
+    currentUserId: cloudUser.id
+  }
+  if (oldUserId) {
+    reassignCloudBrowserUserId(next, oldUserId, cloudUser.id)
+  }
+  return next
+}
+
+function reassignCloudBrowserUserId(store: CloudBrowserStore, fromUserId: string, toUserId: string): void {
+  const arrays = [
+    store.folders,
+    store.exams,
+    store.revisions,
+    store.submissions,
+    store.attachments,
+    store.corrections,
+    store.inlineComments ?? [],
+    store.learningTasks as Array<Record<string, unknown>>,
+    store.learningCollections as Array<Record<string, unknown>>,
+    store.learningCards as Array<Record<string, unknown>>,
+    store.learningReviewEvents as Array<Record<string, unknown>>,
+    store.learningSchedules as Array<Record<string, unknown>>
+  ]
+  for (const rows of arrays) {
+    for (const row of rows as Array<Record<string, unknown>>) {
+      if (row.userId === fromUserId) row.userId = toUserId
+    }
+  }
+}
+
+function sanitizeCloudBrowserStore(store: CloudBrowserStore): CloudBrowserStore {
+  return {
+    ...store,
+    aiSettings: store.aiSettings
+      ? {
+          provider: 'openai',
+          configured: Boolean((store.aiSettings as { configured?: unknown }).configured),
+          model: String((store.aiSettings as { model?: unknown }).model ?? ''),
+          updatedAt: (store.aiSettings as { updatedAt?: unknown }).updatedAt ?? null
+        }
+      : null
+  }
+}
+
+function buildCloudBrowserSnapshotTables(
+  store: CloudBrowserStore,
+  user: User
+): Record<string, Array<Record<string, unknown>>> {
+  const exams = store.exams.filter((exam) => exam.userId === user.id)
+  const examIds = new Set(exams.map((exam) => String(exam.id)))
+  const submissions = store.submissions.filter((submission) => submission.userId === user.id)
+  const submissionIds = new Set(submissions.map((submission) => submission.id))
+  const corrections = store.corrections.filter((correction) => correction.userId === user.id)
+  const correctionIds = new Set(corrections.map((correction) => correction.id))
+  const tagNames = normalizeTags(exams.flatMap((exam) => Array.isArray(exam.tags) ? exam.tags.map(String) : []))
+  const tags = tagNames.map((name) => ({
+    id: cloudBrowserTagId(user.id, name),
+    user_id: user.id,
+    name,
+    created_at: user.createdAt
+  }))
+
+  return {
+    users: [{
+      id: user.id,
+      display_name: user.displayName,
+      kind: user.kind,
+      remote_user_id: user.remoteUserId,
+      onboarding_completed_at: user.onboardingCompletedAt,
+      tour_completed_at: user.tourCompletedAt,
+      created_at: user.createdAt,
+      updated_at: user.updatedAt
+    }],
+    folders: store.folders
+      .filter((folder) => folder.userId === user.id)
+      .map((folder) => ({
+        id: folder.id,
+        user_id: folder.userId,
+        name: folder.name,
+        parent_id: folder.parentId,
+        trashed_at: folder.trashedAt,
+        created_at: folder.createdAt,
+        updated_at: folder.updatedAt
+      })),
+    tags,
+    exam_tags: exams.flatMap((exam) =>
+      (Array.isArray(exam.tags) ? normalizeTags(exam.tags.map(String)) : []).map((tag) => ({
+        user_id: user.id,
+        exam_id: exam.id,
+        tag_id: cloudBrowserTagId(user.id, tag)
+      }))
+    ),
+    exams: exams.map((exam) => ({
+      id: exam.id,
+      user_id: exam.userId,
+      title: exam.title,
+      folder_id: exam.folderId ?? null,
+      status: exam.status,
+      tags_json: JSON.stringify(Array.isArray(exam.tags) ? exam.tags : []),
+      notes: exam.notes ?? '',
+      legal_area: exam.legalArea ?? null,
+      exam_type: exam.examType ?? null,
+      source_name: exam.sourceName ?? null,
+      source_url: exam.sourceUrl ?? null,
+      current_revision_id: exam.currentRevisionId ?? null,
+      created_at: exam.createdAt,
+      updated_at: exam.updatedAt
+    })),
+    exam_revisions: store.revisions
+      .filter((revision) => revision.userId === user.id && examIds.has(revision.examId))
+      .map((revision) => ({
+        id: revision.id,
+        user_id: revision.userId,
+        exam_id: revision.examId,
+        created_at: revision.createdAt,
+        kind: revision.kind,
+        content_format: revision.contentFormat,
+        content_hash: revision.contentHash,
+        content_json: JSON.stringify(revision.content)
+      })),
+    submissions: submissions
+      .filter((submission) => examIds.has(submission.examId))
+      .map((submission) => ({
+        id: submission.id,
+        user_id: submission.userId,
+        exam_id: submission.examId,
+        submitted_at: submission.submittedAt,
+        revision_id: submission.revisionId,
+        content_hash: submission.contentHash,
+        pdf_path: submission.pdfPath ?? null
+      })),
+    corrections: corrections
+      .filter((correction) => submissionIds.has(correction.targetSubmissionId))
+      .map((correction) => ({
+        id: correction.id,
+        user_id: correction.userId,
+        submission_id: correction.targetSubmissionId,
+        created_at: correction.createdAt,
+        updated_at: correction.updatedAt,
+        score_points: correction.score.points,
+        grading_comment: correction.gradingComment,
+        tags_json: JSON.stringify(correction.tags)
+      })),
+    inline_comments: (store.inlineComments ?? [])
+      .filter((comment) => comment.userId === user.id && correctionIds.has(comment.correctionId))
+      .map((comment) => ({
+        id: comment.id,
+        user_id: comment.userId,
+        correction_id: comment.correctionId,
+        submission_id: comment.targetSubmissionId,
+        created_at: comment.createdAt,
+        status: comment.status,
+        body: comment.body,
+        anchor_json: JSON.stringify(comment.anchor),
+        tags_json: JSON.stringify(comment.tags)
+      })),
+    attachments: store.attachments
+      .filter((attachment) => attachment.userId === user.id && examIds.has(attachment.examId))
+      .map((attachment) => ({
+        id: attachment.id,
+        user_id: attachment.userId,
+        exam_id: attachment.examId,
+        original_name: attachment.originalName,
+        stored_name: attachment.storedName,
+        mime_type: attachment.mimeType,
+        size: attachment.size,
+        relative_path: attachment.relativePath,
+        role: attachment.role,
+        created_at: attachment.createdAt
+      })),
+    learning_tasks: [],
+    learning_collections: [],
+    learning_cards: [],
+    learning_card_tags: [],
+    learning_review_events: [],
+    learning_card_schedules: []
+  }
+}
+
+function cloudBrowserTagId(userId: string, tag: string): string {
+  return `cloud-web-tag:${userId}:${tag}`
 }
 
 async function listCloudCollections(): Promise<LearningCollection[]> {
@@ -741,6 +1233,31 @@ async function updateCloudCard(input: UpdateLearningCardInput): Promise<Learning
 
   await replaceCloudTags(client, user.id, itemId, input.tags)
   return getCloudCard(input.id)
+}
+
+async function deleteCloudCard(input: DeleteLearningCardInput): Promise<void> {
+  const { client, user } = await requireCloudContext()
+  const { data: prompt, error: promptError } = await client
+    .from('learning_prompts')
+    .select('id, item_id')
+    .eq('id', input.id)
+    .eq('is_archived', false)
+    .single()
+  if (promptError) throw promptError
+  const itemId = String(prompt.item_id)
+
+  const { error: promptArchiveError } = await client
+    .from('learning_prompts')
+    .update({ is_archived: true })
+    .eq('id', input.id)
+  if (promptArchiveError) throw promptArchiveError
+
+  const { error: itemError } = await client
+    .from('learning_items')
+    .update({ is_archived: true })
+    .eq('id', itemId)
+    .eq('owner_user_id', user.id)
+  if (itemError) throw itemError
 }
 
 async function getCloudCard(promptId: string): Promise<LearningCard> {

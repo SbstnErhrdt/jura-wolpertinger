@@ -9,6 +9,7 @@ dist
 out
 coverage
 test-results
+playwright-report
 .release-stage/
 /release
 build/icon.icns

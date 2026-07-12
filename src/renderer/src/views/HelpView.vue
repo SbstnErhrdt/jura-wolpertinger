@@ -16,10 +16,11 @@
 
     <section class="help-hero">
       <div>
-        <h2>Offline arbeiten, später synchronisieren</h2>
+        <h2>Lernen, schreiben, später übertragen</h2>
         <p>
-          Jura Wolpertinger speichert deine Klausuren lokal pro Nutzer. Jeder Arbeitsbereich bleibt
-          getrennt, damit du Demo-Daten, eigene Klausuren und spätere Übernahmen sauber auseinanderhalten kannst.
+          Jura Wolpertinger verbindet kurze Karteikarten-Einheiten mit prüfungsnahem Schreiben.
+          Lokal kannst du ohne Online-Verbindung arbeiten; angemeldet kannst du deine Daten mit
+          der Online-Version verbinden.
         </p>
       </div>
     </section>
@@ -50,6 +51,31 @@ const faq = [
       'Nein. Die App speichert lokal und offline-ready. Autosaves, Abgaben und Bewertungen bleiben in der lokalen Datenbank erhalten.'
   },
   {
+    question: 'Wie erstelle ich Karteikarten?',
+    answer:
+      'Öffne zuerst eine Sammlung. Dort kannst du neue Karteikarten anlegen, Vorderseite und Rückseite schreiben und passende Schlagwörter hinzufügen.'
+  },
+  {
+    question: 'Wie wiederhole ich Karteikarten?',
+    answer:
+      'Starte eine Wiederholung über Home, über den Bereich Karteikarten oder direkt aus einer Sammlung. Nach dem Aufdecken bewertest du selbst, wie gut du die Antwort konntest.'
+  },
+  {
+    question: 'Was bedeuten die Bewertungen bei Karteikarten?',
+    answer:
+      'Nochmal, Schwer, Gut und Leicht zeigen deinen letzten Lernstand. Die App nutzt diese Rückmeldung, damit schwierige Karten früher wieder auftauchen.'
+  },
+  {
+    question: 'Wie lösche ich Karteikarten?',
+    answer:
+      'Öffne die Sammlung, gehe bei der Karte auf das Aktionsmenü mit den drei Punkten und wähle Karteikarte löschen. Vor dem Löschen fragt die App nochmal nach.'
+  },
+  {
+    question: 'Wie übernehme ich Karteikarten auf ein anderes Gerät?',
+    answer:
+      'Du kannst deine Karteikarten als Datei sichern und später wieder auswählen. Mit einer Online-Verbindung sollen dieselben Inhalte zusätzlich zwischen Geräten übertragen werden.'
+  },
+  {
     question: 'Warum gibt es mehrere Nutzer?',
     answer:
       'So kannst du eigene Klausuren, Demo-Daten oder andere Arbeitsbereiche trennen, ohne Dateien manuell zu verschieben.'
@@ -62,7 +88,7 @@ const faq = [
   {
     question: 'Was passiert bei einer späteren Anmeldung?',
     answer:
-      'Deine lokalen Daten sollen erhalten bleiben. Eine spätere Anmeldung soll vorhandene Klausuren übernehmen, statt sie ungefragt zu ersetzen.'
+      'Deine lokalen Daten sollen erhalten bleiben. Eine spätere Anmeldung soll vorhandene Klausuren und Karteikarten übernehmen, statt sie ungefragt zu ersetzen.'
   },
   {
     question: 'Was passiert bei einer KI-Korrektur?',
@@ -72,12 +98,12 @@ const faq = [
   {
     question: 'Wie sollte ich Tags nutzen?',
     answer:
-      'Nutze Tags für Rechtsgebiet, Prüfungsgebiet, Klausurtyp, Thema und typische Fehler. Beispiele: zivilrecht, relationstechnik, strafurteil, verwaltungsrecht, fristen.'
+      'Nutze Schlagwörter für Rechtsgebiet, Prüfungsgebiet, Klausurtyp, Thema und typische Fehler. Beispiele: zivilrecht, relationstechnik, strafurteil, verwaltungsrecht, fristen.'
   },
   {
-    question: 'Warum sind Tags für Auswertungen wichtig?',
+    question: 'Warum sind Schlagwörter für Auswertungen wichtig?',
     answer:
-      'Nur mit konsistenten Tags kann die Auswertung später zeigen, in welchen Rechtsgebieten, Aufgabentypen oder Fehlergruppen sich deine Punkte entwickeln.'
+      'Nur mit konsistenten Schlagwörtern kann die Auswertung später zeigen, in welchen Rechtsgebieten, Aufgabentypen oder Fehlergruppen sich deine Punkte und Wiederholungen entwickeln.'
   },
   {
     question: 'Kann ich die Tour erneut ansehen?',

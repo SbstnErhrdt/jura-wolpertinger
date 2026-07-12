@@ -35,4 +35,20 @@ describe('general Nuxt UI views', () => {
     expect(combined).toContain('<USelect')
     expect(combined).toContain('<UModal')
   })
+
+  it('keeps About and Hilfe aligned with current flashcard workflows', async () => {
+    const about = await readFile(resolve(viewsRoot, 'AboutView.vue'), 'utf8')
+    const help = await readFile(resolve(viewsRoot, 'HelpView.vue'), 'utf8')
+    const agents = await readFile(resolve(import.meta.dirname, '../../AGENTS.md'), 'utf8')
+
+    expect(about).toContain('Karteikarten')
+    expect(about).toContain('Lokal und online')
+    expect(about).toContain('KI-Korrektur')
+    expect(help).toContain('Wie erstelle ich Karteikarten?')
+    expect(help).toContain('Wie wiederhole ich Karteikarten?')
+    expect(help).toContain('Wie lösche ich Karteikarten?')
+    expect(help).toContain('Schlagwörter')
+    expect(agents).toContain('AboutView.vue')
+    expect(agents).toContain('HelpView.vue')
+  })
 })

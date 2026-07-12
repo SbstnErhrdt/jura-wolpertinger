@@ -11,37 +11,57 @@
         </div>
         <p class="auth-copy">{{ authCopy }}</p>
         <div
-          v-if="cloudAuth.status !== 'missing_config'"
+          v-if="cloudAuth.status !== 'missing_config' && authMode !== 'reset_password'"
           class="auth-mode-switch"
           aria-label="Anmeldung oder Registrierung auswählen"
         >
-          <UButton
-            type="button"
-            label="Einloggen"
-            :variant="authMode === 'sign_in' ? 'solid' : 'ghost'"
-            :aria-pressed="authMode === 'sign_in'"
-            @click="setAuthMode('sign_in')"
-          />
-          <UButton
-            type="button"
-            label="Account erstellen"
-            :variant="authMode === 'sign_up' ? 'solid' : 'ghost'"
-            :aria-pressed="authMode === 'sign_up'"
-            @click="setAuthMode('sign_up')"
-          />
+          <span class="auth-mode-segment" :class="{ 'is-active': authMode === 'sign_in' }">
+            <UButton
+              type="button"
+              class="auth-mode-button"
+              color="neutral"
+              variant="ghost"
+              label="Einloggen"
+              :aria-pressed="authMode === 'sign_in'"
+              @click="setAuthMode('sign_in')"
+            />
+          </span>
+          <span class="auth-mode-segment" :class="{ 'is-active': authMode === 'sign_up' }">
+            <UButton
+              type="button"
+              class="auth-mode-button"
+              color="neutral"
+              variant="ghost"
+              label="Account erstellen"
+              :aria-pressed="authMode === 'sign_up'"
+              @click="setAuthMode('sign_up')"
+            />
+          </span>
         </div>
         <form v-if="cloudAuth.status !== 'missing_config'" class="auth-form" @submit.prevent="submitAuthForm">
-          <UFormField label="E-Mail" class="form-field">
-            <UInput v-model="authEmail" type="email" autocomplete="email" required />
+          <UFormField label="E-Mail" class="auth-field">
+            <UInput v-model="authEmail" class="auth-input" type="email" autocomplete="email" required />
           </UFormField>
-          <UFormField label="Passwort" class="form-field">
+          <UFormField v-if="authMode !== 'reset_password'" label="Passwort" class="auth-field">
             <UInput
               v-model="authPassword"
+              class="auth-input"
               type="password"
               :autocomplete="authMode === 'sign_up' ? 'new-password' : 'current-password'"
               required
             />
           </UFormField>
+          <div v-if="authMode === 'sign_in'" class="auth-inline-action">
+            <UButton
+              type="button"
+              class="link-button"
+              color="neutral"
+              variant="link"
+              :disabled="authBusy"
+              label="Passwort vergessen?"
+              @click="setAuthMode('reset_password')"
+            />
+          </div>
           <p class="auth-action-hint">{{ authActionHint }}</p>
           <UAlert
             v-if="authMessage"
@@ -50,7 +70,7 @@
             :description="authMessage"
           />
           <div class="auth-actions">
-            <UButton type="submit" :loading="authBusy" :label="authSubmitLabel" />
+            <UButton type="submit" class="auth-submit" :loading="authBusy" :label="authSubmitLabel" />
           </div>
           <p class="auth-switch-copy">
             {{ authSwitchText }}
@@ -66,6 +86,20 @@
           </p>
         </form>
         <UAlert v-else class="auth-message" color="error" :description="cloudAuth.error ?? ''" />
+        <UButton
+          class="auth-theme-toggle"
+          color="neutral"
+          variant="ghost"
+          :title="isDark ? 'Hellmodus' : 'Dunkelmodus'"
+          @click="toggleTheme"
+        >
+          <span class="theme-toggle-option" :class="{ active: !isDark }">
+            <Sun :size="17" />
+          </span>
+          <span class="theme-toggle-option" :class="{ active: isDark }">
+            <Moon :size="17" />
+          </span>
+        </UButton>
       </div>
     </section>
 
@@ -85,7 +119,29 @@
           <UNavigationMenu :items="moreNavigationItems" orientation="vertical" />
         </nav>
         <div class="sidebar-footer">
-          <section class="sidebar-user" aria-label="Nutzer">
+          <section v-if="isCloudShell" class="sidebar-account" aria-label="Konto">
+            <span class="sidebar-account-label">Konto</span>
+            <div class="sidebar-account-card">
+              <div class="sidebar-account-avatar" aria-hidden="true">{{ cloudAccountInitial }}</div>
+              <div class="sidebar-account-copy">
+                <strong>{{ cloudAccountTitle }}</strong>
+                <span>{{ cloudAccountSubtitle }}</span>
+              </div>
+            </div>
+            <UButton class="sidebar-small-button" color="neutral" variant="ghost" :to="{ name: 'settings' }">
+              <Settings :size="15" />
+              Profil
+            </UButton>
+            <UButton class="sidebar-small-button" color="neutral" variant="ghost" @click="signOut">
+              <LogOut :size="15" />
+              Abmelden
+            </UButton>
+            <UButton class="sidebar-small-button" color="neutral" variant="ghost" @click="startTour">
+              <Route :size="15" />
+              Tour
+            </UButton>
+          </section>
+          <section v-else class="sidebar-user" aria-label="Nutzer">
             <UFormField label="Nutzer">
               <USelect
                 id="user-switcher"
@@ -205,7 +261,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { FolderKanban, Layers, LibraryBig, Moon, Route, Settings, Sun, UserPlus } from 'lucide-vue-next'
+import { FolderKanban, Layers, LibraryBig, LogOut, Moon, Route, Settings, Sun, UserPlus } from 'lucide-vue-next'
 import type { AppUser } from '@shared/ipc'
 import { APP_VERSION } from '@shared/constants'
 import { RELEASE_SMOKE_READY_EVENT } from '@shared/releaseSmoke'
@@ -236,36 +292,65 @@ const authPassword = ref('')
 const authBusy = ref(false)
 const authMessage = ref('')
 const authMessageKind = ref<'info' | 'error'>('info')
-const authMode = ref<'sign_in' | 'sign_up'>('sign_in')
-const authTitle = computed(() =>
-  authMode.value === 'sign_up' ? 'Kostenlosen Account erstellen' : 'Einloggen'
-)
-const authCopy = computed(() =>
-  authMode.value === 'sign_up'
-    ? 'Erstelle deinen kostenlosen Account. Wenn alles passt, wirst du direkt angemeldet.'
-    : 'Melde dich an, um deine Lern- und Prüfungsdaten zu öffnen.'
-)
-const authActionHint = computed(() =>
-  authMode.value === 'sign_up'
-    ? 'Mit dem Button unten wird der Account sofort erstellt.'
-    : 'Mit dem Button unten wirst du direkt angemeldet.'
-)
+const authMode = ref<'sign_in' | 'sign_up' | 'reset_password'>('sign_in')
+const authTitle = computed(() => {
+  if (authMode.value === 'sign_up') return 'Kostenlosen Account erstellen'
+  if (authMode.value === 'reset_password') return 'Passwort zurücksetzen'
+  return 'Einloggen'
+})
+const authCopy = computed(() => {
+  if (authMode.value === 'sign_up') {
+    return 'Erstelle deinen kostenlosen Account. Wenn alles passt, wirst du direkt angemeldet.'
+  }
+  if (authMode.value === 'reset_password') {
+    return 'Gib deine E-Mail-Adresse ein. Wir senden dir einen Link, mit dem du dein Passwort neu setzen kannst.'
+  }
+  return 'Melde dich an, um deine Lern- und Prüfungsdaten zu öffnen.'
+})
+const authActionHint = computed(() => {
+  if (authMode.value === 'sign_up') return 'Mit dem Button unten wird der Account sofort erstellt.'
+  if (authMode.value === 'reset_password') return 'Du erhältst eine E-Mail, falls für diese Adresse ein Account existiert.'
+  return 'Mit dem Button unten wirst du direkt angemeldet.'
+})
 const authSubmitLabel = computed(() => {
   if (authBusy.value) return 'Bitte warten'
+  if (authMode.value === 'reset_password') return 'Link zum Zurücksetzen senden'
   return authMode.value === 'sign_up' ? 'Account jetzt erstellen' : 'Jetzt einloggen'
 })
-const authSwitchText = computed(() =>
-  authMode.value === 'sign_up' ? 'Du hast schon einen Account?' : 'Noch kein Account?'
-)
-const authSwitchLabel = computed(() =>
-  authMode.value === 'sign_up' ? 'Einloggen' : 'Kostenlos erstellen'
-)
+const authSwitchText = computed(() => {
+  if (authMode.value === 'sign_up') return 'Du hast schon einen Account?'
+  if (authMode.value === 'reset_password') return 'Passwort wieder eingefallen?'
+  return 'Noch kein Account?'
+})
+const authSwitchLabel = computed(() => {
+  if (authMode.value === 'sign_up') return 'Einloggen'
+  if (authMode.value === 'reset_password') return 'Zurück zum Einloggen'
+  return 'Kostenlos erstellen'
+})
 const onboardingSettingsTitle = computed(() => (isElectronApiAvailable ? 'Cloud verbinden' : 'Einstellungen prüfen'))
 const onboardingSettingsCopy = computed(() =>
   isElectronApiAvailable
     ? 'Optional synchronisieren. Lokal bleibt alles nutzbar.'
     : 'Account, App-Status und Optionen prüfen.'
 )
+const isCloudShell = computed(() => cloudAuth.value.status !== 'not_required')
+const cloudAccountEmail = computed(() => {
+  if (cloudAuth.value.status !== 'signed_in') return ''
+  return cloudAuth.value.session.user.email ?? ''
+})
+const cloudAccountTitle = computed(() => {
+  const email = cloudAccountEmail.value
+  return currentUser.value?.displayName || email || 'Dein Konto'
+})
+const cloudAccountSubtitle = computed(() => {
+  const email = cloudAccountEmail.value
+  if (!email || cloudAccountTitle.value === email) return 'Online angemeldet'
+  return email
+})
+const cloudAccountInitial = computed(() => {
+  const source = cloudAccountTitle.value.trim()
+  return source ? source.slice(0, 1).toUpperCase() : 'J'
+})
 const userOptions = computed(() =>
   users.value.map((user) => ({
     label: `${user.displayName}${user.kind === 'demo' ? ' · Demo' : ''}`,
@@ -427,18 +512,23 @@ async function startTour(): Promise<void> {
   })
 }
 
-function setAuthMode(mode: 'sign_in' | 'sign_up'): void {
+function setAuthMode(mode: 'sign_in' | 'sign_up' | 'reset_password'): void {
   authMode.value = mode
+  if (mode !== 'reset_password') authPassword.value = ''
   authMessage.value = ''
 }
 
 function toggleAuthMode(): void {
-  setAuthMode(authMode.value === 'sign_up' ? 'sign_in' : 'sign_up')
+  setAuthMode(authMode.value === 'sign_in' ? 'sign_up' : 'sign_in')
 }
 
 async function submitAuthForm(): Promise<void> {
   if (authMode.value === 'sign_up') {
     await registerAuth()
+    return
+  }
+  if (authMode.value === 'reset_password') {
+    await resetPassword()
     return
   }
   await submitAuth()
@@ -486,5 +576,34 @@ async function registerAuth(): Promise<void> {
   if (cloudAuth.value.status === 'signed_in') {
     await loadUsers()
   }
+}
+
+async function resetPassword(): Promise<void> {
+  const client = getSupabaseAuthClient()
+  if (!client) return
+  authBusy.value = true
+  authMessage.value = ''
+  const { error } = await client.auth.resetPasswordForEmail(authEmail.value.trim(), {
+    redirectTo: window.location.origin
+  })
+  authBusy.value = false
+  if (error) {
+    authMessageKind.value = 'error'
+    authMessage.value = 'Zurücksetzen fehlgeschlagen. Bitte E-Mail-Adresse prüfen.'
+    return
+  }
+  authMessageKind.value = 'info'
+  authMessage.value = 'Wenn ein Account existiert, erhältst du eine E-Mail zum Zurücksetzen.'
+}
+
+async function signOut(): Promise<void> {
+  const client = getSupabaseAuthClient()
+  if (!client) return
+  await client.auth.signOut()
+  users.value = []
+  currentUser.value = null
+  authPassword.value = ''
+  authMessage.value = ''
+  cloudAuth.value = await readCloudAuthState()
 }
 </script>

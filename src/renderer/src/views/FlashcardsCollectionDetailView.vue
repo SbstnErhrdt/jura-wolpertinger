@@ -54,19 +54,19 @@
           </div>
         </div>
         <dl class="card-performance">
-          <div>
+          <div class="performance-cell">
             <dt>Fällig</dt>
             <dd>{{ dueLabel(card.dueAt) }}</dd>
           </div>
-          <div>
+          <div :class="['performance-cell', 'performance-cell-rating', ratingStatusClass(card.lastRating)]">
             <dt>Letzte Bewertung</dt>
             <dd>{{ ratingLabel(card.lastRating) }}</dd>
           </div>
-          <div>
+          <div class="performance-cell">
             <dt>Wiederholungen</dt>
             <dd>{{ card.reps }}</dd>
           </div>
-          <div>
+          <div class="performance-cell">
             <dt>Nochmal</dt>
             <dd>{{ card.lapses }}</dd>
           </div>
@@ -112,6 +112,25 @@
       </div>
       </template>
     </UModal>
+
+    <UModal :open="Boolean(deleteCardTarget)" @update:open="!$event && cancelDeleteCard()">
+      <template #content>
+        <div class="dialog-card">
+          <h2>Karteikarte löschen</h2>
+          <p class="dialog-copy">
+            Die Karte „{{ deleteCardTarget?.title || 'Ohne Titel' }}“ wird aus dieser Sammlung entfernt.
+          </p>
+          <div class="dialog-actions">
+            <UButton type="button" color="neutral" variant="outline" :disabled="deleteCardBusy" @click="cancelDeleteCard">
+              Abbrechen
+            </UButton>
+            <UButton type="button" color="error" :loading="deleteCardBusy" @click="confirmDeleteCard">
+              Löschen
+            </UButton>
+          </div>
+        </div>
+      </template>
+    </UModal>
   </section>
 </template>
 
@@ -153,6 +172,8 @@ const cardTitle = ref('')
 const cardFront = ref('')
 const cardBack = ref('')
 const cardTags = ref<string[]>([])
+const deleteCardTarget = ref<LearningCard | null>(null)
+const deleteCardBusy = ref(false)
 const canCreateCard = computed(() => Boolean(cardFront.value.trim()) && Boolean(cardBack.value.trim()))
 const breadcrumbItems = computed<AppBreadcrumbItem[]>(() => [
   { label: 'Home', to: { name: 'home' } },
@@ -273,12 +294,40 @@ async function saveCard(): Promise<void> {
   await loadCards()
 }
 
+function openDeleteCardDialog(card: LearningCard): void {
+  deleteCardTarget.value = card
+}
+
+function cancelDeleteCard(): void {
+  if (deleteCardBusy.value) return
+  deleteCardTarget.value = null
+}
+
+async function confirmDeleteCard(): Promise<void> {
+  if (!deleteCardTarget.value) return
+  deleteCardBusy.value = true
+  try {
+    await api.deleteLearningCard({ id: deleteCardTarget.value.id })
+    transferMessage.value = 'Karteikarte gelöscht.'
+    deleteCardTarget.value = null
+    await loadCards()
+  } finally {
+    deleteCardBusy.value = false
+  }
+}
+
 function cardActions(card: LearningCard): AppActionMenuItem[] {
   return [
     {
       label: 'Karteikarte bearbeiten',
       icon: 'i-lucide-pencil',
       onSelect: () => openEditCardDialog(card)
+    },
+    {
+      label: 'Karteikarte löschen',
+      icon: 'i-lucide-trash-2',
+      color: 'error',
+      onSelect: () => openDeleteCardDialog(card)
     }
   ]
 }
@@ -293,6 +342,14 @@ function ratingLabel(rating: ReviewRating | null): string {
   if (rating === 3) return 'Gut'
   if (rating === 4) return 'Leicht'
   return 'Noch nicht bewertet'
+}
+
+function ratingStatusClass(rating: ReviewRating | null): string {
+  if (rating === 1) return 'status-rating-again'
+  if (rating === 2) return 'status-rating-hard'
+  if (rating === 3) return 'status-rating-good'
+  if (rating === 4) return 'status-rating-easy'
+  return 'status-rating-empty'
 }
 
 function dueLabel(value: string): string {

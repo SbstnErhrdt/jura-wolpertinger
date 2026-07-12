@@ -273,6 +273,59 @@ describe('AppServices', () => {
     expect(secondPage.items.map((exam) => exam.title)).toEqual(['Tau Anspruch'])
   })
 
+  it('prunes old autosave revisions without deleting submitted revisions', () => {
+    const user = services.getCurrentUser()
+    const exam = services.createExam({ title: 'Revisionen Test' })
+    const oldAutosaveIds = Array.from({ length: 25 }, () => crypto.randomUUID())
+    const submittedRevisionId = oldAutosaveIds[1]
+
+    for (const [index, revisionId] of oldAutosaveIds.entries()) {
+      services.db.prepare(
+        `
+        INSERT INTO exam_revisions
+          (id, user_id, exam_id, created_at, kind, content_format, content_hash, content_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `
+      ).run(
+        revisionId,
+        user.id,
+        exam.id,
+        `2026-05-${String(index + 1).padStart(2, '0')}T08:00:00.000Z`,
+        'autosave',
+        'tiptap-v1',
+        `hash-${index}`,
+        JSON.stringify({ type: 'doc', content: [] })
+      )
+    }
+    services.db.prepare(
+      `
+      INSERT INTO submissions
+        (id, user_id, exam_id, submitted_at, revision_id, content_hash, pdf_path)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `
+    ).run(
+      crypto.randomUUID(),
+      user.id,
+      exam.id,
+      '2026-06-01T08:00:00.000Z',
+      submittedRevisionId,
+      'hash-1',
+      null
+    )
+
+    services.saveRevision(exam.id, { type: 'doc', content: [] }, 'autosave')
+
+    const remainingRows = services.db
+      .prepare('SELECT id FROM exam_revisions WHERE exam_id = ?')
+      .all(exam.id) as Array<{ id: string }>
+    const remainingIds = new Set(remainingRows.map((row) => row.id))
+
+    expect(remainingIds.has(submittedRevisionId)).toBe(true)
+    expect(remainingIds.has(oldAutosaveIds[2])).toBe(false)
+    expect(remainingIds.has(oldAutosaveIds[3])).toBe(false)
+    expect(remainingIds.has(oldAutosaveIds[4])).toBe(false)
+  })
+
   it('renames the current user without changing their workspace', () => {
     const user = services.getCurrentUser()
     const exam = services.createExam({ title: 'Nutzername Klausur' })
@@ -321,6 +374,29 @@ describe('AppServices', () => {
     const dashboardAfter = services.getLearningDashboard()
     expect(dashboardAfter.totalCards).toBe(1)
     expect(dashboardAfter.learnedToday).toBe(true)
+  })
+
+  it('archives flashcards instead of leaving deleted cards in collection lists', () => {
+    const collection = services.createLearningCollection({
+      name: 'Zivilrecht',
+      subject: 'Zivilrecht',
+      source: 'Test'
+    })
+    const card = services.createLearningCard({
+      collectionId: collection.id,
+      title: 'Anspruch',
+      frontMarkdown: 'Was ist Anspruch?',
+      backMarkdown: 'Das Recht, von einem anderen ein Tun oder Unterlassen zu verlangen.',
+      tags: ['zivilrecht']
+    })
+
+    services.deleteLearningCard({ id: card.id })
+
+    expect(services.listLearningCards(collection.id)).toEqual([])
+    expect(services.getReviewBatch({ collectionId: collection.id, limit: 5 })).toEqual([])
+    expect(services.listLearningCollections()).toEqual([
+      expect.objectContaining({ id: collection.id, cardCount: 0, dueCount: 0 })
+    ])
   })
 
   it('returns paginated learning cards after applying collection and search filters', () => {

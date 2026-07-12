@@ -7,6 +7,7 @@ import type {
   CreateLearningCardInput,
   CreateLearningCollectionInput,
   CreateExamInput,
+  DeleteLearningCardInput,
   ExamDetails,
   ExamListItem,
   FolderDto,
@@ -52,6 +53,7 @@ import {
   legalAreaSchema,
   reviewRatingSchema
 } from '@shared/schemas'
+import { selectExamRevisionIdsForDeletion } from '@shared/revisionRetention'
 
 const BROWSER_STORE_KEY = 'jura-wolpertinger-browser-dev-v1'
 const AI_CORRECTION_NOT_IMPLEMENTED_MESSAGE = 'KI-Korrektur ist noch nicht implementiert.'
@@ -391,6 +393,7 @@ function createBrowserDevApi(): AppApi {
       exam.status = exam.status === 'draft' ? 'in_progress' : exam.status
       exam.updatedAt = now
       exam.lastSavedAt = now
+      pruneBrowserExamRevisions(store, input.examId, exam.currentRevisionId)
       writeStore(store)
       return revision
     },
@@ -777,6 +780,15 @@ function createBrowserDevApi(): AppApi {
       writeStore(store)
       return card
     },
+    async deleteLearningCard(input: DeleteLearningCardInput) {
+      const store = readStore()
+      const user = ensureBrowserUser(store)
+      const card = store.learningCards.find((candidate) => candidate.id === input.id && candidate.userId === user.id)
+      if (!card) throw new Error(`Learning card not found: ${input.id}`)
+      card.isArchived = true
+      card.updatedAt = nowIso()
+      writeStore(store)
+    },
     async getReviewBatch(input: GetReviewBatchInput = {}) {
       const store = readStore()
       const user = ensureBrowserUser(store)
@@ -1073,6 +1085,24 @@ function writeStore(store: BrowserStore): void {
     ...store,
     aiSettings: normalizeBrowserAiSettings(store.aiSettings)
   }))
+}
+
+function pruneBrowserExamRevisions(
+  store: BrowserStore,
+  examId: string,
+  currentRevisionId: string | null
+): void {
+  const idsForDeletion = selectExamRevisionIdsForDeletion({
+    revisions: store.revisions.filter((revision) => revision.examId === examId),
+    currentRevisionId,
+    submittedRevisionIds: new Set(
+      store.submissions
+        .filter((submission) => submission.examId === examId)
+        .map((submission) => submission.revisionId)
+    )
+  })
+  if (!idsForDeletion.size) return
+  store.revisions = store.revisions.filter((revision) => !idsForDeletion.has(revision.id))
 }
 
 function emptyStore(): BrowserStore {

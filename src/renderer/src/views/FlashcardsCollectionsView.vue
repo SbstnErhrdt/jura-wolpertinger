@@ -34,18 +34,35 @@
 
     <div class="collection-grid">
       <UCard v-for="collection in collections" :key="collection.id" class="collection-card">
-        <h2>{{ collection.name }}</h2>
-        <p>{{ collection.subject || 'Allgemein' }}</p>
+        <div class="collection-card-header">
+          <div class="collection-card-icon" aria-hidden="true">
+            <FolderKanban :size="18" />
+          </div>
+          <div class="collection-card-title">
+            <p>{{ collection.subject || 'Allgemein' }}</p>
+            <h2 :title="collection.name">{{ collection.name }}</h2>
+          </div>
+        </div>
         <div class="collection-stats">
-          <span>{{ collection.cardCount }} Karten</span>
-          <span>{{ collection.dueCount }} fällig</span>
+          <span>
+            <Layers :size="15" aria-hidden="true" />
+            <strong>{{ collection.cardCount }}</strong>
+            Karten
+          </span>
+          <span :class="{ due: collection.dueCount > 0 }">
+            <Clock3 :size="15" aria-hidden="true" />
+            <strong>{{ collection.dueCount }}</strong>
+            fällig
+          </span>
         </div>
         <div class="collection-card-actions">
-          <UButton color="neutral" variant="outline" :to="{ name: 'flashcards-collection', params: { id: collection.id } }">
-            Öffnen
-          </UButton>
-          <UButton color="neutral" variant="outline" :to="{ name: 'flashcards-review', query: { collection: collection.id } }">
+          <UButton :to="{ name: 'flashcards-review', query: { collection: collection.id } }">
+            <Play :size="16" aria-hidden="true" />
             Wiederholen
+          </UButton>
+          <UButton color="neutral" variant="outline" :to="{ name: 'flashcards-collection', params: { id: collection.id } }">
+            <FolderOpen :size="16" aria-hidden="true" />
+            Öffnen
           </UButton>
         </div>
       </UCard>
@@ -72,7 +89,7 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { Download, Plus, Upload } from 'lucide-vue-next'
+import { Clock3, Download, FolderKanban, FolderOpen, Layers, Play, Plus, Upload } from 'lucide-vue-next'
 import { useRoute, useRouter } from 'vue-router'
 import type { LearningCollection } from '@shared/schemas'
 import { api } from '../api'

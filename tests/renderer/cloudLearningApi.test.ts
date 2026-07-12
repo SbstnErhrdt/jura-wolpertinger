@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AppApi } from '../../src/shared/ipc'
+import type { AppApi, ExamDetails, ExamListItem } from '../../src/shared/ipc'
+import type { ExamRevision } from '../../src/shared/schemas'
 
 type QueryCall = {
   table: string
-  operation: 'select' | 'eq' | 'in' | 'order' | 'range'
+  operation: 'select' | 'eq' | 'in' | 'order' | 'range' | 'limit' | 'maybeSingle' | 'upsert'
   column?: string
   value?: unknown
   from?: number
@@ -22,12 +23,20 @@ const collectionId = '22222222-2222-4222-8222-222222222222'
 let queryCalls: QueryCall[] = []
 let rpcCalls: RpcCall[] = []
 let tableData: Record<string, unknown[]> = {}
+let upsertCalls: Array<{ table: string; value: Record<string, unknown>; options?: Record<string, unknown> }> = []
+
+const browserStoreKey = 'jura-wolpertinger-browser-dev-v1'
 
 describe('cloud learning API', () => {
   beforeEach(() => {
     queryCalls = []
     rpcCalls = []
     tableData = {}
+    upsertCalls = []
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: createMemoryLocalStorage()
+    })
     vi.resetModules()
   })
 
@@ -196,6 +205,41 @@ describe('cloud learning API', () => {
     expect(promptIdCalls).toHaveLength(1)
     expect(promptIdCalls[0].value).toHaveLength(10)
   })
+
+  it('stores browser exam revisions in the cloud snapshot and hydrates them in a fresh browser', async () => {
+    const examId = '44444444-4444-4444-8444-444444444444'
+    const uploadedText = 'Obersatz aus der Cloud-Klausur'
+    writeBrowserStore(createBrowserStoreWithExam(examId, 'Lokaler Starttext'))
+
+    vi.doMock('../../src/renderer/src/cloudAuth', () => ({
+      getSupabaseAuthClient: () => createSupabaseClientMock()
+    }))
+    const apiModulePath = '../../src/renderer/src/cloudLearningApi'
+    const { createCloudLearningApi } = (await import(/* @vite-ignore */ apiModulePath)) as {
+      createCloudLearningApi: (localApi: AppApi) => AppApi
+    }
+    const api = createCloudLearningApi(createBrowserExamLocalApiStub())
+
+    await api.saveRevision({
+      examId,
+      kind: 'autosave',
+      content: tiptapDoc(uploadedText)
+    })
+    await waitForCondition(() => upsertCalls.length > 0)
+
+    const uploadedSnapshot = upsertCalls.at(-1)?.value.payload_json
+    expect(JSON.stringify(uploadedSnapshot)).toContain(uploadedText)
+    expect(JSON.stringify(uploadedSnapshot)).toContain('"exam_revisions"')
+
+    localStorage.removeItem(browserStoreKey)
+    tableData.user_sync_snapshots = upsertCalls.map((call) => ({
+      ...call.value,
+      updated_at: now
+    }))
+
+    const hydrated = await api.getExam(examId)
+    expect(JSON.stringify(hydrated.currentRevision?.content)).toContain(uploadedText)
+  })
 })
 
 function createSupabaseClientMock() {
@@ -295,6 +339,27 @@ function createQueryBuilder(table: string) {
       rows = rows.slice(from, to + 1)
       return builder
     },
+    limit(value: number) {
+      queryCalls.push({ table, operation: 'limit', value })
+      rows = rows.slice(0, value)
+      return builder
+    },
+    async maybeSingle<T>() {
+      queryCalls.push({ table, operation: 'maybeSingle' })
+      return { data: (rows[0] ?? null) as T | null, error: null }
+    },
+    async upsert(value: Record<string, unknown>, options?: Record<string, unknown>) {
+      queryCalls.push({ table, operation: 'upsert', value })
+      upsertCalls.push({ table, value, options })
+      tableData[table] = [
+        value,
+        ...(tableData[table] ?? []).filter((row) => {
+          const current = row as Record<string, unknown>
+          return current.user_id !== value.user_id || current.local_user_id !== value.local_user_id
+        })
+      ]
+      return { data: null, error: null }
+    },
     async returns<T>() {
       return { data: rows as T, error: null, count: tableData[table]?.length ?? rows.length }
     }
@@ -347,6 +412,7 @@ function createLocalApiStub(): AppApi {
     listLearningCardsPage: unimplemented,
     createLearningCard: unimplemented,
     updateLearningCard: unimplemented,
+    deleteLearningCard: unimplemented,
     getReviewBatch: unimplemented,
     recordReview: unimplemented,
     addAttachment: unimplemented,
@@ -362,6 +428,177 @@ function createLocalApiStub(): AppApi {
     disconnectSyncAccount: unimplemented,
     runSync: unimplemented
   }
+}
+
+function createBrowserExamLocalApiStub(): AppApi {
+  return {
+    ...createLocalApiStub(),
+    async listExams() {
+      return readBrowserStore().exams
+    },
+    async listExamsPage() {
+      const items = readBrowserStore().exams
+      return {
+        items,
+        total: items.length,
+        page: 1,
+        pageSize: 25,
+        pageCount: 1
+      }
+    },
+    async getExam(id: string) {
+      const store = readBrowserStore()
+      const exam = store.exams.find((candidate) => candidate.id === id)
+      if (!exam) throw new Error(`Exam not found: ${id}`)
+      const currentRevision = store.revisions.find(
+        (candidate) => candidate.id === exam.currentRevisionId
+      ) ?? null
+      return {
+        ...exam,
+        currentRevision,
+        submissions: [],
+        attachments: []
+      } satisfies ExamDetails
+    },
+    async saveRevision(input) {
+      const store = readBrowserStore()
+      const exam = store.exams.find((candidate) => candidate.id === input.examId)
+      if (!exam) throw new Error(`Exam not found: ${input.examId}`)
+      const revision: ExamRevision = {
+        schemaVersion: 1,
+        editorSchemaVersion: 1,
+        id: '55555555-5555-4555-8555-555555555555',
+        userId: exam.userId,
+        examId: input.examId,
+        createdAt: now,
+        kind: input.kind ?? 'autosave',
+        contentFormat: 'tiptap-v1',
+        contentHash: 'hash-after-save',
+        content: input.content
+      }
+      store.revisions.push(revision)
+      exam.currentRevisionId = revision.id
+      exam.lastSavedAt = now
+      exam.updatedAt = now
+      writeBrowserStore(store)
+      return revision
+    }
+  }
+}
+
+function createBrowserStoreWithExam(examId: string, text: string) {
+  const revisionId = '33333333-3333-4333-8333-333333333333'
+  const exam: ExamListItem = {
+    id: examId,
+    userId,
+    title: 'Cloud Klausur',
+    folderId: null,
+    folderName: null,
+    status: 'in_progress',
+    tags: ['arbeitsrecht'],
+    notes: '',
+    createdAt: now,
+    updatedAt: now,
+    lastSavedAt: now,
+    currentRevisionId: revisionId,
+    latestScore: null,
+    legalArea: null,
+    examType: null,
+    sourceName: null,
+    sourceUrl: null
+  }
+  const revision: ExamRevision = {
+    schemaVersion: 1,
+    editorSchemaVersion: 1,
+    id: revisionId,
+    userId,
+    examId,
+    createdAt: now,
+    kind: 'autosave',
+    contentFormat: 'tiptap-v1',
+    contentHash: 'hash-before-save',
+    content: tiptapDoc(text)
+  }
+  return {
+    users: [{
+      id: userId,
+      displayName: 'learner@example.test',
+      kind: 'remote',
+      remoteUserId: userId,
+      onboardingCompletedAt: now,
+      tourCompletedAt: now,
+      createdAt: now,
+      updatedAt: now
+    }],
+    currentUserId: userId,
+    folders: [],
+    exams: [exam],
+    revisions: [revision],
+    submissions: [],
+    attachments: [],
+    corrections: [],
+    aiSettings: null,
+    aiCorrectionDrafts: [],
+    learningTasks: [],
+    learningCollections: [],
+    learningCards: [],
+    learningReviewEvents: [],
+    learningSchedules: []
+  }
+}
+
+function tiptapDoc(text: string): Record<string, unknown> {
+  return {
+    type: 'doc',
+    content: [
+      {
+        type: 'paragraph',
+        content: [{ type: 'text', text }]
+      }
+    ]
+  }
+}
+
+function readBrowserStore(): ReturnType<typeof createBrowserStoreWithExam> {
+  const raw = localStorage.getItem(browserStoreKey)
+  if (!raw) throw new Error('Browser store is empty')
+  return JSON.parse(raw)
+}
+
+function writeBrowserStore(store: ReturnType<typeof createBrowserStoreWithExam>): void {
+  localStorage.setItem(browserStoreKey, JSON.stringify(store))
+}
+
+function createMemoryLocalStorage(): Storage {
+  const values = new Map<string, string>()
+  return {
+    get length() {
+      return values.size
+    },
+    clear() {
+      values.clear()
+    },
+    getItem(key: string) {
+      return values.get(key) ?? null
+    },
+    key(index: number) {
+      return Array.from(values.keys())[index] ?? null
+    },
+    removeItem(key: string) {
+      values.delete(key)
+    },
+    setItem(key: string, value: string) {
+      values.set(key, value)
+    }
+  }
+}
+
+async function waitForCondition(predicate: () => boolean): Promise<void> {
+  for (let index = 0; index < 25; index += 1) {
+    if (predicate()) return
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+  throw new Error('Timed out waiting for condition')
 }
 
 function unimplemented(): never {

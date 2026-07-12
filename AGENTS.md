@@ -51,6 +51,7 @@ Vor größeren Änderungen zuerst lesen:
 - Löschen, Archivieren oder andere potentiell destruktive Aktionen brauchen immer ein Confirm-Modal mit klarer Beschreibung der Folge.
 - Hierarchien sollen in der UI sichtbar navigierbar sein. Ein untergeordnetes Objekt wird im Kontext seines übergeordneten Objekts erstellt, z. B. Karteikarten innerhalb einer geöffneten Sammlung, nicht lose auf der Sammlungsübersicht.
 - Übersichtsseiten zeigen Orientierung und Einstiegspunkte; Detailseiten zeigen die eigentliche Arbeitsoberfläche mit Liste, Suche, Sortierung, Kennzahlen und Aktionen im Kontext.
+- Neue oder geänderte Nutzerfeatures müssen auch in `src/renderer/src/views/AboutView.vue` und `src/renderer/src/views/HelpView.vue` geprüft und bei Bedarf aktualisiert werden. Die Hilfetexte müssen die Funktion aus Nutzersicht erklären, nicht mit technischen Begriffen.
 
 ## Datenmodell-Regeln
 

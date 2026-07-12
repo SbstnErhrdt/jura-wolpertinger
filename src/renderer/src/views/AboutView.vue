@@ -11,17 +11,18 @@
     <section class="about-hero">
       <div class="about-hero-copy">
         <p class="about-kicker">Ein kleines Freizeitprojekt</p>
-        <h2>Prüfungsnah üben, offline schreiben, mit der Oberfläche vertraut werden.</h2>
+        <h2>Prüfungsnah schreiben, Karteikarten wiederholen und den eigenen Lernstand behalten.</h2>
         <p>
           Der Wolpertinger ist hier einfach Wolpi: die inoffizielle Begleitfigur dieser App. In
           der kleinen Geschichte hinter dem Projekt hilft er Jura-Studierenden in Bayern dabei,
-          Prüfungen möglichst prüfungsnah zu schreiben und sich früh an die Arbeitsweise der
-          Oberfläche zu gewöhnen.
+          regelmäßig zu lernen, Karteikarten wiederzuholen und Prüfungen möglichst prüfungsnah zu
+          schreiben.
         </p>
         <p>
           Die App ist kein offizielles Angebot, sondern ein privates Freizeitprojekt. Sie soll
-          eine ruhige, einfache Umgebung bieten, in der man Entwürfe offline schreiben, abgeben,
-          korrigieren und den eigenen Stand lokal nachhalten kann.
+          eine ruhige, einfache Umgebung bieten, in der man eigene Sammlungen aufbaut, kurze
+          Lerneinheiten startet, Entwürfe schreibt, Abgaben korrigiert und den eigenen Stand
+          nachvollziehbar nachhält.
         </p>
       </div>
       <div class="about-hero-art">
@@ -33,29 +34,36 @@
       <UCard class="about-panel">
         <h3>Die Idee</h3>
         <p>
-          Wolpi steht für eine einfache Idee: Wenn die Oberfläche vertraut ist, bleibt im Ernstfall
-          mehr Aufmerksamkeit für den Inhalt. Deshalb orientiert sich die App bewusst an einem
-          prüfungsnahen Ablauf und soll Schreiben, automatisches Speichern und Abgeben nicht
-          unnötig kompliziert machen.
+          Wolpi steht für eine einfache Idee: Lernen soll schnell starten und sich nicht nach
+          Verwaltungsarbeit anfühlen. Karteikarten helfen bei kleinen Wiederholungen zwischendurch,
+          Prüfungen trainieren den Ernstfall am Schreibtisch.
         </p>
       </UCard>
 
       <UCard class="about-panel">
         <h3>Was die App können soll</h3>
         <p>
-          Prüfungen verwalten, in Ordnern ablegen, lokal exportieren, Kommentare und Bewertungen
-          festhalten und den eigenen Fortschritt sauber dokumentieren. Alles offline-ready, klar
-          und ohne unnötigen Ballast.
+          Karteikarten in Sammlungen organisieren, Schlagwörter vergeben, Wiederholungen bewerten,
+          Prüfungen verwalten, Kommentare und Bewertungen festhalten und Fortschritt sichtbar
+          machen. Alles klar, ruhig und ohne unnötigen Ballast.
         </p>
       </UCard>
 
       <UCard class="about-panel">
-        <h3>Warum lokal</h3>
+        <h3>Lokal und online</h3>
         <p>
-          Die Arbeit soll auf dem eigenen Rechner bleiben. Entwürfe werden fortlaufend in lokale
-          Revisionen geschrieben, sodass eine Klausur nach Stromausfall, leerem Akku oder
-          App-Absturz nicht einfach verloren ist. Ein Server kann später kommen, aber der Kern
-          soll auch allein zuverlässig funktionieren.
+          Die Desktop-App soll auch ohne Online-Verbindung zuverlässig nutzbar bleiben. Wer möchte,
+          kann seine Daten später mit der Online-Version verbinden und zwischen Geräten
+          übertragen. Die Web-App ist für angemeldete Nutzer gedacht.
+        </p>
+      </UCard>
+
+      <UCard class="about-panel">
+        <h3>KI-Korrektur</h3>
+        <p>
+          Die KI-Korrektur soll wie ein zusätzlicher Korrektor unterstützen: mit nachvollziehbarer
+          Bewertung, Hinweisen und konkreten Verbesserungsvorschlägen. In der Online-Version bleibt
+          sie zunächst zurückhaltend, bis Kosten, Datenschutz und Qualität sauber geklärt sind.
         </p>
       </UCard>
 

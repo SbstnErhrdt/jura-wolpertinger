@@ -353,6 +353,60 @@ describe('browser development API', () => {
     expect(await api.listLearningTasks()).toEqual([expect.objectContaining({ id: currentTaskId, status: 'done' })])
   })
 
+  it('prunes old browser autosave revisions without deleting submitted revisions', async () => {
+    const apiModulePath = '../../src/renderer/src/api'
+    const { getApi } = (await import(/* @vite-ignore */ apiModulePath)) as {
+      getApi: () => AppApi
+    }
+    const api = getApi()
+    const exam = await api.createExam({ title: 'Browser Revisionen' })
+    const store = JSON.parse(localStorageMock.getItem(browserStoreKey) ?? '{}') as {
+      currentUserId: string
+      revisions: Array<Record<string, unknown>>
+      submissions: Array<Record<string, unknown>>
+    }
+    const oldAutosaveIds = Array.from({ length: 25 }, () => crypto.randomUUID())
+    const submittedRevisionId = oldAutosaveIds[1]
+    for (const [index, revisionId] of oldAutosaveIds.entries()) {
+      store.revisions.push({
+        schemaVersion: 1,
+        editorSchemaVersion: EDITOR_SCHEMA_VERSION,
+        id: revisionId,
+        userId: store.currentUserId,
+        examId: exam.id,
+        createdAt: `2026-05-${String(index + 1).padStart(2, '0')}T08:00:00.000Z`,
+        kind: 'autosave',
+        contentFormat: 'tiptap-v1',
+        contentHash: `hash-${index}`,
+        content: { type: 'doc', content: [] }
+      })
+    }
+    store.submissions.push({
+      schemaVersion: 1,
+      id: crypto.randomUUID(),
+      userId: store.currentUserId,
+      examId: exam.id,
+      submittedAt: '2026-06-01T08:00:00.000Z',
+      revisionId: submittedRevisionId,
+      contentHash: 'hash-1',
+      canContinueEditing: true,
+      pdfPath: null
+    })
+    localStorageMock.setItem(browserStoreKey, JSON.stringify(store))
+
+    await api.saveRevision({ examId: exam.id, content: { type: 'doc', content: [] }, kind: 'autosave' })
+
+    const updatedStore = JSON.parse(localStorageMock.getItem(browserStoreKey) ?? '{}') as {
+      revisions: Array<{ id: string }>
+    }
+    const remainingIds = new Set(updatedStore.revisions.map((revision) => revision.id))
+
+    expect(remainingIds.has(submittedRevisionId)).toBe(true)
+    expect(remainingIds.has(oldAutosaveIds[2])).toBe(false)
+    expect(remainingIds.has(oldAutosaveIds[3])).toBe(false)
+    expect(remainingIds.has(oldAutosaveIds[4])).toBe(false)
+  })
+
   it('exports and imports flashcard JSON in the browser fallback', async () => {
     const apiModulePath = '../../src/renderer/src/api'
     const { getApi } = (await import(/* @vite-ignore */ apiModulePath)) as {

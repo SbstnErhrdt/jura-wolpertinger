@@ -180,7 +180,7 @@ const emit = defineEmits<{
   pdf: []
 }>()
 
-const saveState = ref('Entwurf lokal gespeichert')
+const saveState = ref('Entwurf gespeichert')
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 let lastInternalContent = JSON.stringify(props.modelValue)
 let applyingExternalContent = false
@@ -276,12 +276,12 @@ function clipboard(command: 'cut' | 'copy' | 'paste'): void {
 
 function queueSave(content: Record<string, unknown>): void {
   if (props.readonly) return
-  saveState.value = 'Noch nicht lokal gespeichert'
+  saveState.value = 'Noch nicht gespeichert'
   emit('dirty')
   if (saveTimer) clearTimeout(saveTimer)
   saveTimer = setTimeout(() => {
     emit('save', content)
-    saveState.value = 'Entwurf lokal gespeichert'
+    saveState.value = 'Entwurf gespeichert'
     saveTimer = null
   }, 1000)
 }

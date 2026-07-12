@@ -239,7 +239,7 @@ test.describe('Jura Wolpertinger Electron app', () => {
       await expect(page.locator('.exam-session-header')).toContainText('E1234')
       await expect(page.locator('.exam-session-header')).not.toContainText('Prüfungsnummer')
       await expect(page.locator('.session-back')).toBeVisible()
-      await expect(page.locator('.focus-save-state')).toContainText('Entwurf lokal gespeichert')
+      await expect(page.locator('.focus-save-state')).toContainText('Entwurf gespeichert')
       await expectToolbarOrder(page)
 
       const frame = await page.locator('.editor-frame').boundingBox()

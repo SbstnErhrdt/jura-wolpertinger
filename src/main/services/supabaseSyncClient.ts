@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js'
+import WsWebSocket from 'ws'
 import type { SyncAuthInput } from '@shared/schemas'
 import type {
   CloudLearningCard,
@@ -15,6 +16,7 @@ const DEFAULT_SYNC_URL = 'https://app.jura-wolpi.de/api'
 const SYNC_BUCKET = 'user-files'
 const LOCAL_ENV_FILES = ['.env.local', '.env', '../jura-supabase/.env', 'jura-supabase/.env']
 const QUERY_CHUNK_SIZE = 50
+type RealtimeTransportConstructor = new (address: string | URL, protocols?: string | string[]) => WebSocket
 
 let localEnvCache: { cwd: string; values: Record<string, string> } | null = null
 
@@ -36,6 +38,9 @@ export class SupabaseSyncClient {
         persistSession: false,
         autoRefreshToken: false,
         detectSessionInUrl: false
+      },
+      realtime: {
+        transport: WsWebSocket as unknown as RealtimeTransportConstructor
       }
     })
   }

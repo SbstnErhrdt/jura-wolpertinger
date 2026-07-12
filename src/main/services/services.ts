@@ -88,6 +88,7 @@ import type {
   UpdateFolderInput,
   UpdateExamInput
 } from '@shared/ipc'
+import { selectExamRevisionIdsForDeletion } from '@shared/revisionRetention'
 import { openDatabase, type SqliteDatabase } from './database'
 import {
   buildAiCorrectionPrompt,
@@ -647,6 +648,7 @@ export class AppServices {
           .run(id, createdAt, 'in_progress', examId)
       })()
 
+    this.pruneExamRevisions(examId)
     return this.getRevision(id)
   }
 
@@ -1394,6 +1396,23 @@ export class AppServices {
     return this.getLearningCard(input.id)
   }
 
+  deleteLearningCard(input: { id: string }): void {
+    const card = this.getLearningCard(input.id)
+    const now = nowIso()
+    this.db.transaction(() => {
+      this.db
+        .prepare(
+          `
+          UPDATE learning_cards
+          SET is_archived = 1, updated_at = ?
+          WHERE id = ? AND user_id = ?
+        `
+        )
+        .run(now, input.id, this.getCurrentUserId())
+      this.touchCollection(card.collectionId, now)
+    })()
+  }
+
   exportLearningDecks(): string {
     const collections = this.listLearningCollections().map((collection) => {
       const cards = this.listLearningCards(collection.id).map((card) => ({
@@ -1991,6 +2010,26 @@ export class AppServices {
       .prepare('SELECT * FROM submissions WHERE exam_id = ? AND user_id = ? ORDER BY submitted_at DESC')
       .all(examId, this.getCurrentUserId()) as Row[]
     return rows.map(submissionFromRow)
+  }
+
+  private pruneExamRevisions(examId: string): void {
+    const exam = this.getExam(examId)
+    const idsForDeletion = selectExamRevisionIdsForDeletion({
+      revisions: this.listRevisionsForExam(examId),
+      currentRevisionId: exam.currentRevisionId,
+      submittedRevisionIds: new Set(this.listSubmissionsForExam(examId).map((submission) => submission.revisionId))
+    })
+    if (!idsForDeletion.size) return
+
+    const deleteRevision = this.db.prepare(
+      'DELETE FROM exam_revisions WHERE id = ? AND exam_id = ? AND user_id = ? AND kind = ?'
+    )
+    const userId = this.getCurrentUserId()
+    this.db.transaction(() => {
+      for (const revisionId of idsForDeletion) {
+        deleteRevision.run(revisionId, examId, userId, 'autosave')
+      }
+    })()
   }
 
   private getCorrection(id: string): Correction {

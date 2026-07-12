@@ -16,17 +16,17 @@ export function startOnboardingTour(onDone?: () => void): void {
       {
         element: '.brand',
         popover: {
-          title: 'Dein lokaler Arbeitsbereich',
+          title: 'Dein Arbeitsbereich',
           description:
-            'Alles bleibt auf deinem Rechner gespeichert. Deine Klausuren, Ordner und Bewertungen sind deinem Nutzer zugeordnet.'
+            'Hier öffnest du deinen Lernbereich. Klausuren, Ordner und Bewertungen bleiben deinem Konto oder lokalen Nutzer zugeordnet.'
         }
       },
       {
-        element: '.sidebar-user',
+        element: '.sidebar-user, .sidebar-account',
         popover: {
-          title: 'Nutzer wechseln',
+          title: 'Konto und Profil',
           description:
-            'Hier wechselst du zwischen deinem Arbeitsbereich und dem Demo-Bereich. Beim Wechsel bleibt alles erhalten.'
+            'Hier siehst du, mit welchem Profil du arbeitest. Lokal kannst du Nutzer wechseln, in der Web-App meldest du dich hier ab.'
         }
       },
       {

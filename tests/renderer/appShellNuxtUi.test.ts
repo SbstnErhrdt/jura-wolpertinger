@@ -67,10 +67,58 @@ describe('Nuxt UI app shell', () => {
 
     expect(styles).toMatch(/\.nav a:hover\s*\{[^}]*background:/s)
     expect(styles).toMatch(/\.nav a\[data-active\]\s*\{[^}]*background:/s)
+    expect(styles).toContain('--wolpi-blue-tint: #e2ebf3')
+    expect(styles).toContain('--wolpi-nav-blue: #005a84')
+    expect(styles).toContain('--wolpi-blue-tint-text: var(--wolpi-nav-blue)')
+    expect(styles).toMatch(/\.nav a\[data-active\]\s*\{[^}]*background:\s*var\(--wolpi-blue-tint\)/s)
+    expect(styles).toMatch(/\.nav a\[data-active\]\s*\{[^}]*color:\s*var\(--wolpi-blue-tint-text\)/s)
     expect(styles).toMatch(/\.nav a\.router-link-active\s*\{[^}]*background:/s)
+    expect(styles).toMatch(/\.nav a\.router-link-active\s*\{[^}]*background:\s*var\(--wolpi-blue-tint\)/s)
+    expect(styles).toMatch(/\.nav a\.router-link-active\s*\{[^}]*color:\s*var\(--wolpi-blue-tint-text\)/s)
+    expect(styles).toContain(".nav a.router-link-active [data-slot='label']")
+    expect(styles).toContain(".nav a[data-active] [data-slot='label']")
     expect(styles).toMatch(/\.nav a:focus-visible\s*\{[^}]*outline:\s*2px solid/s)
     expect(styles).toMatch(/:root\[data-theme='dark'\] \.nav a:hover\s*\{[^}]*background:/s)
     expect(styles).toMatch(/:root\[data-theme='dark'\] \.nav a\[data-active\]\s*\{[^}]*background:/s)
+    expect(styles).toMatch(/:root\[data-theme='dark'\] \.nav a\[data-active\]\s*\{[^}]*color:\s*var\(--wolpi-blue-tint-text\)/s)
     expect(styles).toMatch(/:root\[data-theme='dark'\] \.nav a\.router-link-active\s*\{[^}]*background:/s)
+    expect(styles).toMatch(/:root\[data-theme='dark'\] \.nav a\.router-link-active\s*\{[^}]*color:\s*var\(--wolpi-blue-tint-text\)/s)
+  })
+
+  it('keeps the app blue palette anchored to the Wolpi navigation blue', async () => {
+    const styles = await readFile(resolve(rendererRoot, 'styles/main.css'), 'utf8')
+
+    expect(styles).toContain('--wolpi-nav-blue: #005a84')
+    expect(styles).toContain('--color-primary: var(--wolpi-nav-blue)')
+    expect(styles).toContain('--color-primary-strong: var(--wolpi-nav-blue)')
+    expect(styles).not.toMatch(/#(?:004f80|008bd2|006ea8|075d88|0f6c9d|0f506f|168fd1|7fcaf0|43bce8|82d5f2|159fd8|b9e7f8|dff3fc|0091ea|007fbe|0086d7|008fe3)\b/i)
+  })
+
+  it('keeps cloud account controls separate from local user switching', async () => {
+    const app = await readFile(resolve(rendererRoot, 'App.vue'), 'utf8')
+
+    expect(app).toContain('const isCloudShell = computed')
+    expect(app).toContain('<section v-if="isCloudShell" class="sidebar-account" aria-label="Konto">')
+    expect(app).toContain('<section v-else class="sidebar-user" aria-label="Nutzer">')
+    expect(app).toContain('Profil')
+    expect(app).toContain(`:to="{ name: 'settings' }"`)
+    expect(app).toContain('Abmelden')
+    expect(app).toContain('async function signOut')
+    expect(app).toContain('showCreateUser = true')
+  })
+
+  it('keeps the cloud auth form readable, recoverable and theme-aware', async () => {
+    const app = await readFile(resolve(rendererRoot, 'App.vue'), 'utf8')
+    const styles = await readFile(resolve(rendererRoot, 'styles/main.css'), 'utf8')
+
+    expect(app).toContain("authMode = ref<'sign_in' | 'sign_up' | 'reset_password'>")
+    expect(app).toContain('Passwort vergessen?')
+    expect(app).toContain('resetPasswordForEmail')
+    expect(app).toContain('class="auth-theme-toggle"')
+    expect(app).toContain('Link zum Zurücksetzen senden')
+    expect(styles).toMatch(/\.auth-field\s+\[data-slot='label'\]\s*\{[^}]*color:\s*#243746 !important/s)
+    expect(styles).toMatch(/:root\[data-theme='dark'\] \.auth-panel\s*\{[^}]*background:\s*#0e202b/s)
+    expect(styles).toMatch(/:root\[data-theme='dark'\] \.auth-field\s+\[data-slot='label'\]\s*\{[^}]*color:\s*#eef5f7 !important/s)
+    expect(styles).toMatch(/\.auth-theme-toggle\s*\{[^}]*justify-self:\s*center/s)
   })
 })

@@ -8,7 +8,6 @@
         <div class="exam-header-meta">
           <span class="status-pill">{{ statusLabel(exam.status) }}</span>
           <span>{{ autosaveLabel }}</span>
-          <span>Offline gespeichert</span>
           <span>Gespeichert {{ formatDate(exam.lastSavedAt) }}</span>
         </div>
       </div>
@@ -208,7 +207,7 @@
       <div class="dialog-card" @click.stop>
         <h2>Klausur abgeben</h2>
         <p class="dialog-copy">
-          Die aktuelle Fassung wird lokal gespeichert und als Abgabe festgehalten. Du kannst danach
+          Die aktuelle Fassung wird gespeichert und als Abgabe festgehalten. Du kannst danach
           weiterarbeiten, aber diese Abgabe bleibt als eigener Offline-Stand erhalten.
         </p>
         <div class="dialog-actions">
@@ -240,7 +239,7 @@
           </div>
           <img :src="submissionImageUrl" alt="" class="submission-celebration-image" />
           <h2>Klausur abgegeben</h2>
-          <p>Die Abgabe ist lokal gespeichert und bleibt auch nach einem Neustart verfügbar.</p>
+          <p>Die Abgabe ist gespeichert und bleibt auch nach einem Neustart verfügbar.</p>
           <button class="submission-celebration-action" @click="dismissSubmissionOverlay">
             Weiter
           </button>
@@ -297,7 +296,7 @@ const toolbarHidden = ref(false)
 const iconUrl = 'assets/icon.png'
 const submissionImageUrl = 'assets/submission.png'
 const actionError = ref('')
-const autosaveLabel = ref('Entwurf lokal gespeichert')
+const autosaveLabel = ref('Entwurf gespeichert')
 const showSubmitDialog = ref(false)
 const showSubmissionOverlay = ref(false)
 const { isDark, toggleTheme } = useTheme()
@@ -317,7 +316,7 @@ const confettiPieces = Array.from({ length: 24 }, (_value, index) => ({
     left: `${4 + ((index * 4.1) % 92)}%`,
     animationDelay: `${(index % 6) * 0.09}s`,
     animationDuration: `${2.1 + (index % 5) * 0.16}s`,
-    background: ['#008bd2', '#70d6ff', '#ffca3a', '#8ac926', '#ff6b6b', '#6a4c93'][index % 6],
+    background: ['#005a84', '#6f93b3', '#ffca3a', '#8ac926', '#ff6b6b', '#6a4c93'][index % 6],
     transform: `rotate(${(index * 17) % 360}deg)`
   }
 }))
@@ -352,7 +351,7 @@ async function load(): Promise<void> {
   content.value =
     exam.value.currentRevision?.content ??
     (structuredClone(EMPTY_TIPTAP_DOCUMENT) as unknown as Record<string, unknown>)
-  autosaveLabel.value = 'Entwurf lokal gespeichert'
+  autosaveLabel.value = 'Entwurf gespeichert'
 }
 
 async function saveRevision(nextContent: Record<string, unknown>): Promise<void> {
@@ -361,7 +360,7 @@ async function saveRevision(nextContent: Record<string, unknown>): Promise<void>
   try {
     await api.saveRevision({ examId: exam.value.id, content: plainContent(nextContent), kind: 'autosave' })
     exam.value = await api.getExam(exam.value.id)
-    autosaveLabel.value = 'Entwurf lokal gespeichert'
+    autosaveLabel.value = 'Entwurf gespeichert'
   } catch (error) {
     autosaveLabel.value = 'Speichern fehlgeschlagen'
     actionError.value = error instanceof Error ? error.message : String(error)
@@ -376,7 +375,7 @@ async function saveNow(): Promise<void> {
     autosaveLabel.value = 'Speichern...'
     await api.saveRevision({ examId: exam.value.id, content: plainContent(content.value), kind: 'manual' })
     exam.value = await api.getExam(exam.value.id)
-    autosaveLabel.value = 'Entwurf lokal gespeichert'
+    autosaveLabel.value = 'Entwurf gespeichert'
   })
 }
 
@@ -475,7 +474,7 @@ function attachmentRoleLabel(role: string): string {
 }
 
 function markDirty(): void {
-  autosaveLabel.value = 'Noch nicht lokal gespeichert'
+  autosaveLabel.value = 'Noch nicht gespeichert'
 }
 
 async function runAction(action: () => Promise<void>): Promise<void> {
