@@ -134,7 +134,12 @@
         <RouterView />
       </main>
 
-      <UModal :open="showTourPrompt" :dismissible="false" @update:open="showTourPrompt = $event">
+      <UModal
+        :open="showTourPrompt"
+        :dismissible="false"
+        title="Was möchtest du als Nächstes tun?"
+        @update:open="showTourPrompt = $event"
+      >
         <template #content>
           <section class="modal-card onboarding-card" aria-labelledby="onboarding-title">
             <div class="onboarding-heading">

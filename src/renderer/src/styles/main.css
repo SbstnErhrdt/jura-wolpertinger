@@ -389,7 +389,7 @@ body {
 }
 
 .nav-section {
-  color: rgba(255, 255, 255, 0.62);
+  color: rgba(255, 255, 255, 0.82);
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -1510,7 +1510,7 @@ button:active .key-hint,
 }
 
 .sidebar-version {
-  color: rgba(238, 245, 247, 0.64);
+  color: rgba(238, 245, 247, 0.82);
   font-size: 12px;
   line-height: 1.2;
   text-align: center;
@@ -2519,7 +2519,7 @@ button:active .key-hint,
 }
 
 .onboarding-action-card small {
-  color: var(--color-text-muted);
+  color: #445c68;
   font-size: 13px;
   line-height: 1.35;
 }
