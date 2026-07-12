@@ -457,6 +457,54 @@ const usersUpdatedListener = () => {
   void loadUsers()
 }
 
+function getRecoveryTokenHashFromUrl(): string | null {
+  const params = new URLSearchParams(window.location.search)
+  const tokenHash = params.get('token_hash')?.trim()
+  if (!tokenHash || params.get('type') === null || params.get('type') !== 'recovery') return null
+  return tokenHash
+}
+
+function clearRecoveryTokenHashFromUrl(): void {
+  const url = new URL(window.location.href)
+  url.searchParams.delete('token_hash')
+  url.searchParams.delete('type')
+  window.history.replaceState(window.history.state, document.title, `${url.pathname}${url.search}${url.hash}`)
+}
+
+async function verifyRecoveryTokenFromUrl(): Promise<void> {
+  const tokenHash = getRecoveryTokenHashFromUrl()
+  if (!tokenHash) return
+
+  const client = getSupabaseAuthClient()
+  if (!client) return
+
+  authBusy.value = true
+  authMessageKind.value = 'info'
+  authMessage.value = 'Passwort-Link wird geprüft.'
+
+  const { error } = await client.auth.verifyOtp({
+    token_hash: tokenHash,
+    type: 'recovery'
+  })
+
+  clearRecoveryTokenHashFromUrl()
+  authBusy.value = false
+
+  if (error) {
+    authMode.value = 'reset_password'
+    authMessageKind.value = 'error'
+    authMessage.value = 'Der Link ist abgelaufen oder wurde bereits verwendet. Bitte fordere einen neuen Link an.'
+    return
+  }
+
+  authMode.value = 'update_password'
+  authPassword.value = ''
+  authPasswordConfirm.value = ''
+  authMessageKind.value = 'info'
+  authMessage.value = ''
+  cloudAuth.value = await readCloudAuthState()
+}
+
 onMounted(async () => {
   applyTheme()
   if (window.location.hash.includes('type=recovery')) {
@@ -478,6 +526,7 @@ onMounted(async () => {
   if (cloudAuth.value.status === 'not_required' || cloudAuth.value.status === 'signed_in') {
     await loadUsers()
   }
+  await verifyRecoveryTokenFromUrl()
   window.addEventListener('jura:start-tour', startTourListener)
   window.addEventListener('jura:users-updated', usersUpdatedListener)
   await nextTick()
