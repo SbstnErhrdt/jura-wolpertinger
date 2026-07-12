@@ -1,0 +1,15 @@
+baseURL = 'https://jura-wolpi.de/'
+languageCode = 'de-DE'
+title = 'Jura Wolpertinger'
+disableKinds = ['taxonomy', 'term']
+enableRobotsTXT = true
+
+[params]
+description = 'Jura Wolpertinger ist eine Desktop- und Web-App für Karteikarten, Übungsklausuren, Autosave, Bewertungen und Lernfortschritt in der juristischen Examensvorbereitung.'
+image = 'https://jura-wolpi.de/assets/hello.png'
+
+[markup.goldmark.renderer]
+unsafe = true
+
+[outputs]
+home = ['HTML', 'SITEMAP']

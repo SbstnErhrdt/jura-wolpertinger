@@ -46,107 +46,13 @@
             <UButton color="neutral" variant="outline" :to="{ name: 'exam', params: { id: submission.examId } }">
               Zur Prüfung
             </UButton>
-            <UButton type="button" color="neutral" variant="outline" @click="showAiSettings = !showAiSettings">
-              KI einrichten
-            </UButton>
-            <UButton type="button" :disabled="aiBusy || !aiSettings.configured || cloudAiDisabled" @click="generateAiDraft">
-              {{ cloudAiDisabled ? 'Cloud-KI noch nicht freigeschaltet' : aiBusy ? 'KI arbeitet...' : 'KI-Korrektur vorschlagen' }}
-            </UButton>
-            <UButton :disabled="aiBusy" @click="saveCorrection">Speichern</UButton>
+            <UButton @click="saveCorrection">Speichern</UButton>
           </div>
         </header>
 
         <p v-if="actionError" class="action-error">{{ actionError }}</p>
-        <p v-if="aiNotice" class="action-notice">{{ aiNotice }}</p>
 
         <div class="correction-workspace">
-          <section v-if="showAiSettings" class="correction-assessment-panel ai-settings-panel">
-            <div>
-              <h2>KI-Korrektur</h2>
-              <p class="field-hint">
-                Aufgabenstellung, Musterlösung und Abgabe werden für die Korrektur an den
-                konfigurierten KI-Anbieter übertragen.
-              </p>
-              <div class="settings-ai-status compact">
-                <strong>{{ aiStatusTitle }}</strong>
-                <p>{{ aiStatusDescription }}</p>
-                <span v-if="aiKeyPreview">Key: {{ aiKeyPreview }}</span>
-                <span>Modell: {{ aiSettings.model ?? DEFAULT_AI_MODEL }}</span>
-                <span v-if="storedKeyOverridesEnvironment" class="settings-ai-hint">
-                  Gespeicherter App-Key überschreibt deinen .env-Key.
-                </span>
-                <span v-if="aiConnectionMessage" :class="aiConnectionOk ? 'settings-test-ok' : 'settings-test-error'">
-                  {{ aiConnectionMessage }}
-                </span>
-              </div>
-              <div v-if="!showAiKeyForm" class="dialog-actions">
-                <UButton type="button" @click="openAiKeyForm">{{ aiSetupButtonLabel }}</UButton>
-                <UButton
-                  type="button"
-                  color="neutral"
-                  variant="outline"
-                  :disabled="!aiSettings.configured || aiBusy"
-                  @click="testAiConnection"
-                >
-                  {{ aiBusy ? 'Prüft ...' : 'Verbindung testen' }}
-                </UButton>
-                <UButton
-                  v-if="storedKeyOverridesEnvironment"
-                  type="button"
-                  color="neutral"
-                  variant="outline"
-                  :disabled="aiBusy"
-                  @click="testEnvironmentConnection"
-                >
-                  .env-Key testen
-                </UButton>
-                <UButton
-                  v-if="effectiveAiSource === 'stored'"
-                  type="button"
-                  color="error"
-                  variant="outline"
-                  :disabled="aiBusy"
-                  @click="startRemoveAiSettings"
-                >
-                  App-Key entfernen
-                </UButton>
-              </div>
-              <div v-if="confirmRemoveAiKey" class="settings-confirm-remove">
-                <strong>App-Key entfernen?</strong>
-                <p>KI-Korrekturen nutzen danach keinen gespeicherten App-Key mehr.</p>
-                <div class="dialog-actions">
-                  <UButton type="button" color="error" :disabled="aiBusy" @click="removeAiSettings">
-                    Entfernen
-                  </UButton>
-                  <UButton type="button" color="neutral" variant="outline" :disabled="aiBusy" @click="cancelRemoveAiSettings">
-                    Abbrechen
-                  </UButton>
-                </div>
-              </div>
-              <form v-if="showAiKeyForm" class="settings-key-form" @submit.prevent="saveAiSettings">
-                <label>
-                  OpenAI API-Key
-                  <UInput v-model="aiApiKeyInput" type="password" :placeholder="aiKeyPlaceholder" />
-                  <span v-if="effectiveAiSource === 'stored'" class="settings-field-note">
-                    Der gespeicherte Key bleibt erhalten, wenn du hier nichts eingibst.
-                  </span>
-                </label>
-                <label>
-                  Modell
-                  <UInput v-model="aiModelInput" :placeholder="DEFAULT_AI_MODEL" />
-                </label>
-                <div class="dialog-actions">
-                  <UButton type="submit" :disabled="aiBusy">
-                    {{ aiBusy ? 'Speichert ...' : 'Speichern' }}
-                  </UButton>
-                  <UButton type="button" color="neutral" variant="outline" :disabled="aiBusy" @click="cancelAiKeyForm">
-                    Abbrechen
-                  </UButton>
-                </div>
-              </form>
-            </div>
-          </section>
-
           <section class="correction-assessment-panel">
             <div>
               <h2>Bewertung</h2>
@@ -166,85 +72,6 @@
                 Bewertungskommentar
                 <UTextarea v-model="gradingComment" :rows="4" />
               </label>
-            </div>
-          </section>
-
-          <section v-if="selectedAiDraft" class="correction-assessment-panel ai-draft-panel">
-            <div>
-              <h2>KI-Vorschlag</h2>
-              <div class="ai-draft-score">
-                <strong>{{ formatScoreInput(selectedAiDraft.score.points) || 'ohne Punkte' }}</strong>
-                <span v-if="selectedAiDraft.score.points !== null">Punkte</span>
-              </div>
-              <p class="field-hint">{{ selectedAiDraft.scoreReasoning }}</p>
-
-              <div class="ai-draft-section">
-                <h3>Bewertungskommentar</h3>
-                <p>{{ selectedAiDraft.gradingComment }}</p>
-              </div>
-
-              <div
-                v-if="selectedAiDraft.strengths.length || selectedAiDraft.weaknesses.length"
-                class="ai-draft-two-column"
-              >
-                <div v-if="selectedAiDraft.strengths.length">
-                  <h3>Stärken</h3>
-                  <ul>
-                    <li v-for="strength in selectedAiDraft.strengths" :key="strength">
-                      {{ strength }}
-                    </li>
-                  </ul>
-                </div>
-                <div v-if="selectedAiDraft.weaknesses.length">
-                  <h3>Schwächen</h3>
-                  <ul>
-                    <li v-for="weakness in selectedAiDraft.weaknesses" :key="weakness">
-                      {{ weakness }}
-                    </li>
-                  </ul>
-                </div>
-              </div>
-
-              <div v-if="selectedAiDraft.improvementSuggestions.length" class="ai-draft-section">
-                <h3>Verbesserungsvorschläge</h3>
-                <ul class="ai-suggestion-list">
-                  <li
-                    v-for="suggestion in selectedAiDraft.improvementSuggestions"
-                    :key="`${suggestion.category}-${suggestion.priority}-${suggestion.title}`"
-                  >
-                    <div>
-                      <strong>{{ suggestion.title }}</strong>
-                      <span>
-                        {{ formatImprovementCategory(suggestion.category) }} ·
-                        {{ formatLearningTaskPriority(suggestion.priority) }}
-                      </span>
-                    </div>
-                    <p>{{ suggestion.detail }}</p>
-                  </li>
-                </ul>
-              </div>
-
-              <div v-if="selectedAiDraft.inlineComments.length" class="ai-draft-section">
-                <h3>Inline-Kommentare</h3>
-                <ul class="ai-inline-comment-list">
-                  <li
-                    v-for="comment in selectedAiDraft.inlineComments"
-                    :key="`${comment.selectedText}-${comment.body}`"
-                  >
-                    <blockquote>{{ comment.selectedText }}</blockquote>
-                    <p>{{ comment.body }}</p>
-                  </li>
-                </ul>
-              </div>
-
-              <div class="dialog-actions">
-                <UButton type="button" color="neutral" variant="outline" :disabled="aiBusy" @click="rejectAiDraft(selectedAiDraft.id)">
-                  Verwerfen
-                </UButton>
-                <UButton type="button" :disabled="aiBusy" @click="acceptAiDraft(selectedAiDraft.id)">
-                  Übernehmen
-                </UButton>
-              </div>
             </div>
           </section>
 
@@ -346,12 +173,10 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { CheckCircle2, Clock3 } from 'lucide-vue-next'
-import { DEFAULT_AI_MODEL, EDITOR_SCHEMA_VERSION } from '@shared/constants'
-import { aiConnectionFallbackMessage, type AiConnectionTestSource } from '@shared/aiConnectionFeedback'
-import type { AiSettingsStatus, SubmissionDetails } from '@shared/ipc'
-import type { AiCorrectionDraft, Correction, InlineComment } from '@shared/schemas'
+import { EDITOR_SCHEMA_VERSION } from '@shared/constants'
+import type { SubmissionDetails } from '@shared/ipc'
+import type { Correction, InlineComment } from '@shared/schemas'
 import { api } from '../api'
-import { requiresCloudAuth } from '../cloudAuth'
 import { type AppBreadcrumbItem, withHomeIcon } from '../ui/breadcrumbs'
 import { renderTiptapHtml } from '../utils/renderTiptap'
 
@@ -379,37 +204,11 @@ const activeCommentId = ref<string | null>(null)
 const commentPositions = ref<Record<string, number>>({})
 const commentRailHeight = ref(760)
 const selectionPopover = ref({ x: 0, y: 0 })
-const aiSettings = ref<AiSettingsStatus>({
-  provider: 'openai',
-  configured: false,
-  model: null,
-  source: null,
-  keyPreview: null,
-  environmentAvailable: false,
-  updatedAt: null
-})
-const aiDrafts = ref<AiCorrectionDraft[]>([])
-const showAiSettings = ref(false)
-const showAiKeyForm = ref(false)
-const confirmRemoveAiKey = ref(false)
-const aiApiKeyInput = ref('')
-const aiModelInput = ref(DEFAULT_AI_MODEL)
-const aiBusy = ref(false)
-const aiNotice = ref('')
-const aiConnectionMessage = ref('')
-const aiConnectionOk = ref(false)
-const cloudAiDisabled = requiresCloudAuth()
-const effectiveAiSource = computed(() =>
-  aiSettings.value.source ?? (aiSettings.value.configured ? 'stored' : null)
-)
-const aiKeyPreview = computed(() =>
-  aiSettings.value.keyPreview ?? (effectiveAiSource.value === 'stored' ? 'gespeichert' : null)
-)
 
 const renderedHtml = computed(() =>
   submission.value ? renderTiptapHtml(submission.value.content) : ''
 )
-const canAddComment = computed(() => Boolean(!aiBusy.value && selectedText.value && commentBody.value.trim()))
+const canAddComment = computed(() => Boolean(selectedText.value && commentBody.value.trim()))
 const openSubmissionCount = computed(
   () => submittedItems.value.filter((item) => item.scorePoints === null).length
 )
@@ -433,34 +232,6 @@ const detailBreadcrumbItems = computed<AppBreadcrumbItem[]>(() => [
 const activeBreadcrumbItems = computed<AppBreadcrumbItem[]>(() =>
   submission.value && correction.value ? detailBreadcrumbItems.value : listBreadcrumbItems
 )
-const selectedAiDraft = computed(
-  () => aiDrafts.value.find((draft) => draft.status === 'draft') ?? null
-)
-const aiKeyPlaceholder = computed(() =>
-  effectiveAiSource.value === 'stored' ? 'neuer Key oder leer lassen' : 'sk-...'
-)
-const storedKeyOverridesEnvironment = computed(
-  () => effectiveAiSource.value === 'stored' && Boolean(aiSettings.value.environmentAvailable)
-)
-const aiStatusTitle = computed(() => {
-  if (cloudAiDisabled) return 'Cloud-KI noch nicht freigeschaltet'
-  if (effectiveAiSource.value === 'stored') return 'OpenAI-Key gespeichert'
-  if (effectiveAiSource.value === 'environment') return 'Entwicklungs-Key aktiv'
-  return 'OpenAI-Key fehlt'
-})
-const aiStatusDescription = computed(() => {
-  if (cloudAiDisabled) return 'KI-Korrektur ist in der Cloud-Version sichtbar, aber noch deaktiviert.'
-  if (effectiveAiSource.value === 'stored') return 'KI-Korrekturen nutzen den lokal gespeicherten App-Key.'
-  if (effectiveAiSource.value === 'environment') return 'Der Key kommt aus deiner lokalen .env-Datei.'
-  return 'Richte einen eigenen OpenAI-Key ein, bevor KI-Korrekturen gestartet werden.'
-})
-const aiSetupButtonLabel = computed(() =>
-  effectiveAiSource.value === 'stored'
-    ? 'Key oder Modell ändern'
-    : effectiveAiSource.value === 'environment'
-      ? 'Eigenen App-Key speichern'
-      : 'OpenAI-Key einrichten'
-)
 
 onMounted(() => {
   window.addEventListener('resize', updateCommentPositions)
@@ -477,12 +248,10 @@ watch(
 
 async function load(): Promise<void> {
   await loadSubmittedItems()
-  aiSettings.value = await api.getAiSettingsStatus()
   const submissionId = typeof route.params.id === 'string' ? route.params.id : null
   if (!submissionId) {
     submission.value = null
     correction.value = null
-    aiDrafts.value = []
     scoreInput.value = ''
     gradingComment.value = ''
     return
@@ -491,7 +260,6 @@ async function load(): Promise<void> {
   submission.value = await api.getSubmission(submissionId)
   correction.value =
     submission.value.corrections[0] ?? (await api.createCorrection(submission.value.id))
-  aiDrafts.value = await api.listAiCorrectionDrafts(submission.value.id)
   scoreInput.value = formatScoreInput(correction.value.score.points)
   gradingComment.value = correction.value.gradingComment
   await nextTick()
@@ -531,9 +299,8 @@ async function loadSubmittedItems(): Promise<void> {
 }
 
 async function saveCorrection(): Promise<void> {
-  if (!correction.value || aiBusy.value) return
+  if (!correction.value) return
   actionError.value = ''
-  aiNotice.value = ''
   try {
     correction.value = await api.updateCorrection({
       correctionId: correction.value.id,
@@ -545,163 +312,6 @@ async function saveCorrection(): Promise<void> {
     await loadSubmittedItems()
   } catch (error) {
     actionError.value = error instanceof Error ? error.message : String(error)
-  }
-}
-
-async function saveAiSettings(): Promise<void> {
-  actionError.value = ''
-  aiNotice.value = ''
-  aiBusy.value = true
-  try {
-    aiSettings.value = await api.saveAiSettings({
-      provider: 'openai',
-      apiKey: aiApiKeyInput.value,
-      model: aiModelInput.value.trim() || DEFAULT_AI_MODEL
-    })
-    aiModelInput.value = aiSettings.value.model ?? DEFAULT_AI_MODEL
-    aiApiKeyInput.value = ''
-    showAiKeyForm.value = false
-    confirmRemoveAiKey.value = false
-    aiNotice.value = 'KI-Einstellungen gespeichert.'
-  } catch (error) {
-    actionError.value = error instanceof Error ? error.message : String(error)
-  } finally {
-    aiBusy.value = false
-  }
-}
-
-function openAiKeyForm(): void {
-  actionError.value = ''
-  aiNotice.value = ''
-  aiConnectionMessage.value = ''
-  confirmRemoveAiKey.value = false
-  aiApiKeyInput.value = ''
-  aiModelInput.value = aiSettings.value.model ?? DEFAULT_AI_MODEL
-  showAiKeyForm.value = true
-}
-
-function cancelAiKeyForm(): void {
-  aiApiKeyInput.value = ''
-  aiModelInput.value = aiSettings.value.model ?? DEFAULT_AI_MODEL
-  showAiKeyForm.value = false
-}
-
-function startRemoveAiSettings(): void {
-  actionError.value = ''
-  aiNotice.value = ''
-  aiConnectionMessage.value = ''
-  showAiKeyForm.value = false
-  confirmRemoveAiKey.value = true
-}
-
-function cancelRemoveAiSettings(): void {
-  confirmRemoveAiKey.value = false
-}
-
-async function removeAiSettings(): Promise<void> {
-  actionError.value = ''
-  aiNotice.value = ''
-  aiConnectionMessage.value = ''
-  aiBusy.value = true
-  try {
-    aiSettings.value = await api.removeAiSettings()
-    aiModelInput.value = aiSettings.value.model ?? DEFAULT_AI_MODEL
-    aiApiKeyInput.value = ''
-    showAiKeyForm.value = false
-    confirmRemoveAiKey.value = false
-    aiNotice.value =
-      effectiveAiSource.value === 'environment'
-        ? 'App-Key entfernt. Der Entwicklungs-Key aus .env ist weiter aktiv.'
-        : 'OpenAI-Key entfernt.'
-  } catch (error) {
-    actionError.value = error instanceof Error ? error.message : String(error)
-  } finally {
-    aiBusy.value = false
-  }
-}
-
-async function runAiConnectionTest(source: AiConnectionTestSource): Promise<void> {
-  actionError.value = ''
-  aiNotice.value = ''
-  aiConnectionOk.value = false
-  aiConnectionMessage.value =
-    source === 'environment' ? '.env-Verbindungstest läuft ...' : 'Verbindungstest läuft ...'
-  aiBusy.value = true
-  try {
-    if (typeof api.testAiConnection !== 'function') {
-      aiConnectionOk.value = false
-      aiConnectionMessage.value = 'Bitte App neu starten, damit der Verbindungstest verfügbar ist.'
-      actionError.value = aiConnectionMessage.value
-      return
-    }
-    const result = await api.testAiConnection({ source })
-    aiConnectionOk.value = result.ok
-    aiConnectionMessage.value = result.message
-    if (!result.ok) actionError.value = result.message
-  } catch (error) {
-    aiConnectionOk.value = false
-    aiConnectionMessage.value = aiConnectionFallbackMessage(source)
-    actionError.value = error instanceof Error ? error.message : String(error)
-  } finally {
-    aiBusy.value = false
-  }
-}
-
-async function testAiConnection(): Promise<void> {
-  await runAiConnectionTest('active')
-}
-
-async function testEnvironmentConnection(): Promise<void> {
-  await runAiConnectionTest('environment')
-}
-
-async function generateAiDraft(): Promise<void> {
-  if (!submission.value) return
-  if (cloudAiDisabled) {
-    actionError.value = 'KI-Korrektur ist in der Cloud-Version noch nicht freigeschaltet.'
-    return
-  }
-  actionError.value = ''
-  aiNotice.value = ''
-  aiBusy.value = true
-  try {
-    await api.generateAiCorrectionDraft({ submissionId: submission.value.id })
-    aiNotice.value = 'KI-Vorschlag erstellt.'
-    await load()
-  } catch (error) {
-    actionError.value = error instanceof Error ? error.message : String(error)
-  } finally {
-    aiBusy.value = false
-  }
-}
-
-async function acceptAiDraft(id: string): Promise<void> {
-  actionError.value = ''
-  aiNotice.value = ''
-  aiBusy.value = true
-  try {
-    await api.acceptAiCorrectionDraft(id)
-    aiNotice.value = 'KI-Vorschlag übernommen.'
-    await load()
-  } catch (error) {
-    actionError.value = error instanceof Error ? error.message : String(error)
-  } finally {
-    aiBusy.value = false
-  }
-}
-
-async function rejectAiDraft(id: string): Promise<void> {
-  actionError.value = ''
-  aiNotice.value = ''
-  aiBusy.value = true
-  try {
-    await api.rejectAiCorrectionDraft(id)
-    aiNotice.value = 'KI-Vorschlag verworfen.'
-    await load()
-  } catch (error) {
-    actionError.value = error instanceof Error ? error.message : String(error)
-  } finally {
-    aiBusy.value = false
   }
 }
 
@@ -897,26 +507,4 @@ function formatScoreInput(value: number | null): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1).replace('.', ',')
 }
 
-function formatImprovementCategory(category: AiCorrectionDraft['improvementSuggestions'][number]['category']): string {
-  const labels: Record<AiCorrectionDraft['improvementSuggestions'][number]['category'], string> = {
-    issue_spotting: 'Problemerkennung',
-    law: 'Rechtliche Grundlagen',
-    procedure: 'Verfahren',
-    structure: 'Aufbau',
-    argumentation: 'Argumentation',
-    style: 'Stil',
-    time_management: 'Zeitmanagement',
-    other: 'Sonstiges'
-  }
-  return labels[category]
-}
-
-function formatLearningTaskPriority(priority: AiCorrectionDraft['improvementSuggestions'][number]['priority']): string {
-  const labels: Record<AiCorrectionDraft['improvementSuggestions'][number]['priority'], string> = {
-    low: 'niedrig',
-    medium: 'mittel',
-    high: 'hoch'
-  }
-  return labels[priority]
-}
 </script>

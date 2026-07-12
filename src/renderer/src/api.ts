@@ -44,6 +44,7 @@ import type {
 } from '@shared/schemas'
 import { getSupabaseAuthClient, requiresCloudAuth } from './cloudAuth'
 import { createCloudLearningApi } from './cloudLearningApi'
+import { downloadExamPdf } from './utils/browserPdfExport'
 import {
   examStatusSchema,
   examTypeSchema,
@@ -56,7 +57,7 @@ import {
 import { selectExamRevisionIdsForDeletion } from '@shared/revisionRetention'
 
 const BROWSER_STORE_KEY = 'jura-wolpertinger-browser-dev-v1'
-const AI_CORRECTION_NOT_IMPLEMENTED_MESSAGE = 'KI-Korrektur ist noch nicht implementiert.'
+const AI_CORRECTION_NOT_IMPLEMENTED_MESSAGE = 'Diese Funktion ist derzeit nicht freigeschaltet.'
 
 type BrowserStore = {
   users: User[]
@@ -458,9 +459,9 @@ function createBrowserDevApi(): AppApi {
       const provider = (input as { provider?: unknown }).provider
       const apiKey = input.apiKey.trim()
       const model = input.model.trim()
-      if (provider !== 'openai') throw new Error('AI provider wird noch nicht unterstuetzt.')
-      if (!apiKey && !store.aiSettings?.configured) throw new Error('OpenAI API key darf nicht leer sein')
-      if (!model) throw new Error('OpenAI model darf nicht leer sein')
+      if (provider !== 'openai') throw new Error('Dieser Anbieter wird noch nicht unterstuetzt.')
+      if (!apiKey && !store.aiSettings?.configured) throw new Error('Der Zugang darf nicht leer sein')
+      if (!model) throw new Error('Das Modell darf nicht leer sein')
       store.aiSettings = {
         provider,
         configured: true,
@@ -483,7 +484,7 @@ function createBrowserDevApi(): AppApi {
           ok: false,
           model: null,
           source: null,
-          message: 'OpenAI-Key fehlt.'
+          message: 'Zugang fehlt.'
         }
       }
       return {
@@ -857,8 +858,8 @@ function createBrowserDevApi(): AppApi {
       console.warn('.jura import is only available in the Electron app window.')
       return null
     },
-    async exportExamPdf() {
-      console.warn('PDF export is only available in the Electron app window.')
+    async exportExamPdf(examId: string) {
+      await exportBrowserExamPdf(examId)
       return null
     },
     async createCorrection(submissionId: string) {
@@ -1209,6 +1210,17 @@ function submissionDetails(store: BrowserStore, id: string): SubmissionDetails {
       (correction) => correction.targetSubmissionId === submission.id
     )
   }
+}
+
+async function exportBrowserExamPdf(examId: string): Promise<void> {
+  const store = readStore()
+  const user = ensureBrowserUser(store)
+  const exam = store.exams.find(
+    (candidate) => candidate.id === examId && candidate.userId === user.id
+  )
+  if (!exam?.currentRevisionId) throw new Error('Für den PDF-Export muss zuerst ein Entwurf gespeichert sein.')
+  const revision = getRevision(store, exam.currentRevisionId)
+  await downloadExamPdf(exam.title, revision.content)
 }
 
 function aiSettingsStatus(settings: BrowserStore['aiSettings']): AiSettingsStatus {

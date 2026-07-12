@@ -143,7 +143,7 @@
         <div>
           <h2>Lernaufgaben</h2>
           <p class="analytics-panel-copy">
-            Offene Aufgaben aus akzeptierten KI-Korrekturen, abgeleitet aus Verbesserungsvorschlägen.
+            Offene Aufgaben aus deiner Nachbereitung, damit wichtige Verbesserungen nicht im Kommentar verschwinden.
           </p>
         </div>
       </div>

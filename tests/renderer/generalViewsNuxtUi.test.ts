@@ -43,7 +43,7 @@ describe('general Nuxt UI views', () => {
 
     expect(about).toContain('Karteikarten')
     expect(about).toContain('Lokal und online')
-    expect(about).toContain('KI-Korrektur')
+    expect(about).not.toContain('KI-Korrektur')
     expect(help).toContain('Wie erstelle ich Karteikarten?')
     expect(help).toContain('Wie wiederhole ich Karteikarten?')
     expect(help).toContain('Wie lösche ich Karteikarten?')

@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ if .Title }}{{ .Title }} | {{ site.Title }}{{ else }}{{ site.Title }}{{ end }}</title>
+    <meta name="description" content="{{ .Description | default site.Params.description }}">
+    <link rel="canonical" href="{{ .Permalink }}">
+    <link rel="icon" href="/assets/icon.png">
+    <meta property="og:type" content="website">
+    <meta property="og:locale" content="de_DE">
+    <meta property="og:site_name" content="{{ site.Title }}">
+    <meta property="og:title" content="{{ .Title | default site.Title }}">
+    <meta property="og:description" content="{{ .Description | default site.Params.description }}">
+    <meta property="og:url" content="{{ .Permalink }}">
+    <meta property="og:image" content="{{ site.Params.image }}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{ .Title | default site.Title }}">
+    <meta name="twitter:description" content="{{ .Description | default site.Params.description }}">
+    <meta name="twitter:image" content="{{ site.Params.image }}">
+    {{ $style := resources.Get "css/main.css" | minify | fingerprint }}
+    <link rel="stylesheet" href="{{ $style.RelPermalink }}" integrity="{{ $style.Data.Integrity }}">
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Jura Wolpertinger",
+        "applicationCategory": "EducationalApplication",
+        "operatingSystem": "Windows, macOS, Linux, Web",
+        "description": "{{ site.Params.description }}",
+        "url": "https://jura-wolpi.de/",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "EUR"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    {{ block "main" . }}{{ end }}
+  </body>
+</html>

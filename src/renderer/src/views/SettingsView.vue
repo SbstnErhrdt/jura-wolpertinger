@@ -110,98 +110,6 @@
       <section class="settings-panel">
         <div class="panel-header">
           <div>
-            <h2>KI-Korrektur</h2>
-            <p class="settings-copy">
-              Aufgabenstellung, Musterlösung und Abgabe werden nur auf deine ausdrückliche Anfrage an den
-              konfigurierten KI-Anbieter übertragen.
-            </p>
-          </div>
-          <UBadge :color="aiSettings.configured ? 'success' : 'neutral'" variant="soft">
-            {{ aiSettings.configured ? 'aktiv' : 'nicht eingerichtet' }}
-          </UBadge>
-        </div>
-
-        <div class="settings-ai-status">
-          <strong>{{ aiStatusTitle }}</strong>
-          <p>{{ aiStatusDescription }}</p>
-          <span v-if="aiKeyPreview">Key: {{ aiKeyPreview }}</span>
-          <span v-if="effectiveAiSource === 'stored' && aiSettings.updatedAt">
-            Gespeichert: {{ formatDateTime(aiSettings.updatedAt) }}
-          </span>
-          <span>Modell: {{ aiSettings.model ?? DEFAULT_AI_MODEL }}</span>
-          <span v-if="storedKeyOverridesEnvironment" class="settings-ai-hint">
-            Gespeicherter App-Key überschreibt deinen .env-Key.
-          </span>
-          <span v-if="aiConnectionMessage" :class="aiConnectionOk ? 'settings-test-ok' : 'settings-test-error'">
-            {{ aiConnectionMessage }}
-          </span>
-        </div>
-
-        <div v-if="!showAiKeyForm" class="settings-actions">
-          <UButton type="button" @click="openAiKeyForm">{{ aiSetupButtonLabel }}</UButton>
-          <UButton type="button" color="neutral" variant="outline" :disabled="!aiSettings.configured || aiBusy" @click="testAiConnection">
-            {{ aiBusy ? 'Prüft ...' : 'Verbindung testen' }}
-          </UButton>
-          <UButton
-            v-if="storedKeyOverridesEnvironment"
-            type="button"
-            color="neutral"
-            variant="outline"
-            :disabled="aiBusy"
-            @click="testEnvironmentConnection"
-          >
-            .env-Key testen
-          </UButton>
-          <UButton
-            v-if="effectiveAiSource === 'stored'"
-            type="button"
-            color="error"
-            variant="outline"
-            :disabled="aiBusy"
-            @click="startRemoveAiSettings"
-          >
-            App-Key entfernen
-          </UButton>
-        </div>
-
-        <div v-if="confirmRemoveAiKey" class="settings-confirm-remove">
-          <strong>App-Key entfernen?</strong>
-          <p>KI-Korrekturen nutzen danach keinen gespeicherten App-Key mehr.</p>
-          <div class="settings-actions">
-            <UButton type="button" color="error" :loading="aiBusy" @click="removeAiSettings">
-              Entfernen
-            </UButton>
-            <UButton type="button" color="neutral" variant="outline" :disabled="aiBusy" @click="cancelRemoveAiSettings">
-              Abbrechen
-            </UButton>
-          </div>
-        </div>
-
-        <form v-if="showAiKeyForm" class="settings-key-form" @submit.prevent="saveAiSettings">
-          <UFormField class="settings-field" label="OpenAI API-Key">
-            <UInput v-model="aiApiKeyInput" type="password" :placeholder="aiKeyPlaceholder" />
-            <span v-if="effectiveAiSource === 'stored'" class="settings-field-note">
-              Der gespeicherte Key bleibt erhalten, wenn du hier nichts eingibst.
-            </span>
-          </UFormField>
-          <UFormField class="settings-field" label="Modell">
-            <UInput v-model="aiModelInput" :placeholder="DEFAULT_AI_MODEL" />
-          </UFormField>
-
-          <div class="settings-actions">
-            <UButton type="submit" :loading="aiBusy">
-              {{ aiBusy ? 'Speichert ...' : 'Speichern' }}
-            </UButton>
-            <UButton type="button" color="neutral" variant="outline" :disabled="aiBusy" @click="cancelAiKeyForm">
-              Abbrechen
-            </UButton>
-          </div>
-        </form>
-      </section>
-
-      <section class="settings-panel">
-        <div class="panel-header">
-          <div>
             <h2>Oberfläche</h2>
             <p class="settings-copy">Wähle den Modus, in dem du länger schreiben und korrigieren möchtest.</p>
           </div>
@@ -262,10 +170,8 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import type { AiSettingsStatus, AppUser } from '@shared/ipc'
+import type { AppUser } from '@shared/ipc'
 import type { SyncRunAction, SyncStatus } from '@shared/schemas'
-import { DEFAULT_AI_MODEL } from '@shared/constants'
-import { aiConnectionFallbackMessage, type AiConnectionTestSource } from '@shared/aiConnectionFeedback'
 import { api, isElectronApiAvailable } from '../api'
 import { type AppBreadcrumbItem, withHomeIcon } from '../ui/breadcrumbs'
 import { useTheme } from '../theme'
@@ -281,24 +187,8 @@ const users = ref<AppUser[]>([])
 const currentUser = ref<AppUser | null>(null)
 const currentUserName = ref('')
 const newUserName = ref('')
-const aiSettings = ref<AiSettingsStatus>({
-  provider: 'openai',
-  configured: false,
-  model: null,
-  source: null,
-  keyPreview: null,
-  environmentAvailable: false,
-  updatedAt: null
-})
-const aiApiKeyInput = ref('')
-const aiModelInput = ref(DEFAULT_AI_MODEL)
-const aiBusy = ref(false)
-const showAiKeyForm = ref(false)
-const confirmRemoveAiKey = ref(false)
 const actionError = ref('')
 const actionNotice = ref('')
-const aiConnectionMessage = ref('')
-const aiConnectionOk = ref(false)
 const syncStatus = ref<SyncStatus>({
   connected: false,
   remoteUserId: null,
@@ -317,35 +207,6 @@ const userOptions = computed(() =>
     label: `${user.displayName}${user.kind === 'demo' ? ' · Demo' : ''}`,
     value: user.id
   }))
-)
-const effectiveAiSource = computed(() =>
-  aiSettings.value.source ?? (aiSettings.value.configured ? 'stored' : null)
-)
-const aiKeyPreview = computed(() =>
-  aiSettings.value.keyPreview ?? (effectiveAiSource.value === 'stored' ? 'gespeichert' : null)
-)
-const aiKeyPlaceholder = computed(() =>
-  effectiveAiSource.value === 'stored' ? 'neuer Key oder leer lassen' : 'sk-...'
-)
-const storedKeyOverridesEnvironment = computed(
-  () => effectiveAiSource.value === 'stored' && Boolean(aiSettings.value.environmentAvailable)
-)
-const aiStatusTitle = computed(() => {
-  if (effectiveAiSource.value === 'stored') return 'OpenAI-Key gespeichert'
-  if (effectiveAiSource.value === 'environment') return 'Entwicklungs-Key aktiv'
-  return 'OpenAI-Key fehlt'
-})
-const aiStatusDescription = computed(() => {
-  if (effectiveAiSource.value === 'stored') return 'KI-Korrekturen nutzen den lokal gespeicherten App-Key.'
-  if (effectiveAiSource.value === 'environment') return 'Der Key kommt aus deiner lokalen .env-Datei.'
-  return 'Richte einen eigenen OpenAI-Key ein, bevor KI-Korrekturen gestartet werden.'
-})
-const aiSetupButtonLabel = computed(() =>
-  effectiveAiSource.value === 'stored'
-    ? 'Key oder Modell ändern'
-    : effectiveAiSource.value === 'environment'
-      ? 'Eigenen App-Key speichern'
-      : 'OpenAI-Key einrichten'
 )
 const syncConfirmTitle = computed(() => {
   if (syncConfirmAction.value === 'upload') return 'Lokale Daten online sichern?'
@@ -381,8 +242,6 @@ async function load(): Promise<void> {
   currentUser.value = await api.getCurrentUser()
   users.value = await api.listUsers()
   currentUserName.value = currentUser.value.displayName
-  aiSettings.value = await api.getAiSettingsStatus()
-  aiModelInput.value = aiSettings.value.model ?? DEFAULT_AI_MODEL
   syncStatus.value = await api.getSyncStatus()
 }
 
@@ -458,34 +317,6 @@ async function runSyncAction(): Promise<void> {
   }
 }
 
-function openAiKeyForm(): void {
-  actionError.value = ''
-  actionNotice.value = ''
-  aiConnectionMessage.value = ''
-  confirmRemoveAiKey.value = false
-  aiApiKeyInput.value = ''
-  aiModelInput.value = aiSettings.value.model ?? DEFAULT_AI_MODEL
-  showAiKeyForm.value = true
-}
-
-function cancelAiKeyForm(): void {
-  aiApiKeyInput.value = ''
-  aiModelInput.value = aiSettings.value.model ?? DEFAULT_AI_MODEL
-  showAiKeyForm.value = false
-}
-
-function startRemoveAiSettings(): void {
-  actionError.value = ''
-  actionNotice.value = ''
-  aiConnectionMessage.value = ''
-  showAiKeyForm.value = false
-  confirmRemoveAiKey.value = true
-}
-
-function cancelRemoveAiSettings(): void {
-  confirmRemoveAiKey.value = false
-}
-
 async function switchUser(userId: string | undefined): Promise<void> {
   if (!userId) return
   await api.switchUser(userId)
@@ -525,85 +356,6 @@ async function resetTour(): Promise<void> {
 
 function startTour(): void {
   window.dispatchEvent(new CustomEvent('jura:start-tour'))
-}
-
-async function saveAiSettings(): Promise<void> {
-  actionError.value = ''
-  actionNotice.value = ''
-  aiConnectionMessage.value = ''
-  aiBusy.value = true
-  try {
-    aiSettings.value = await api.saveAiSettings({
-      provider: 'openai',
-      apiKey: aiApiKeyInput.value,
-      model: aiModelInput.value.trim() || DEFAULT_AI_MODEL
-    })
-    aiModelInput.value = aiSettings.value.model ?? DEFAULT_AI_MODEL
-    aiApiKeyInput.value = ''
-    showAiKeyForm.value = false
-    actionNotice.value = 'KI-Einstellungen gespeichert.'
-  } catch (error) {
-    actionError.value = error instanceof Error ? error.message : String(error)
-  } finally {
-    aiBusy.value = false
-  }
-}
-
-async function removeAiSettings(): Promise<void> {
-  actionError.value = ''
-  actionNotice.value = ''
-  aiConnectionMessage.value = ''
-  aiBusy.value = true
-  try {
-    aiSettings.value = await api.removeAiSettings()
-    aiModelInput.value = aiSettings.value.model ?? DEFAULT_AI_MODEL
-    aiApiKeyInput.value = ''
-    showAiKeyForm.value = false
-    confirmRemoveAiKey.value = false
-    actionNotice.value =
-      effectiveAiSource.value === 'environment'
-        ? 'App-Key entfernt. Der Entwicklungs-Key aus .env ist weiter aktiv.'
-        : 'OpenAI-Key entfernt.'
-  } catch (error) {
-    actionError.value = error instanceof Error ? error.message : String(error)
-  } finally {
-    aiBusy.value = false
-  }
-}
-
-async function runAiConnectionTest(source: AiConnectionTestSource): Promise<void> {
-  actionError.value = ''
-  actionNotice.value = ''
-  aiConnectionOk.value = false
-  aiConnectionMessage.value =
-    source === 'environment' ? '.env-Verbindungstest läuft ...' : 'Verbindungstest läuft ...'
-  aiBusy.value = true
-  try {
-    if (typeof api.testAiConnection !== 'function') {
-      aiConnectionOk.value = false
-      aiConnectionMessage.value = 'Bitte App neu starten, damit der Verbindungstest verfügbar ist.'
-      actionError.value = aiConnectionMessage.value
-      return
-    }
-    const result = await api.testAiConnection({ source })
-    aiConnectionOk.value = result.ok
-    aiConnectionMessage.value = result.message
-    if (!result.ok) actionError.value = result.message
-  } catch (error) {
-    aiConnectionOk.value = false
-    aiConnectionMessage.value = aiConnectionFallbackMessage(source)
-    actionError.value = error instanceof Error ? error.message : String(error)
-  } finally {
-    aiBusy.value = false
-  }
-}
-
-async function testAiConnection(): Promise<void> {
-  await runAiConnectionTest('active')
-}
-
-async function testEnvironmentConnection(): Promise<void> {
-  await runAiConnectionTest('environment')
 }
 
 function setLightTheme(): void {

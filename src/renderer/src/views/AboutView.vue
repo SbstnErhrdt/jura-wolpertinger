@@ -59,11 +59,11 @@
       </UCard>
 
       <UCard class="about-panel">
-        <h3>KI-Korrektur</h3>
+        <h3>Karteikarten</h3>
         <p>
-          Die KI-Korrektur soll wie ein zusätzlicher Korrektor unterstützen: mit nachvollziehbarer
-          Bewertung, Hinweisen und konkreten Verbesserungsvorschlägen. In der Online-Version bleibt
-          sie zunächst zurückhaltend, bis Kosten, Datenschutz und Qualität sauber geklärt sind.
+          Karteikarten ergänzen das Klausurtraining um kurze Einheiten: Sammlungen öffnen,
+          Vorder- und Rückseite wiederholen, den eigenen Stand bewerten und schwierige Karten
+          gezielt früher wiedersehen.
         </p>
       </UCard>
 

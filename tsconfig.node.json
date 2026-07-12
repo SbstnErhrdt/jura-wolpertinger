@@ -21,6 +21,7 @@
     "scripts/**/*.ts",
     "src/main/**/*.ts",
     "src/preload/**/*.ts",
+    "src/renderer/src/utils/browserPdfExport.ts",
     "src/shared/**/*.ts",
     "tests/**/*.ts"
   ]
