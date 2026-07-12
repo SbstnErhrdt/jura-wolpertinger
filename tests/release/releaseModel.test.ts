@@ -2,12 +2,13 @@ import { createHash } from 'node:crypto'
 import { mkdtemp, mkdir, rm, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import YAML from 'yaml'
 import {
   buildPublicManifest,
   collectReleaseArtifacts,
   rewriteUpdateMetadata,
+  type ReleaseArtifact,
   type ReleasePlatform
 } from '../../scripts/release/model'
 
@@ -211,6 +212,35 @@ describe('collectReleaseArtifacts', () => {
   })
 })
 
+describe('readFileInfo', () => {
+  afterEach(() => {
+    vi.doUnmock('node:fs/promises')
+    vi.resetModules()
+  })
+
+  it('derives SHA-512 and size from the same readFile buffer', async () => {
+    const bytes = Buffer.from('buffer only bytes')
+    const readFileMock = vi.fn().mockResolvedValue(bytes)
+    const statMock = vi.fn().mockRejectedValue(new Error('stat should not be called'))
+    const actualFs = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
+
+    vi.resetModules()
+    vi.doMock('node:fs/promises', () => ({
+      ...actualFs,
+      readFile: readFileMock,
+      stat: statMock
+    }))
+
+    const { readFileInfo } = await import('../../scripts/release/files')
+
+    await expect(readFileInfo('/tmp/release-artifact.bin')).resolves.toEqual({
+      size: bytes.length,
+      sha512: createHash('sha512').update(bytes).digest('base64')
+    })
+    expect(statMock).not.toHaveBeenCalled()
+  })
+})
+
 describe('rewriteUpdateMetadata', () => {
   it('rewrites artifact URLs to versioned encoded paths', async () => {
     const fixture = await createFixture('mac-arm64')
@@ -227,6 +257,30 @@ describe('rewriteUpdateMetadata', () => {
     expect(parsed.files.map(({ url }) => url)).toEqual([
       `${VERSION}/${encodeURIComponent(`${PRODUCT_NAME}-${VERSION}-arm64-mac.zip`)}`,
       `${VERSION}/${encodeURIComponent(`${PRODUCT_NAME}-${VERSION}-arm64-mac.dmg`)}`
+    ])
+  })
+
+  it('rewrites Windows absolute paths to versioned encoded basenames only', async () => {
+    const fixture = await createFixture('windows-x64', {
+      metadataFileName: 'latest.yml',
+      metadataContent: buildMetadataYaml({
+        version: VERSION,
+        path: `C:\\Users\\sbstn\\Downloads\\${PRODUCT_NAME}-${VERSION}-x64-win.exe`,
+        files: [`C:\\Users\\sbstn\\Downloads\\${PRODUCT_NAME}-${VERSION}-x64-win.exe`]
+      })
+    })
+
+    const rewritten = await rewriteUpdateMetadata({
+      metadataPath: join(fixture.directory, fixture.definition.metadataFileName)
+    })
+    const parsed = YAML.parse(rewritten) as {
+      files: Array<{ url: string }>
+      path: string
+    }
+
+    expect(parsed.path).toBe(`${VERSION}/${encodeURIComponent(`${PRODUCT_NAME}-${VERSION}-x64-win.exe`)}`)
+    expect(parsed.files.map(({ url }) => url)).toEqual([
+      `${VERSION}/${encodeURIComponent(`${PRODUCT_NAME}-${VERSION}-x64-win.exe`)}`
     ])
   })
 })
@@ -305,15 +359,51 @@ describe('buildPublicManifest', () => {
       })
     ).toThrow(/duplicate.*linux-x64/i)
   })
+
+  it.each([
+    '/Users/sbstn/Downloads/release.dmg',
+    'C:\\Users\\sbstn\\Downloads\\release.dmg',
+    '../release.dmg',
+    'nested/../release.dmg',
+    './release.dmg',
+    'release//artifact.dmg'
+  ])('rejects unsafe remotePath values: %s', (remotePath) => {
+    expect(() =>
+      buildPublicManifest({
+        artifacts: [
+          buildDownloadArtifact({
+            platform: 'mac-arm64',
+            fileName: `${PRODUCT_NAME}-${VERSION}-arm64-mac.dmg`,
+            remotePath
+          })
+        ],
+        baseUrl: 'https://downloads.jura-wolpi.de/desktop/stable',
+        publishedAt: '2026-07-12T10:00:00.000Z'
+      })
+    ).toThrow(/relative object path/i)
+  })
 })
 
-async function createFixture(platform: ReleasePlatform) {
+async function createFixture(
+  platform: ReleasePlatform,
+  options?: {
+    metadataFileName?: string
+    metadataContent?: string
+  }
+) {
   const definition = fixtureDefinitions[platform]
   const directory = await mkdtemp(join(tmpdir(), 'release-model-'))
   temporaryDirectories.push(directory)
   await mkdir(directory, { recursive: true })
   await Promise.all(
-    definition.files.map(({ fileName, content }) => writeFile(join(directory, fileName), content))
+    definition.files.map(({ fileName, content, kind }) =>
+      writeFile(
+        join(directory, fileName),
+        kind === 'metadata' && fileName === (options?.metadataFileName ?? definition.metadataFileName)
+          ? (options?.metadataContent ?? content)
+          : content
+      )
+    )
   )
 
   return {
@@ -331,4 +421,21 @@ function buildMetadataYaml(input: { version: string; path: string; files: string
     })),
     releaseDate: '2026-07-12T10:00:00.000Z'
   })
+}
+
+function buildDownloadArtifact(input: {
+  platform: ReleasePlatform
+  fileName: string
+  remotePath: string
+}): ReleaseArtifact {
+  return {
+    platform: input.platform,
+    version: VERSION,
+    kind: 'download',
+    fileName: input.fileName,
+    filePath: `/tmp/${input.fileName}`,
+    remotePath: input.remotePath,
+    size: Buffer.byteLength('download bytes'),
+    sha512: createHash('sha512').update(Buffer.from('download bytes')).digest('base64')
+  }
 }

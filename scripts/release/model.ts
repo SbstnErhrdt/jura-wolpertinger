@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import YAML from 'yaml'
 import {
+  assertRelativeObjectPath,
   buildVersionedArtifactPath,
   extractArtifactFileName,
   isRemoteUrl,
@@ -195,7 +196,7 @@ export function buildPublicManifest(input: BuildPublicManifestInput): ReleaseMan
       fileName: artifact.fileName,
       size: artifact.size,
       sha512: artifact.sha512,
-      url: joinUrlPath(input.baseUrl, config.directory, artifact.remotePath)
+      url: joinUrlPath(input.baseUrl, config.directory, assertRelativeObjectPath(artifact.remotePath))
     } satisfies ReleaseManifestEntry
   })
 

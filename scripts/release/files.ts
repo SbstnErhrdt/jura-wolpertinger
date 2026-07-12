@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { readdir, readFile, stat } from 'node:fs/promises'
+import { readdir, readFile } from 'node:fs/promises'
 
 export async function listDirectoryFiles(directory: string) {
   const entries = await readdir(directory, { withFileTypes: true })
@@ -11,10 +11,10 @@ export async function listDirectoryFiles(directory: string) {
 }
 
 export async function readFileInfo(filePath: string) {
-  const [bytes, details] = await Promise.all([readFile(filePath), stat(filePath)])
+  const bytes = await readFile(filePath)
 
   return {
-    size: details.size,
+    size: bytes.length,
     sha512: createHash('sha512').update(bytes).digest('base64')
   }
 }
@@ -38,11 +38,40 @@ export function isRemoteUrl(value: string) {
 }
 
 export function extractArtifactFileName(value: string) {
-  const lastSegment = value.split('/').at(-1) ?? value
+  const lastSegment = value
+    .split(/[\\/]+/)
+    .filter((segment) => segment.length > 0)
+    .at(-1) ?? value
 
   try {
     return decodeURIComponent(lastSegment)
   } catch {
     return lastSegment
   }
+}
+
+export function assertRelativeObjectPath(value: string) {
+  if (value.length === 0) {
+    throw new Error('Release artifact remotePath must be a strict relative object path.')
+  }
+
+  if (value.includes('\\')) {
+    throw new Error('Release artifact remotePath must be a strict relative object path.')
+  }
+
+  if (value.startsWith('/')) {
+    throw new Error('Release artifact remotePath must be a strict relative object path.')
+  }
+
+  if (/^[A-Za-z]:\//.test(value)) {
+    throw new Error('Release artifact remotePath must be a strict relative object path.')
+  }
+
+  const segments = value.split('/')
+
+  if (segments.some((segment) => segment.length === 0 || segment === '.' || segment === '..')) {
+    throw new Error('Release artifact remotePath must be a strict relative object path.')
+  }
+
+  return value
 }
