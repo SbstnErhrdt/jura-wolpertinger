@@ -1,5 +1,6 @@
 /// <reference lib="dom" />
 
+import AxeBuilder from '@axe-core/playwright'
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test'
 import { mkdtemp, readdir, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -36,10 +37,13 @@ test.describe('Jura Wolpertinger Electron app', () => {
             .evaluate((image) => (image as HTMLImageElement).naturalWidth)
         )
         .toBeGreaterThan(0)
+      await scanAccessibility(page, 'home')
       await page.click('.onboarding-card button:has-text("Nicht mehr anzeigen")')
       await expect(page.locator('.sidebar-user .user-switcher')).toContainText('Lokaler Nutzer')
       await page.click('.nav a:has-text("Sammlungen")')
       await expect(page).toHaveURL(/#\/flashcards\/collections/)
+      await expect(page.locator('.flashcards-page')).toBeVisible()
+      await scanAccessibility(page, 'collections')
       await page.click('button:has-text("Neue Sammlung")')
       await page.fill('.dialog-card input[placeholder="z. B. Strafrecht AT"]', 'Arbeitsrecht')
       await page.fill('.dialog-card input[placeholder="z. B. Strafrecht"]', 'Arbeitsrecht')
@@ -186,6 +190,7 @@ test.describe('Jura Wolpertinger Electron app', () => {
 
       await page.click('.nav a:has-text("Bibliothek")')
       await expect(page.locator('.dashboard')).toBeVisible()
+      await scanAccessibility(page, 'library')
       await page.click('button:has-text("Neue Klausur")')
       await page.fill('.dialog-card input[placeholder="Titel"]', 'Tag-Test')
       await page.click('.dialog-card .tag-input-suggestion:has-text("bayern")')
@@ -258,6 +263,7 @@ test.describe('Jura Wolpertinger Electron app', () => {
       await expect(page).toHaveURL(/#\/exams\/corrections\/.+/)
       await expect(page.locator('.correction-list-panel')).toContainText('E1234')
       await expect(page.locator('.readonly-document')).toContainText('Anspruch entstanden.')
+      await scanAccessibility(page, 'correction')
 
       await page.fill('input[placeholder="0 bis 18, z. B. 12,5"]', '12,5')
       await page.locator('textarea').first().fill('Solide Schwerpunktsetzung.')
@@ -277,6 +283,7 @@ test.describe('Jura Wolpertinger Electron app', () => {
       await page.click('.nav a:has-text("Auswertung")')
       await expect(page).toHaveURL(/#\/exams\/analytics/)
       await expect(page.locator('.analytics-view')).toBeVisible()
+      await scanAccessibility(page, 'analytics')
       await expect(
         page.locator('.analytics-metrics .metric').filter({ hasText: 'Durchschnitt' }).locator('strong')
       ).toHaveText('12,5')
@@ -392,6 +399,26 @@ async function selectReadonlyText(page: Page, text: string): Promise<void> {
     }
     throw new Error(`Text not found: ${selectedText}`)
   }, text)
+}
+
+async function scanAccessibility(page: Page, surface: 'home' | 'collections' | 'library' | 'correction' | 'analytics'): Promise<void> {
+  await page.waitForLoadState('domcontentloaded')
+  const results = await new AxeBuilder({ page }).setLegacyMode(true).analyze()
+  const blockingImpacts = ['serious', 'critical']
+  const violations = results.violations.filter(
+    (violation) => violation.impact && blockingImpacts.includes(violation.impact)
+  )
+
+  expect(
+    violations.map((violation) => ({
+      id: violation.id,
+      impact: violation.impact,
+      help: violation.help,
+      helpUrl: violation.helpUrl,
+      targets: violation.nodes.map((node) => node.target)
+    })),
+    `${surface} has serious or critical Axe violations`
+  ).toEqual([])
 }
 
 function isIgnorableConsoleError(error: string): boolean {
