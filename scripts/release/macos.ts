@@ -1,7 +1,13 @@
 import { spawn } from 'node:child_process'
-import { access, readFile, rm } from 'node:fs/promises'
+import { access, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { constants as fsConstants } from 'node:fs'
 import { basename, join, relative } from 'node:path'
+import { tmpdir } from 'node:os'
+import {
+  RELEASE_SMOKE_ENV,
+  RELEASE_SMOKE_MARKER,
+  RELEASE_SMOKE_USER_DATA_ENV
+} from '../../src/shared/releaseSmoke'
 import { collectReleaseArtifacts, type ReleasePlatform } from './model'
 
 const REQUIRED_ENVIRONMENT_VARIABLES = [
@@ -43,6 +49,7 @@ export type RunCommand = (
   options?: {
     cwd?: string
     env?: Record<string, string | undefined>
+    timeoutMs?: number
   }
 ) => Promise<CommandResult>
 
@@ -152,9 +159,9 @@ export async function runLocalMacRelease(
       }
     )
 
-    await validateBuiltMacArtifacts({
+    await validateMacReleaseArtifacts({
       cwd: input.cwd,
-      outputDirectory: target.outputDirectory,
+      inputDirectory: join(input.cwd, target.outputDirectory),
       platform: target.platform,
       expectedArch: target.expectedArch,
       runCommand,
@@ -171,28 +178,39 @@ export async function runLocalMacRelease(
   }
 }
 
-async function validateBuiltMacArtifacts(input: {
+export interface ValidateMacReleaseArtifactsInput {
   cwd: string
-  outputDirectory: string
+  inputDirectory: string
   platform: ReleasePlatform
   expectedArch: 'arm64' | 'x86_64'
-  runCommand: RunCommand
+  runCommand?: RunCommand
   env: Record<string, string | undefined>
-}) {
-  const absoluteOutputDirectory = join(input.cwd, input.outputDirectory)
+  pathExists?: (path: string) => Promise<boolean>
+}
+
+export async function validateMacReleaseArtifacts(input: ValidateMacReleaseArtifactsInput) {
+  const runCommand = input.runCommand ?? createCommandRunner()
+  const pathExists = input.pathExists ?? defaultPathExists
   const artifacts = await collectReleaseArtifacts({
-    directory: absoluteOutputDirectory,
+    directory: input.inputDirectory,
     platform: input.platform
   })
   const dmgArtifact = artifacts.find(
     (artifact) => artifact.kind === 'download' && artifact.fileName.endsWith('.dmg')
+  )
+  const zipArtifact = artifacts.find(
+    (artifact) => artifact.kind === 'update' && artifact.fileName.endsWith('.zip')
   )
 
   if (!dmgArtifact) {
     throw new Error(`${input.platform} is missing DMG.`)
   }
 
-  const attachResult = await input.runCommand(
+  if (!zipArtifact) {
+    throw new Error(`${input.platform} is missing ZIP.`)
+  }
+
+  const attachResult = await runCommand(
     ['hdiutil', 'attach', dmgArtifact.filePath, '-nobrowse', '-readonly'],
     {
       cwd: input.cwd,
@@ -209,43 +227,21 @@ async function validateBuiltMacArtifacts(input: {
       throw new Error(`Unable to determine mounted volume for ${relative(input.cwd, dmgArtifact.filePath)}.`)
     }
 
-    const mountedAppPath = await resolveMountedAppPath({
-      mountPoint: attachedVolume.mountPoint,
-      dmgFileName: dmgArtifact.fileName,
-      version: dmgArtifact.version
+    const mountedAppPath = await resolveAppPath({
+      root: attachedVolume.mountPoint,
+      artifactFileName: dmgArtifact.fileName,
+      version: dmgArtifact.version,
+      pathExists
     })
-    const mountedExecutablePath = await findExpectedAppExecutable(mountedAppPath)
-
-    await input.runCommand(
-      ['codesign', '--verify', '--deep', '--strict', '--verbose=2', mountedAppPath],
-      {
-        cwd: input.cwd,
-        env: input.env
-      }
-    )
-    await input.runCommand(
-      ['spctl', '--assess', '--type', 'exec', '--verbose=4', mountedAppPath],
-      {
-        cwd: input.cwd,
-        env: input.env
-      }
-    )
-    await input.runCommand(['xcrun', 'stapler', 'validate', mountedAppPath], {
+    await validateAppBundle({
+      appPath: mountedAppPath,
       cwd: input.cwd,
-      env: input.env
+      env: input.env,
+      expectedArch: input.expectedArch,
+      platform: input.platform,
+      runCommand,
+      pathExists
     })
-
-    const archResult = await input.runCommand(['lipo', '-archs', mountedExecutablePath], {
-      cwd: input.cwd,
-      env: input.env
-    })
-    const discoveredArchitectures = archResult.stdout.trim().split(/\s+/).filter(Boolean)
-
-    if (!discoveredArchitectures.includes(input.expectedArch)) {
-      throw new Error(
-        `Expected ${input.platform} app binary to include architecture ${input.expectedArch}.`
-      )
-    }
   } catch (error) {
     validationError = error instanceof Error ? error : new Error(String(error))
   } finally {
@@ -257,7 +253,7 @@ async function validateBuiltMacArtifacts(input: {
           target: cleanupTarget,
           cwd: input.cwd,
           env: input.env,
-          runCommand: input.runCommand
+          runCommand
         })
       } catch (detachError) {
         cleanupError = detachError instanceof Error ? detachError : new Error(String(detachError))
@@ -279,28 +275,116 @@ async function validateBuiltMacArtifacts(input: {
   if (validationError) {
     throw validationError
   }
+
+  const extractionDirectory = await mkdtemp(join(tmpdir(), 'jura-release-zip-'))
+
+  try {
+    await runCommand(['ditto', '-x', '-k', zipArtifact.filePath, extractionDirectory], {
+      cwd: input.cwd,
+      env: input.env
+    })
+    const extractedAppPath = await resolveAppPath({
+      root: extractionDirectory,
+      artifactFileName: zipArtifact.fileName,
+      version: zipArtifact.version,
+      pathExists
+    })
+    await validateAppBundle({
+      appPath: extractedAppPath,
+      cwd: input.cwd,
+      env: input.env,
+      expectedArch: input.expectedArch,
+      platform: input.platform,
+      runCommand,
+      pathExists
+    })
+  } finally {
+    await rm(extractionDirectory, { recursive: true, force: true })
+  }
 }
 
-async function resolveMountedAppPath(input: {
-  mountPoint: string
-  dmgFileName: string
-  version: string
+async function validateAppBundle(input: {
+  appPath: string
+  cwd: string
+  env: Record<string, string | undefined>
+  expectedArch: 'arm64' | 'x86_64'
+  platform: ReleasePlatform
+  runCommand: RunCommand
+  pathExists: (path: string) => Promise<boolean>
 }) {
-  const productName = readProductNameFromDmgFileName(input.dmgFileName, input.version)
-  const mountedAppPath = join(input.mountPoint, `${productName}.app`)
-  const exists = await defaultPathExists(mountedAppPath)
+  const executablePath = await findExpectedAppExecutable(input.appPath, input.pathExists)
+
+  await input.runCommand(
+    ['codesign', '--verify', '--deep', '--strict', '--verbose=2', input.appPath],
+    { cwd: input.cwd, env: input.env }
+  )
+  await input.runCommand(
+    ['spctl', '--assess', '--type', 'exec', '--verbose=4', input.appPath],
+    { cwd: input.cwd, env: input.env }
+  )
+  await input.runCommand(['xcrun', 'stapler', 'validate', input.appPath], {
+    cwd: input.cwd,
+    env: input.env
+  })
+
+  const archResult = await input.runCommand(['lipo', '-archs', executablePath], {
+    cwd: input.cwd,
+    env: input.env
+  })
+  const discoveredArchitectures = archResult.stdout.trim().split(/\s+/).filter(Boolean)
+
+  if (!discoveredArchitectures.includes(input.expectedArch)) {
+    throw new Error(
+      `Expected ${input.platform} app binary to include architecture ${input.expectedArch}.`
+    )
+  }
+
+  const smokeUserDataDirectory = await mkdtemp(join(tmpdir(), 'jura-release-smoke-'))
+  let smokeResult: CommandResult
+
+  try {
+    smokeResult = await input.runCommand([executablePath], {
+      cwd: input.cwd,
+      env: {
+        ...input.env,
+        [RELEASE_SMOKE_ENV]: '1',
+        [RELEASE_SMOKE_USER_DATA_ENV]: smokeUserDataDirectory
+      },
+      timeoutMs: 30_000
+    })
+  } finally {
+    await rm(smokeUserDataDirectory, { recursive: true, force: true })
+  }
+
+  if (!smokeResult.stdout.split(/\r?\n/).includes(RELEASE_SMOKE_MARKER)) {
+    throw new Error(`${input.platform} packaged startup smoke did not emit the renderer-ready marker.`)
+  }
+}
+
+async function resolveAppPath(input: {
+  root: string
+  artifactFileName: string
+  version: string
+  pathExists: (path: string) => Promise<boolean>
+}) {
+  const productName = readProductNameFromArtifactFileName(input.artifactFileName, input.version)
+  const appPath = join(input.root, `${productName}.app`)
+  const exists = await input.pathExists(appPath)
 
   if (!exists) {
     throw new Error(`Expected mounted app bundle ${productName}.app.`)
   }
 
-  return mountedAppPath
+  return appPath
 }
 
-async function findExpectedAppExecutable(appPath: string): Promise<string> {
+async function findExpectedAppExecutable(
+  appPath: string,
+  pathExists: (path: string) => Promise<boolean>
+): Promise<string> {
   const executableName = basename(appPath, '.app')
   const executablePath = join(appPath, 'Contents', 'MacOS', executableName)
-  const exists = await defaultPathExists(executablePath)
+  const exists = await pathExists(executablePath)
 
   if (!exists) {
     throw new Error(`Expected mounted app executable ${executableName}.`)
@@ -369,7 +453,7 @@ function parseAttachedVolume(output: string) {
   }
 }
 
-function readProductNameFromDmgFileName(fileName: string, version: string) {
+function readProductNameFromArtifactFileName(fileName: string, version: string) {
   const suffix = `-${version}-`
   const suffixIndex = fileName.indexOf(suffix)
 
@@ -405,6 +489,13 @@ export function createCommandRunner(): RunCommand {
 
       let stdout = ''
       let stderr = ''
+      let timedOut = false
+      const timeout = options?.timeoutMs
+        ? setTimeout(() => {
+            timedOut = true
+            child.kill('SIGKILL')
+          }, options.timeoutMs)
+        : null
 
       child.stdout.on('data', (chunk: Buffer | string) => {
         stdout += chunk.toString()
@@ -416,6 +507,13 @@ export function createCommandRunner(): RunCommand {
 
       child.on('error', reject)
       child.on('close', (code) => {
+        if (timeout) clearTimeout(timeout)
+
+        if (timedOut) {
+          reject(new Error(`${file} timed out after ${options?.timeoutMs}ms.`))
+          return
+        }
+
         if (code === 0) {
           resolve({ stdout, stderr })
           return

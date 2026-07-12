@@ -7,7 +7,7 @@ Jura Wolpertinger verteilt Desktop-Releases und Auto-Updates ausschließlich üb
 1. Version in `package.json` setzen und die vollständige Verifikationsmatrix ausführen.
 2. Den manuellen Workflow `.github/workflows/release.yml` mit derselben Version starten. Er baut und staged Windows x64 sowie Linux x64, veröffentlicht aber keine Live-Metadaten.
 3. macOS ARM64 und x64 lokal mit `corepack pnpm run release:mac:local` Developer-ID-signieren, notarisieren und prüfen.
-4. Beide macOS-Kandidaten mit `release:stage` unveränderlich in RustFS ablegen.
+4. Beide macOS-Kandidaten mit `release:stage` erneut vollständig prüfen und unveränderlich in RustFS ablegen. Der Befehl läuft für macOS nur auf macOS, validiert DMG- und ZIP-App einschließlich Signatur, Gatekeeper, Stapling, Architektur und Renderer-Startup-Smoke und lädt erst nach einem vollständigen Storage-Preflight ausschließlich fehlende Versionsobjekte hoch.
 
 Normale lokale Pakete ohne Veröffentlichung entstehen mit:
 
@@ -24,7 +24,7 @@ corepack pnpm run release:publish --version 0.1.5 --confirm "publish 0.1.5"
 corepack pnpm run release:verify --base-url https://downloads.jura-wolpi.de/desktop/stable
 ```
 
-Die Veröffentlichung ist pro Plattform atomar: Jede Plattform wird vollständig remote validiert, bevor ihr `latest*.yml` geschrieben wird. `manifest.json` folgt zuletzt. Ein Rollback veröffentlicht auf dieselbe Weise eine vollständig erhaltene ältere Version; bereits installierte neuere Apps werden nicht automatisch heruntergestuft.
+Die Veröffentlichung ist pro Plattform atomar: Jede Plattform wird vollständig remote validiert, bevor ihr `latest*.yml` geschrieben wird. `manifest.json` folgt zuletzt. Die anschließende Feed-Verifikation akzeptiert nur die vier eindeutigen unterstützten Plattform-/Architekturziele mit gemeinsamer Version und URLs unter dem vorgesehenen Feed-Pfad. Ein Rollback veröffentlicht auf dieselbe Weise eine vollständig erhaltene ältere Version; bereits installierte neuere Apps werden nicht automatisch heruntergestuft.
 
 ## Auto-Updates
 

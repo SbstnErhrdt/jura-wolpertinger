@@ -1,16 +1,19 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   runLocalMacRelease,
+  validateMacReleaseArtifacts,
   validateMacReleaseEnvironment,
   type RunCommand
 } from '../../scripts/release/macos'
+import { runReleaseStage } from '../../scripts/release/stage'
 
 const temporaryDirectories: string[] = []
 const VERSION = '1.2.3'
 const PRODUCT_NAME = 'Jura Wolpertinger'
+const RELEASE_SMOKE_MARKER = 'JURA_RELEASE_SMOKE_READY'
 
 afterEach(async () => {
   await Promise.all(
@@ -120,11 +123,152 @@ describe('validateMacReleaseEnvironment', () => {
   })
 })
 
+describe('runReleaseStage', () => {
+  it('rejects mac staging when the host is not macOS', async () => {
+    const validateMacArtifacts = vi.fn()
+    const stage = vi.fn()
+
+    await expect(
+      runReleaseStage({
+        platform: 'mac-arm64',
+        inputDirectory: '/tmp/mac-release',
+        storage: {} as never,
+        hostPlatform: 'linux',
+        validateMacArtifacts,
+        stage
+      })
+    ).rejects.toThrow(/mac staging.*macOS/i)
+
+    expect(validateMacArtifacts).not.toHaveBeenCalled()
+    expect(stage).not.toHaveBeenCalled()
+  })
+
+  it('validates the mac candidate before handing it to immutable storage staging', async () => {
+    const calls: string[] = []
+    const validateMacArtifacts = vi.fn(async () => {
+      calls.push('validate')
+    })
+    const stage = vi.fn(async () => {
+      calls.push('stage')
+      return {
+        platform: 'mac-x64' as const,
+        version: VERSION,
+        plannedKeys: [],
+        uploadedKeys: []
+      }
+    })
+
+    await runReleaseStage({
+      platform: 'mac-x64',
+      inputDirectory: '/tmp/mac-release',
+      storage: {} as never,
+      hostPlatform: 'darwin',
+      env: {},
+      validateMacArtifacts,
+      stage
+    })
+
+    expect(calls).toEqual(['validate', 'stage'])
+    expect(validateMacArtifacts).toHaveBeenCalledWith(
+      expect.objectContaining({
+        inputDirectory: '/tmp/mac-release',
+        platform: 'mac-x64',
+        expectedArch: 'x86_64'
+      })
+    )
+  })
+})
+
+describe('validateMacReleaseArtifacts', () => {
+  it('validates and startup-smokes the app payloads from both DMG and ZIP', async () => {
+    const workspace = await createWorkspace()
+    const outputDirectory = join(workspace, '.release-stage', 'mac', 'arm64')
+    const mountRoot = join(workspace, '.mounts', 'arm64')
+    const commands: Array<{ command: string[]; env?: Record<string, string | undefined> }> = []
+    await writeMacReleaseFixture(outputDirectory, 'arm64')
+    await mkdir(mountRoot, { recursive: true })
+    await writeMountedAppFixture(mountRoot)
+
+    const runCommand: RunCommand = async (command, options) => {
+      commands.push({ command, env: options?.env })
+
+      if (command[0] === 'hdiutil' && command[1] === 'attach') {
+        return { stdout: `/dev/disk4\tApple_HFS\t${mountRoot}\n`, stderr: '' }
+      }
+
+      if (command[0] === 'lipo') {
+        return { stdout: 'arm64', stderr: '' }
+      }
+
+      if (command.at(-1)?.endsWith(join('Contents', 'MacOS', PRODUCT_NAME)) && command.length === 1) {
+        return { stdout: `${RELEASE_SMOKE_MARKER}\n`, stderr: '' }
+      }
+
+      return { stdout: '', stderr: '' }
+    }
+
+    await validateMacReleaseArtifacts({
+      cwd: workspace,
+      inputDirectory: outputDirectory,
+      platform: 'mac-arm64',
+      expectedArch: 'arm64',
+      env: {},
+      runCommand,
+      pathExists: async () => true
+    })
+
+    expect(commands.filter(({ command }) => command[0] === 'codesign')).toHaveLength(2)
+    expect(commands.filter(({ command }) => command[0] === 'spctl')).toHaveLength(2)
+    expect(commands.filter(({ command }) => command[0] === 'xcrun')).toHaveLength(2)
+    expect(commands.filter(({ command }) => command[0] === 'lipo')).toHaveLength(2)
+    expect(commands.some(({ command }) => command[0] === 'ditto' && command.slice(1, 3).join(' ') === '-x -k')).toBe(true)
+    const smokeCommands = commands.filter(({ command }) =>
+      command.at(-1)?.endsWith(join('Contents', 'MacOS', PRODUCT_NAME)) && command.length === 1
+    )
+    expect(smokeCommands).toHaveLength(2)
+    expect(smokeCommands.map(({ env }) => env?.JURA_RELEASE_SMOKE)).toEqual(['1', '1'])
+  })
+
+  it('rejects a packaged app that exits without the renderer-ready smoke marker', async () => {
+    const workspace = await createWorkspace()
+    const outputDirectory = join(workspace, '.release-stage', 'mac', 'arm64')
+    const mountRoot = join(workspace, '.mounts', 'arm64')
+    await writeMacReleaseFixture(outputDirectory, 'arm64')
+    await mkdir(mountRoot, { recursive: true })
+    await writeMountedAppFixture(mountRoot)
+
+    const runCommand: RunCommand = async (command) => {
+      if (command[0] === 'hdiutil' && command[1] === 'attach') {
+        return { stdout: `/dev/disk4\tApple_HFS\t${mountRoot}\n`, stderr: '' }
+      }
+
+      if (command[0] === 'lipo') {
+        return { stdout: 'arm64', stderr: '' }
+      }
+
+      return { stdout: '', stderr: '' }
+    }
+
+    await expect(
+      validateMacReleaseArtifacts({
+        cwd: workspace,
+        inputDirectory: outputDirectory,
+        platform: 'mac-arm64',
+        expectedArch: 'arm64',
+        env: {},
+        runCommand,
+        pathExists: async () => true
+      })
+    ).rejects.toThrow(/startup smoke.*marker/i)
+  })
+})
+
 describe('runLocalMacRelease', () => {
   it('builds arm64 and x64 into separate output directories and validates signed artifacts', async () => {
     const workspace = await createWorkspace()
     const commands: string[] = []
     const mountRoots = new Map<'arm64' | 'x64', string>()
+    let activeArch: 'arm64' | 'x64' = 'arm64'
     const runCommand: RunCommand = async (command, options) => {
       commands.push(command.join(' '))
 
@@ -151,6 +295,7 @@ describe('runLocalMacRelease', () => {
 
       if (command[0] === 'hdiutil' && command[1] === 'attach') {
         const arch = command[2]?.includes('-arm64-') ? 'arm64' : 'x64'
+        activeArch = arch
         const mountRoot = join(workspace, '.mounts', arch)
         mountRoots.set(arch, mountRoot)
         await mkdir(mountRoot, { recursive: true })
@@ -160,9 +305,18 @@ describe('runLocalMacRelease', () => {
 
       if (command[0] === 'lipo') {
         return {
-          stdout: command.at(-1)?.includes('/.mounts/arm64/') ? 'arm64' : 'x86_64',
+          stdout: activeArch === 'arm64' ? 'arm64' : 'x86_64',
           stderr: ''
         }
+      }
+
+      if (command[0] === 'ditto' && command[1] === '-x' && command[2] === '-k') {
+        await writeMountedAppFixture(command[4]!)
+        return { stdout: '', stderr: '' }
+      }
+
+      if (command.length === 1 && command[0]?.endsWith(join('Contents', 'MacOS', PRODUCT_NAME))) {
+        return { stdout: `${RELEASE_SMOKE_MARKER}\n`, stderr: '' }
       }
 
       return { stdout: '', stderr: '' }

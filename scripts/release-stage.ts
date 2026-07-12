@@ -1,6 +1,8 @@
+import { pathToFileURL } from 'node:url'
 import { readReleaseStorageConfig } from './release/config'
-import { createS3ReleaseStorage, stageRelease } from './release/storage'
+import { createS3ReleaseStorage } from './release/storage'
 import { type ReleasePlatform } from './release/model'
+import { runReleaseStage } from './release/stage'
 
 async function main() {
   const args = readArgs(process.argv.slice(2))
@@ -8,11 +10,13 @@ async function main() {
   const inputDirectory = readRequiredValue(args.input, '--input')
   const config = readReleaseStorageConfig(process.env)
   const storage = createS3ReleaseStorage(config)
-  const result = await stageRelease({
+  const result = await runReleaseStage({
     storage,
     platform,
     inputDirectory,
-    dryRun: args.dryRun
+    dryRun: args.dryRun,
+    cwd: process.cwd(),
+    env: process.env
   })
 
   if (args.dryRun) {
@@ -71,7 +75,9 @@ function readRequiredValue(value: string | undefined, name: string) {
   return value
 }
 
-main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : String(error))
-  process.exitCode = 1
-})
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : String(error))
+    process.exitCode = 1
+  })
+}

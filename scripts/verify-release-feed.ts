@@ -33,8 +33,9 @@ export async function verifyReleaseFeed(baseUrl: string, options?: VerifyRelease
   assertHeaderIncludes(manifestResponse, 'content-type', 'json', manifestUrl)
   assertCacheControl(manifestResponse, MUTABLE_METADATA_CACHE_CONTROL, manifestUrl)
 
-  const manifest = await manifestResponse.json() as ReleaseManifest
-  assertManifest(manifest)
+  const manifestValue: unknown = await manifestResponse.json()
+  validateReleaseManifest(manifestValue, baseUrl)
+  const manifest = manifestValue
   const artifactChecks = new Map<string, { size: number; label: string }>()
 
   for (const platform of RELEASE_PLATFORM_ORDER) {
@@ -123,13 +124,33 @@ async function verifyArtifactHead(input: {
   }
 }
 
-function assertManifest(value: ReleaseManifest) {
-  if (!value || typeof value.version !== 'string' || !Array.isArray(value.releases)) {
+const SUPPORTED_MANIFEST_TARGETS = [
+  { platform: 'mac', arch: 'arm64', directory: RELEASE_PLATFORM_CONFIGS['mac-arm64'].directory },
+  { platform: 'mac', arch: 'x64', directory: RELEASE_PLATFORM_CONFIGS['mac-x64'].directory },
+  { platform: 'windows', arch: 'x64', directory: RELEASE_PLATFORM_CONFIGS['windows-x64'].directory },
+  { platform: 'linux', arch: 'x64', directory: RELEASE_PLATFORM_CONFIGS['linux-x64'].directory }
+] as const
+
+export function validateReleaseManifest(
+  value: unknown,
+  baseUrl: string
+): asserts value is ReleaseManifest {
+  if (!isRecord(value) || typeof value.version !== 'string' || !Array.isArray(value.releases)) {
     throw new Error('manifest.json is not a valid release manifest.')
   }
 
+  if (value.releases.length !== SUPPORTED_MANIFEST_TARGETS.length) {
+    throw new Error('manifest.json must contain exactly four supported release entries.')
+  }
+
+  const seenTargets = new Set<string>()
+
   for (const release of value.releases) {
     if (
+      !isRecord(release) ||
+      typeof release.platform !== 'string' ||
+      typeof release.arch !== 'string' ||
+      typeof release.version !== 'string' ||
       typeof release.url !== 'string' ||
       typeof release.fileName !== 'string' ||
       typeof release.size !== 'number' ||
@@ -138,7 +159,43 @@ function assertManifest(value: ReleaseManifest) {
       throw new Error('manifest.json contains an invalid release entry.')
     }
 
+    const target = SUPPORTED_MANIFEST_TARGETS.find(
+      (candidate) => candidate.platform === release.platform && candidate.arch === release.arch
+    )
+
+    if (!target) {
+      throw new Error(`manifest.json contains unsupported target ${release.platform}-${release.arch}.`)
+    }
+
+    const targetKey = `${target.platform}-${target.arch}`
+
+    if (seenTargets.has(targetKey)) {
+      throw new Error(`manifest.json contains duplicate target ${targetKey}.`)
+    }
+
+    seenTargets.add(targetKey)
+
+    if (release.version !== value.version) {
+      throw new Error(
+        `manifest.json entry version ${release.version} does not match manifest version ${value.version}.`
+      )
+    }
+
     assertHttpsUrl(release.url, release.fileName)
+
+    const expectedUrl = `${baseUrl.replace(/\/+$/, '')}/${target.directory}/${value.version}/${encodeURIComponent(release.fileName)}`
+
+    if (new URL(release.url).href !== new URL(expectedUrl).href) {
+      throw new Error(`${release.fileName} URL is outside its approved feed path.`)
+    }
+  }
+
+  for (const target of SUPPORTED_MANIFEST_TARGETS) {
+    const targetKey = `${target.platform}-${target.arch}`
+
+    if (!seenTargets.has(targetKey)) {
+      throw new Error(`manifest.json is missing supported target ${targetKey}.`)
+    }
   }
 }
 

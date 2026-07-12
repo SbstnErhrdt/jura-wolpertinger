@@ -83,7 +83,7 @@ Die Matrix besteht aus:
 | `windows-x64` | `windows-latest` | `corepack pnpm run release:win --x64` | `release/<version>` |
 | `linux-x64` | `ubuntu-latest` | `corepack pnpm run release:linux --x64` | `release/<version>` |
 
-Jeder Job ruft danach `release:stage` für genau seine Plattform auf. Staging schreibt ausschließlich unveränderliche Objekte unter `desktop/stable/<plattform>/<arch>/<version>/`. Der Workflow schreibt keine Live-`latest*.yml`, kein `manifest.json`, keinen GitHub Release und keinen Tag. `fail-fast` ist deaktiviert; deshalb können Kandidaten einer Plattform vorhanden sein, obwohl der andere Matrix-Job fehlschlägt. Veröffentlicht werden darf erst nach erfolgreichem Staging aller vier Plattformen einschließlich der beiden lokalen macOS-Builds.
+Jeder Job ruft danach `release:stage` für genau seine Plattform auf. Staging prüft zuerst alle vorgesehenen Versionsobjekte und schreibt ausschließlich fehlende unveränderliche Objekte unter `desktop/stable/<plattform>/<arch>/<version>/`. Vorhandene Objekte müssen in Bytes, erforderlichen Headern und SHA-512-/Größenmetadaten übereinstimmen; eine Abweichung verhindert sämtliche Uploads des Laufs. Der Workflow schreibt keine Live-`latest*.yml`, kein `manifest.json`, keinen GitHub Release und keinen Tag. `fail-fast` ist deaktiviert; deshalb können Kandidaten einer Plattform vorhanden sein, obwohl der andere Matrix-Job fehlschlägt. Veröffentlicht werden darf erst nach erfolgreichem Staging aller vier Plattformen einschließlich der beiden lokalen macOS-Builds.
 
 ## GitHub Actions Secrets
 
@@ -100,6 +100,8 @@ UPDATE_PUBLIC_BASE_URL
 Keine weiteren RustFS-Namen werden vom aktuellen Workflow gelesen. `UPDATE_PUBLIC_BASE_URL` muss eine HTTPS-URL sein. Secret-Werte dürfen weder in Workflow-YAML, `.env.example`, Logs noch Build-Artefakten stehen. Für RustFS sollte der Actions-Schlüssel nur Objekte unter `desktop/stable/**` schreiben und lesen dürfen.
 
 Apple-Zugangsdaten gehören nicht in diesen Workflow. macOS wird lokal mit `APPLE_API_KEY`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER`, `APPLE_TEAM_ID` und einer Keychain-Identität oder `CSC_LINK` gebaut.
+
+`release:stage` für `mac-arm64` und `mac-x64` läuft ausschließlich auf macOS. Vor dem Storage-Preflight prüft es die App-Bundles aus DMG und ZIP jeweils mit Codesign, Gatekeeper, Stapler, Architekturkontrolle und einem gepackten Renderer-Startup-Smoke.
 
 ## Live-Veröffentlichung
 

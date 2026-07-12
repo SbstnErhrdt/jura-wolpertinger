@@ -38,6 +38,8 @@ import { seedDemoDataIfEnabled } from './services/demoData'
 import { exportExamPdf } from './services/pdf'
 import { resolveRuntimeDockIconPath } from './appIdentity'
 import { configureAutoUpdaterFeed, resolveUpdateFeedUrl } from './updateFeed'
+import { handleReleaseSmokeRendererReady } from './releaseSmoke'
+import { RELEASE_SMOKE_ENV, RELEASE_SMOKE_USER_DATA_ENV } from '@shared/releaseSmoke'
 
 let mainWindow: BrowserWindow | null = null
 let splashWindow: BrowserWindow | null = null
@@ -176,6 +178,13 @@ function createWindow(): void {
   })
 
   mainWindow.once('ready-to-show', revealMainWindow)
+  mainWindow.webContents.once('did-finish-load', () => {
+    handleReleaseSmokeRendererReady({
+      env: process.env,
+      writeMarker: (marker) => process.stdout.write(`${marker}\n`),
+      quit: () => app.quit()
+    })
+  })
   mainWindow.on('closed', () => {
     mainWindow = null
   })
@@ -345,7 +354,7 @@ function registerIpc(): void {
 
 app.whenReady().then(() => {
   configureApplicationIdentity()
-  createSplashWindow()
+  if (process.env[RELEASE_SMOKE_ENV] !== '1') createSplashWindow()
   services = new AppServices(resolveUserDataDir())
   if (!app.isPackaged && process.env.JURA_E2E !== '1') seedDemoDataIfEnabled(services)
   registerIpc()
@@ -379,6 +388,10 @@ function safeFileName(value: string): string {
 }
 
 function resolveUserDataDir(): string {
+  if (process.env[RELEASE_SMOKE_ENV] === '1' && process.env[RELEASE_SMOKE_USER_DATA_ENV]) {
+    return process.env[RELEASE_SMOKE_USER_DATA_ENV]
+  }
+
   if (!app.isPackaged && process.env.JURA_E2E !== '1') {
     return join(process.cwd(), '.dev-data')
   }

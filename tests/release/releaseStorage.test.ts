@@ -111,6 +111,81 @@ describe('stageRelease', () => {
     expect(result.plannedKeys.every((key) => key.startsWith('desktop/stable/linux/x64/1.2.3/'))).toBe(true)
     expect(storage.puts).toEqual([])
   })
+
+  it('accepts an identical idempotent restage without overwriting immutable objects', async () => {
+    const directory = await createReleaseFixture('mac-arm64')
+    const storage = new InMemoryReleaseStorage()
+
+    const firstResult = await stageRelease({
+      storage,
+      platform: 'mac-arm64',
+      inputDirectory: directory
+    })
+    storage.clearPutLog()
+
+    const secondResult = await stageRelease({
+      storage,
+      platform: 'mac-arm64',
+      inputDirectory: directory
+    })
+
+    expect(secondResult.plannedKeys).toEqual(firstResult.plannedKeys)
+    expect(secondResult.uploadedKeys).toEqual([])
+    expect(storage.puts).toEqual([])
+    expect(storage.operations.filter(({ type }) => type === 'head')).toHaveLength(firstResult.plannedKeys.length)
+    expect(storage.operations.filter(({ type }) => type === 'get')).toHaveLength(firstResult.plannedKeys.length)
+  })
+
+  it('rejects an immutable byte mismatch without writing any object', async () => {
+    const directory = await createReleaseFixture('mac-arm64')
+    const storage = new InMemoryReleaseStorage()
+    await stageRelease({ storage, platform: 'mac-arm64', inputDirectory: directory })
+    const key = immutableObjectKey(
+      'mac-arm64',
+      VERSION,
+      `${PRODUCT_NAME}-${VERSION}-arm64-mac.dmg`
+    )
+    const expected = await storage.get({ key })
+    await storage.seed(key, new TextEncoder().encode('different immutable bytes'), {
+      contentType: 'application/x-apple-diskimage',
+      cacheControl: IMMUTABLE_CACHE_CONTROL,
+      metadata: {
+        sha512: sha512(expected),
+        size: String(expected.length)
+      },
+      contentLength: expected.length
+    })
+    storage.clearPutLog()
+
+    await expect(
+      stageRelease({ storage, platform: 'mac-arm64', inputDirectory: directory })
+    ).rejects.toThrow(/immutable.*bytes.*mismatch.*mac-arm64/i)
+
+    expect(storage.puts).toEqual([])
+    expect(storage.operations.filter(({ type }) => type === 'head')).toHaveLength(releaseFiles('mac-arm64').length)
+  })
+
+  it('preflights every planned object before uploading any missing object', async () => {
+    const directory = await createReleaseFixture('linux-x64')
+    const storage = new InMemoryReleaseStorage()
+    const mismatchedKey = immutableObjectKey('linux-x64', VERSION, 'latest-linux.yml')
+    const mismatchedBody = new TextEncoder().encode('wrong metadata bytes')
+    await storage.seed(mismatchedKey, mismatchedBody, {
+      contentType: 'text/yaml; charset=utf-8',
+      cacheControl: IMMUTABLE_CACHE_CONTROL,
+      metadata: {
+        sha512: sha512(mismatchedBody),
+        size: String(mismatchedBody.length)
+      }
+    })
+
+    await expect(
+      stageRelease({ storage, platform: 'linux-x64', inputDirectory: directory })
+    ).rejects.toThrow(/immutable.*mismatch.*linux-x64/i)
+
+    expect(storage.puts).toEqual([])
+    expect(storage.operations.filter(({ type }) => type === 'head')).toHaveLength(releaseFiles('linux-x64').length)
+  })
 })
 
 describe('publishRelease', () => {

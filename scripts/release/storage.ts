@@ -206,9 +206,37 @@ export async function stageRelease(input: StageReleaseInput): Promise<StageResul
   const plannedObjects = await Promise.all(artifacts.map(buildStageObject))
   const plannedKeys = plannedObjects.map(({ key }) => key).sort()
   const uploadedKeys: string[] = []
+  const preflightResults = await Promise.allSettled(
+    plannedObjects.map(async (object) => {
+      const head = await input.storage.head({ key: object.key })
+
+      if (!head) {
+        return object
+      }
+
+      await assertImmutableObjectMatches({
+        storage: input.storage,
+        platform: input.platform,
+        planned: object,
+        head
+      })
+      return null
+    })
+  )
+  const failedPreflight = preflightResults.find(
+    (result): result is PromiseRejectedResult => result.status === 'rejected'
+  )
+
+  if (failedPreflight) {
+    throw failedPreflight.reason
+  }
+
+  const missingObjects = preflightResults.flatMap((result) =>
+    result.status === 'fulfilled' && result.value ? [result.value] : []
+  )
 
   if (!input.dryRun) {
-    for (const object of plannedObjects) {
+    for (const object of missingObjects) {
       await input.storage.put(object)
       uploadedKeys.push(object.key)
     }
@@ -220,6 +248,58 @@ export async function stageRelease(input: StageReleaseInput): Promise<StageResul
     plannedKeys,
     uploadedKeys
   }
+}
+
+async function assertImmutableObjectMatches(input: {
+  storage: ReleaseObjectStorage
+  platform: ReleasePlatform
+  planned: ReleasePutObjectInput
+  head: ReleaseObjectHead
+}) {
+  const expectedMetadata = input.planned.metadata ?? {}
+
+  if (input.head.contentLength !== input.planned.body.length) {
+    throw immutableMismatch(input.platform, input.planned.key, 'content length')
+  }
+
+  if (!headerValuesMatch(input.head.contentType, input.planned.contentType, ';')) {
+    throw immutableMismatch(input.platform, input.planned.key, 'content type')
+  }
+
+  if (!headerValuesMatch(input.head.cacheControl, input.planned.cacheControl, ',')) {
+    throw immutableMismatch(input.platform, input.planned.key, 'cache control')
+  }
+
+  if (
+    input.head.metadata.sha512 !== expectedMetadata.sha512 ||
+    Number(input.head.metadata.size) !== Number(expectedMetadata.size)
+  ) {
+    throw immutableMismatch(input.platform, input.planned.key, 'checksum or size metadata')
+  }
+
+  const remoteBody = await input.storage.get({ key: input.planned.key })
+
+  if (!Buffer.from(remoteBody).equals(Buffer.from(input.planned.body))) {
+    throw immutableMismatch(input.platform, input.planned.key, 'bytes')
+  }
+}
+
+function headerValuesMatch(actual: string | undefined, expected: string, separator: ';' | ',') {
+  if (!actual) {
+    return false
+  }
+
+  const normalize = (value: string) => value
+    .split(separator)
+    .map((part) => part.trim().toLowerCase())
+    .filter(Boolean)
+    .sort()
+
+  return normalize(actual).join(separator) === normalize(expected).join(separator)
+}
+
+function immutableMismatch(platform: ReleasePlatform, key: string, field: string) {
+  return new Error(`Immutable ${field} mismatch for ${platform} release object ${key}.`)
 }
 
 export async function publishRelease(input: PublishReleaseInput): Promise<PublishResult> {

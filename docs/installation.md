@@ -73,7 +73,7 @@ UPDATE_S3_SECRET_ACCESS_KEY
 UPDATE_PUBLIC_BASE_URL
 ```
 
-`UPDATE_PUBLIC_BASE_URL` ist der Feed-Basisendpunkt ohne Objektpfad dahinter, produktiv also `https://downloads.jura-wolpi.de/desktop/stable`. Der S3-Client nutzt den konfigurierten Endpunkt mit Region `auto` und Path-Style-Zugriff. Im manuellen GitHub-Release-Workflow müssen alle fünf Namen als Repository Secrets angelegt sein.
+`UPDATE_PUBLIC_BASE_URL` ist der Feed-Basisendpunkt ohne Objektpfad dahinter, produktiv also `https://downloads.jura-wolpi.de/desktop/stable`. Der S3-Client nutzt den konfigurierten Endpunkt mit Region `auto` und Path-Style-Zugriff. Im manuellen GitHub-Release-Workflow müssen alle fünf Namen als Repository Secrets angelegt sein. Vor einem Stage-Upload werden immer alle vorgesehenen Versionsobjekte geprüft. Fehlende Objekte dürfen hochgeladen werden; vorhandene Objekte werden nur akzeptiert, wenn Bytes, MIME-Typ, immutable Cache Header sowie SHA-512- und Größenmetadaten übereinstimmen. Schon eine Abweichung beendet den Lauf ohne Upload.
 
 ## Release-Ablauf für `0.1.5`
 
@@ -116,7 +116,7 @@ Der Befehl leert nur die beiden lokalen Ausgabeordner, baut gemeinsame App-Resso
 .release-stage/mac/x64
 ```
 
-Für jede Architektur validiert er erforderliche DMG-, ZIP-, Blockmap- und YAML-Dateien, mountet die DMG und prüft das enthaltene App-Bundle mit `codesign --verify --deep --strict`, `spctl --assess`, `xcrun stapler validate` und `lipo -archs`. Der Befehl lädt nichts hoch.
+Für jede Architektur validiert er erforderliche DMG-, ZIP-, Blockmap- und YAML-Dateien. Er mountet die DMG, entpackt die ZIP und prüft beide App-Bundles mit `codesign --verify --deep --strict`, `spctl --assess`, `xcrun stapler validate` und `lipo -archs`. Beide gepackten Apps werden zusätzlich mit `JURA_RELEASE_SMOKE=1` gestartet und müssen nach dem Laden des Haupt-Renderers `JURA_RELEASE_SMOKE_READY` ausgeben und erfolgreich enden. Der Befehl lädt nichts hoch.
 
 ### 4. macOS unveränderlich stagen
 
@@ -133,6 +133,8 @@ Danach mit gesetzten `UPDATE_*`-Variablen stagen:
 corepack pnpm run release:stage --platform mac-arm64 --input .release-stage/mac/arm64
 corepack pnpm run release:stage --platform mac-x64 --input .release-stage/mac/x64
 ```
+
+Auch `release:stage` selbst führt für macOS beide App-Bundle-Prüfungen und den Startup-Smoke erneut aus, bevor es den Storage-Preflight beginnt. macOS-Staging wird auf anderen Betriebssystemen abgelehnt. Eine identische Wiederholung ist idempotent und überschreibt keine vorhandenen Versionsobjekte.
 
 ### 5. Stable explizit veröffentlichen
 
@@ -152,7 +154,7 @@ Die Atomarität gilt pro Plattform. Scheitert beispielsweise Windows, können di
 corepack pnpm run release:verify --base-url https://downloads.jura-wolpi.de/desktop/stable
 ```
 
-Der Check liest Manifest und alle vier Live-YAMLs, prüft deren gemeinsame Version, HTTPS-URLs, öffentliche Artefakt-`HEAD`-Antworten, Größen, Cache Header sowie angekündigte Byte Ranges. Bei Artefakten verlangt er einen vorhandenen, nicht als `text/html` ausgelieferten MIME-Typ; die exakten Werte der Tabelle werden zusätzlich in der RustFS- oder Proxy-Konfiguration geprüft. Erst nach diesem erfolgreichen Check den Release als abgeschlossen melden.
+Der Check verlangt im Manifest exakt vier eindeutige Ziele: macOS ARM64, macOS x64, Windows x64 und Linux x64. Jeder Eintrag muss dieselbe Manifest-Version tragen und unter dem vorgesehenen Plattform-, Architektur- und Versionspfad des angegebenen Basisendpunkts liegen. Danach liest der Check alle vier Live-YAMLs und prüft HTTPS-URLs, öffentliche Artefakt-`HEAD`-Antworten, Größen, Cache Header sowie angekündigte Byte Ranges. Bei Artefakten verlangt er einen vorhandenen, nicht als `text/html` ausgelieferten MIME-Typ; die exakten Werte der Tabelle werden zusätzlich in der RustFS- oder Proxy-Konfiguration geprüft. Erst nach diesem erfolgreichen Check den Release als abgeschlossen melden.
 
 ## Rollback
 
