@@ -50,6 +50,8 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@aws-sdk/client-s3": "^3.1085.0",
+    "@axe-core/playwright": "^4.12.1",
     "@electron/rebuild": "^3.7.1",
     "@iconify-json/lucide": "^1.2.116",
     "@nuxt/icon": "^2.3.1",
@@ -60,10 +62,12 @@
     "electron": "^33.2.1",
     "electron-builder": "^25.1.8",
     "electron-vite": "^2.3.0",
+    "tsx": "^4.23.0",
     "typescript": "^5.7.2",
     "vite": "^5.4.11",
     "vitest": "^2.1.8",
-    "vue-tsc": "^2.1.10"
+    "vue-tsc": "^2.1.10",
+    "yaml": "^2.9.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
