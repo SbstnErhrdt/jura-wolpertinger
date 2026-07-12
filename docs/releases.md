@@ -20,7 +20,7 @@ corepack pnpm run dist
 Erst nach vollständigem Staging aller vier Plattformen darf ein Operator die Live-Metadaten umschalten:
 
 ```bash
-corepack pnpm run release:publish --version 0.1.5 --confirm "publish 0.1.5"
+corepack pnpm run release:publish --version 0.1.6 --confirm "publish 0.1.6"
 corepack pnpm run release:verify --base-url https://downloads.jura-wolpi.de/desktop/stable
 ```
 
