@@ -35,7 +35,7 @@
   --radius-control: 6px;
   --radius-card: 8px;
   --shadow-panel: 0 18px 60px rgba(0, 79, 128, 0.12);
-  --page-max-width: 1120px;
+  --page-max-width: 1440px;
   --page-padding: 28px;
   --page-gap: 22px;
   --page-title-size: 32px;
@@ -2254,7 +2254,7 @@ button:active .key-hint,
 }
 
 .folder-drop-hint {
-  color: #6c8794;
+  color: #445c68;
   font-size: 13px;
   margin: 12px 0 0;
 }
@@ -2559,7 +2559,7 @@ button:active .key-hint,
 }
 
 .exam-row span {
-  color: #667983;
+  color: #445c68;
   display: block;
   font-size: 13px;
 }
@@ -2601,7 +2601,7 @@ button:active .key-hint,
 }
 
 .empty-state {
-  color: #7a8b93;
+  color: #445c68;
   font-size: 14px;
   margin: 10px 0 0;
 }
@@ -3864,6 +3864,10 @@ button:active .key-hint,
 :root[data-theme='dark'] .app-breadcrumb-link,
 :root[data-theme='dark'] .app-breadcrumb-current,
 :root[data-theme='dark'] .app-breadcrumb [data-slot='link'] {
+  color: #b7c9d0;
+}
+
+:root[data-theme='dark'] .app-breadcrumb [data-slot='linkLabel'] {
   color: #b7c9d0;
 }
 

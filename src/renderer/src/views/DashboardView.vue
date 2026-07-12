@@ -173,7 +173,13 @@
         >
           <span>{{ (store.examPage - 1) * store.examPageSize + 1 }}-{{ Math.min(store.examTotal, store.examPage * store.examPageSize) }} von {{ store.examTotal }}</span>
           <UPagination :model-value="store.examPage" :total="store.examTotal" :items-per-page="store.examPageSize" :disabled="store.refreshing" @update:model-value="setExamPage" />
-          <USelect :model-value="store.examPageSize" :items="pageSizeOptions" :disabled="store.refreshing" @update:model-value="setExamPageSize" />
+          <USelect
+            :model-value="store.examPageSize"
+            :items="pageSizeOptions"
+            :disabled="store.refreshing"
+            aria-label="Einträge pro Seite"
+            @update:model-value="setExamPageSize"
+          />
         </nav>
       </section>
     </section>
