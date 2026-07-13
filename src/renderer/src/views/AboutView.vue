@@ -50,11 +50,11 @@
       </UCard>
 
       <UCard class="about-panel">
-        <h3>Lokal und online</h3>
+        <h3>Arbeitsbereich und Online-Sicherung</h3>
         <p>
-          Die Desktop-App soll auch ohne Online-Verbindung zuverlässig nutzbar bleiben. Wer möchte,
-          kann seine Daten später mit der Online-Version verbinden und zwischen Geräten
-          übertragen. Die Web-App ist für angemeldete Nutzer gedacht.
+          Die Desktop-App startet immer mit einem Arbeitsbereich auf dem Gerät. Wer möchte,
+          kann diesen Arbeitsbereich später online sichern, alles abgleichen oder auf einem
+          anderen Gerät weiterarbeiten. Lokale Daten werden dabei nicht ungefragt ersetzt.
         </p>
       </UCard>
 

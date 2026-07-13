@@ -42,7 +42,7 @@ describe('general Nuxt UI views', () => {
     const agents = await readFile(resolve(import.meta.dirname, '../../AGENTS.md'), 'utf8')
 
     expect(about).toContain('Karteikarten')
-    expect(about).toContain('Lokal und online')
+    expect(about).toContain('Arbeitsbereich und Online-Sicherung')
     expect(about).not.toContain('KI-Korrektur')
     expect(help).toContain('Wie erstelle ich Karteikarten?')
     expect(help).toContain('Wie wiederhole ich Karteikarten?')

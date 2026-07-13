@@ -9,9 +9,10 @@ describe('sync UI copy', () => {
     const source = await readFile(resolve(rendererRoot, 'views/SettingsView.vue'), 'utf8')
     const onlinePanel = source.slice(source.indexOf('<h2>Online-Version</h2>'), source.indexOf('<h2>Oberfläche</h2>'))
 
-    expect(onlinePanel).toContain('Mit Online-Version verbinden')
-    expect(onlinePanel).toContain('Lokale Daten online sichern')
-    expect(onlinePanel).toContain('Online-Daten auf dieses Gerät holen')
+    expect(onlinePanel).toContain('Online-Sicherung einrichten')
+    expect(onlinePanel).toContain('Online-Sicherung')
+    expect(onlinePanel).toContain('Dieses Gerät')
+    expect(onlinePanel).toContain('Andere Geräte')
     expect(onlinePanel).not.toMatch(/Supabase|JSON|Bucket|Storage|RLS/i)
     expect(onlinePanel).not.toContain(' API')
   })

@@ -65,38 +65,49 @@
               Sichere deinen Arbeitsbereich online oder lade ihn auf ein anderes Gerät.
             </p>
           </div>
-          <UBadge :color="syncStatus.connected ? 'success' : 'neutral'" variant="soft">
-            {{ syncStatus.connected ? 'verbunden' : 'nicht verbunden' }}
+          <UBadge :color="syncBadgeColor" variant="soft">
+            {{ syncStatusView.badge }}
           </UBadge>
         </div>
 
         <div class="settings-ai-status">
-          <strong>{{ syncStatus.connected ? 'Online-Konto verbunden' : 'Noch nicht verbunden' }}</strong>
-          <p>
-            {{ !isElectronApiAvailable
-              ? 'Diese Web-App speichert bereits online.'
-              : syncStatus.connected
-              ? 'Deine lokalen Daten bleiben erhalten. Du entscheidest, wann übertragen wird.'
-              : 'Verbinde diesen Arbeitsbereich mit deinem Online-Konto.' }}
-          </p>
+          <strong>{{ syncStatusView.title }}</strong>
+          <p>{{ syncStatusView.description }}</p>
+          <span>{{ syncStatusView.detail }}</span>
           <span v-if="syncStatus.remoteEmail">{{ syncStatus.remoteEmail }}</span>
-          <span v-if="syncStatus.lastSyncedAt">Zuletzt: {{ formatDateTime(syncStatus.lastSyncedAt) }}</span>
           <span v-if="syncStatus.lastSyncSummary">{{ syncStatus.lastSyncSummary }}</span>
+        </div>
+
+        <div v-if="isElectronApiAvailable" class="sync-flow" aria-label="Synchronisationsweg">
+          <div>
+            <strong>Dieses Gerät</strong>
+            <span>Karteikarten, Prüfungen, Bewertungen, Anhänge</span>
+          </div>
+          <span aria-hidden="true">↔</span>
+          <div>
+            <strong>Online-Sicherung</strong>
+            <span>verschlüsselte Verbindung mit deinem Konto</span>
+          </div>
+          <span aria-hidden="true">↔</span>
+          <div>
+            <strong>Andere Geräte</strong>
+            <span>nach Anmeldung denselben Arbeitsbereich holen</span>
+          </div>
         </div>
 
         <div v-if="isElectronApiAvailable" class="settings-actions">
           <UButton v-if="!syncStatus.connected" type="button" @click="openSyncConnectModal">
-            Mit Online-Version verbinden
+            Online-Sicherung einrichten
           </UButton>
           <template v-else>
-            <UButton type="button" :loading="syncBusy" @click="openSyncConfirm('merge')">
-              Alles abgleichen
+            <UButton type="button" :loading="syncBusy" @click="openSyncConfirm(syncActionViews[0].action)">
+              {{ syncActionViews[0].label }}
             </UButton>
-            <UButton type="button" color="neutral" variant="outline" :disabled="syncBusy" @click="openSyncConfirm('upload')">
-              Lokale Daten online sichern
+            <UButton type="button" color="neutral" variant="outline" :disabled="syncBusy" @click="openSyncConfirm(syncActionViews[1].action)">
+              {{ syncActionViews[1].label }}
             </UButton>
-            <UButton type="button" color="neutral" variant="outline" :disabled="syncBusy" @click="openSyncConfirm('download')">
-              Online-Daten auf dieses Gerät holen
+            <UButton type="button" color="neutral" variant="outline" :disabled="syncBusy" @click="openSyncConfirm(syncActionViews[2].action)">
+              {{ syncActionViews[2].label }}
             </UButton>
             <UButton type="button" color="error" variant="outline" :loading="syncBusy" @click="disconnectSync">
               Verbindung trennen
@@ -129,8 +140,8 @@
     <UModal :open="showSyncConnectModal" @update:open="showSyncConnectModal = $event">
       <template #content>
         <form class="modal-card" aria-labelledby="sync-connect-title" @submit.prevent="connectSync">
-          <h2 id="sync-connect-title">Mit Online-Version verbinden</h2>
-          <p>Deine lokalen Daten bleiben auf diesem Gerät. Nach der Anmeldung entscheidest du, was übertragen wird.</p>
+          <h2 id="sync-connect-title">Online-Sicherung einrichten</h2>
+          <p>Deine lokalen Daten bleiben auf diesem Gerät. Nach der Anmeldung fragt die App, ob du direkt alles abgleichen möchtest.</p>
           <UFormField class="settings-field" label="E-Mail">
             <UInput v-model="syncEmail" type="email" autocomplete="email" required />
           </UFormField>
@@ -154,6 +165,11 @@
         <section class="modal-card" aria-labelledby="sync-confirm-title">
           <h2 id="sync-confirm-title">{{ syncConfirmTitle }}</h2>
           <p>{{ syncConfirmCopy }}</p>
+          <div class="sync-confirm-flow">
+            <span>Dieses Gerät</span>
+            <strong>{{ syncConfirmDirection }}</strong>
+            <span>Online-Sicherung</span>
+          </div>
           <div class="modal-actions">
             <UButton type="button" color="neutral" variant="outline" :disabled="syncBusy" @click="syncConfirmAction = null">
               Abbrechen
@@ -170,9 +186,11 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import type { AppUser } from '@shared/ipc'
 import type { SyncRunAction, SyncStatus } from '@shared/schemas'
 import { api, isElectronApiAvailable } from '../api'
+import { getSyncStatusView, getWorkspaceSyncAction, getWorkspaceSyncActions } from '../syncWorkspaceUx'
 import { type AppBreadcrumbItem, withHomeIcon } from '../ui/breadcrumbs'
 import { useTheme } from '../theme'
 
@@ -183,6 +201,8 @@ const breadcrumbItems: AppBreadcrumbItem[] = [
 ]
 
 const { isDark, toggleTheme, applyTheme } = useTheme()
+const route = useRoute()
+const router = useRouter()
 const users = ref<AppUser[]>([])
 const currentUser = ref<AppUser | null>(null)
 const currentUserName = ref('')
@@ -208,24 +228,38 @@ const userOptions = computed(() =>
     value: user.id
   }))
 )
+const syncStatusView = computed(() => {
+  if (!isElectronApiAvailable && syncStatus.value.connected) {
+    return {
+      badge: 'Online angemeldet',
+      title: 'Web-App online',
+      description: 'Diese Web-App speichert deine Lern- und Prüfungsdaten direkt online.',
+      detail: 'Änderungen werden automatisch gespeichert.',
+      tone: 'success' as const
+    }
+  }
+  return getSyncStatusView(syncStatus.value)
+})
+const syncBadgeColor = computed(() => {
+  if (syncStatusView.value.tone === 'success') return 'success'
+  if (syncStatusView.value.tone === 'warning') return 'warning'
+  if (syncStatusView.value.tone === 'danger') return 'error'
+  return 'neutral'
+})
+const syncActionViews = getWorkspaceSyncActions()
 const syncConfirmTitle = computed(() => {
-  if (syncConfirmAction.value === 'upload') return 'Lokale Daten online sichern?'
-  if (syncConfirmAction.value === 'download') return 'Online-Daten auf dieses Gerät holen?'
-  return 'Alles abgleichen?'
+  return getWorkspaceSyncAction(syncConfirmAction.value ?? 'merge').title
 })
 const syncConfirmCopy = computed(() => {
-  if (syncConfirmAction.value === 'upload') {
-    return 'Der aktuelle lokale Arbeitsbereich wird online gesichert. Bereits online gesicherte Daten dieses Arbeitsbereichs werden ersetzt.'
-  }
-  if (syncConfirmAction.value === 'download') {
-    return 'Der online gespeicherte Arbeitsbereich wird auf dieses Gerät geladen. Lokale fachliche Daten dieses Arbeitsbereichs werden ersetzt.'
-  }
-  return 'Die App prüft lokale und online gesicherte Daten. Bei unterschiedlichen Änderungen stoppt der Abgleich und fragt nach einer Richtung.'
+  return getWorkspaceSyncAction(syncConfirmAction.value ?? 'merge').description
 })
 const syncConfirmButton = computed(() => {
-  if (syncConfirmAction.value === 'upload') return 'Online sichern'
-  if (syncConfirmAction.value === 'download') return 'Auf dieses Gerät laden'
-  return 'Jetzt abgleichen'
+  return getWorkspaceSyncAction(syncConfirmAction.value ?? 'merge').confirmButton
+})
+const syncConfirmDirection = computed(() => {
+  if (syncConfirmAction.value === 'upload') return '→'
+  if (syncConfirmAction.value === 'download') return '←'
+  return '↔'
 })
 
 function formatDateTime(value: string): string {
@@ -243,6 +277,14 @@ async function load(): Promise<void> {
   users.value = await api.listUsers()
   currentUserName.value = currentUser.value.displayName
   syncStatus.value = await api.getSyncStatus()
+  if (route.query.connectOnline === '1' && isElectronApiAvailable) {
+    await router.replace({ name: 'settings' })
+    if (syncStatus.value.connected) {
+      syncConfirmAction.value = 'merge'
+    } else {
+      openSyncConnectModal()
+    }
+  }
 }
 
 function openSyncConnectModal(): void {
@@ -269,7 +311,8 @@ async function connectSync(): Promise<void> {
       password: syncPassword.value
     })
     closeSyncConnectModal()
-    actionNotice.value = 'Online-Version verbunden.'
+    actionNotice.value = 'Online-Sicherung verbunden. Prüfe jetzt, wie du die Daten abgleichen möchtest.'
+    syncConfirmAction.value = 'merge'
   } catch (error) {
     actionError.value = error instanceof Error ? error.message : String(error)
   } finally {

@@ -220,7 +220,35 @@
         @update:open="showTourPrompt = $event"
       >
         <template #content>
-          <section class="modal-card onboarding-card" aria-labelledby="onboarding-title">
+          <section v-if="onboardingStep === 'workspace'" class="modal-card onboarding-card" aria-labelledby="onboarding-title">
+            <div class="onboarding-heading">
+              <img class="onboarding-image" :src="welcomeImageUrl" alt="" />
+              <div>
+                <p class="eyebrow">Arbeitsbereich</p>
+                <h2 id="onboarding-title">Wie möchtest du starten?</h2>
+                <p>Dein Arbeitsbereich bleibt auf diesem Gerät. Du kannst ihn optional online sichern und auf anderen Geräten nutzen.</p>
+              </div>
+            </div>
+            <div class="onboarding-actions" aria-label="Arbeitsbereich auswählen">
+              <UButton
+                v-for="option in syncModeOptions"
+                :key="option.id"
+                type="button"
+                class="onboarding-action-card"
+                variant="outline"
+                @click="selectWorkspaceMode(option.id)"
+              >
+                <component :is="option.id === 'local' ? HardDrive : Cloud" :size="20" aria-hidden="true" />
+                <span>{{ option.title }}</span>
+                <small>{{ option.description }} {{ option.detail }}</small>
+              </UButton>
+            </div>
+            <div class="modal-actions">
+              <UButton color="neutral" variant="outline" @click="skipOnboarding">Später entscheiden</UButton>
+            </div>
+          </section>
+
+          <section v-else class="modal-card onboarding-card" aria-labelledby="onboarding-title">
             <div class="onboarding-heading">
               <img class="onboarding-image" :src="welcomeImageUrl" alt="" />
               <div>
@@ -284,13 +312,14 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { FolderKanban, Layers, LibraryBig, LogOut, Moon, Route, Settings, Sun, UserPlus } from 'lucide-vue-next'
+import { Cloud, FolderKanban, HardDrive, Layers, LibraryBig, LogOut, Moon, Route, Settings, Sun, UserPlus } from 'lucide-vue-next'
 import type { AppUser } from '@shared/ipc'
 import { APP_VERSION } from '@shared/constants'
 import { RELEASE_SMOKE_READY_EVENT } from '@shared/releaseSmoke'
 import { api, isElectronApiAvailable } from './api'
 import { getSupabaseAuthClient, readCloudAuthState, requiresCloudAuth, type CloudAuthState } from './cloudAuth'
 import { startOnboardingTour } from './onboarding'
+import { getWorkspaceSyncModeOptions, type WorkspaceSyncMode } from './syncWorkspaceUx'
 import { useTheme } from './theme'
 
 const route = useRoute()
@@ -303,6 +332,7 @@ const { isDark, toggleTheme, applyTheme } = useTheme()
 const users = ref<AppUser[]>([])
 const currentUser = ref<AppUser | null>(null)
 const showTourPrompt = ref(false)
+const onboardingStep = ref<'workspace' | 'next'>('workspace')
 const showCreateUser = ref(false)
 const newUserName = ref('')
 const cloudAuth = ref<CloudAuthState>(
@@ -362,9 +392,10 @@ const authSwitchLabel = computed(() => {
 const onboardingSettingsTitle = computed(() => (isElectronApiAvailable ? 'Cloud verbinden' : 'Einstellungen prüfen'))
 const onboardingSettingsCopy = computed(() =>
   isElectronApiAvailable
-    ? 'Optional synchronisieren. Lokal bleibt alles nutzbar.'
+    ? 'Online sichern und auf anderen Geräten nutzen.'
     : 'Account, App-Status und Optionen prüfen.'
 )
+const syncModeOptions = getWorkspaceSyncModeOptions()
 const isCloudShell = computed(() => cloudAuth.value.status !== 'not_required')
 const cloudAccountEmail = computed(() => {
   if (cloudAuth.value.status !== 'signed_in') return ''
@@ -542,12 +573,14 @@ async function loadUsers(): Promise<void> {
   currentUser.value = await api.getCurrentUser()
   users.value = await api.listUsers()
   showTourPrompt.value = !currentUser.value.onboardingCompletedAt
+  if (showTourPrompt.value) onboardingStep.value = 'workspace'
 }
 
 async function switchUser(userId: string | undefined): Promise<void> {
   if (!userId) return
   currentUser.value = await api.switchUser(userId)
   showTourPrompt.value = !currentUser.value.onboardingCompletedAt
+  if (showTourPrompt.value) onboardingStep.value = 'workspace'
   window.location.reload()
 }
 
@@ -559,6 +592,7 @@ async function createUser(): Promise<void> {
   newUserName.value = ''
   showCreateUser.value = false
   showTourPrompt.value = true
+  onboardingStep.value = 'workspace'
   window.location.reload()
 }
 
@@ -566,6 +600,18 @@ async function skipOnboarding(): Promise<void> {
   if (!currentUser.value) return
   currentUser.value = await api.completeOnboarding(currentUser.value.id)
   showTourPrompt.value = false
+}
+
+async function selectWorkspaceMode(mode: WorkspaceSyncMode): Promise<void> {
+  if (mode === 'local') {
+    onboardingStep.value = 'next'
+    return
+  }
+  showTourPrompt.value = false
+  if (currentUser.value) {
+    currentUser.value = await api.completeOnboarding(currentUser.value.id)
+  }
+  await router.push({ name: 'settings', query: { connectOnline: '1' } })
 }
 
 async function openOnboardingTarget(target: 'flashcards' | 'exam' | 'import' | 'settings'): Promise<void> {

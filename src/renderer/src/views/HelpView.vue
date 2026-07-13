@@ -16,11 +16,11 @@
 
     <section class="help-hero">
       <div>
-        <h2>Lernen, schreiben, später übertragen</h2>
+        <h2>Lernen, schreiben, optional online sichern</h2>
         <p>
           Jura Wolpertinger verbindet kurze Karteikarten-Einheiten mit prüfungsnahem Schreiben.
-          Lokal kannst du ohne Online-Verbindung arbeiten; angemeldet kannst du deine Daten mit
-          der Online-Version verbinden.
+          Du kannst auf diesem Gerät starten und deinen Arbeitsbereich später online sichern,
+          wenn du auch auf anderen Geräten weiterarbeiten möchtest.
         </p>
       </div>
     </section>
@@ -74,6 +74,21 @@ const faq = [
     question: 'Wie übernehme ich Karteikarten auf ein anderes Gerät?',
     answer:
       'Du kannst deine Karteikarten als Datei sichern und später wieder auswählen. Mit einer Online-Verbindung sollen dieselben Inhalte zusätzlich zwischen Geräten übertragen werden.'
+  },
+  {
+    question: 'Was ist ein Arbeitsbereich?',
+    answer:
+      'Ein Arbeitsbereich enthält deine Karteikarten, Prüfungen, Bewertungen, Anhänge und Einstellungen. Du kannst lokal starten und später entscheiden, ob dieser Arbeitsbereich online gesichert werden soll.'
+  },
+  {
+    question: 'Was passiert, wenn ich die Online-Sicherung einrichte?',
+    answer:
+      'Deine lokalen Daten bleiben auf dem Gerät. Nach der Anmeldung fragt die App, ob du alles abgleichen, diesen Arbeitsbereich online sichern oder online gesicherte Daten auf dieses Gerät holen möchtest.'
+  },
+  {
+    question: 'Woran sehe ich, ob alles gesichert ist?',
+    answer:
+      'In den Einstellungen zeigt die Karte Online-Version den aktuellen Zustand: nur auf diesem Gerät, bereit zum ersten Abgleich oder online gesichert. Dort steht auch, wann zuletzt synchronisiert wurde.'
   },
   {
     question: 'Warum gibt es mehrere Nutzer?',

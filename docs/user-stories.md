@@ -356,7 +356,12 @@ Als Desktop-Nutzer:in möchte ich mein lokales Profil mit einem Online-Konto ver
 Akzeptanz:
 
 - Die Desktop-App funktioniert weiterhin ohne Account.
+- Neue Nutzer:innen wählen im Einstieg zwischen `Auf diesem Gerät starten` und `Mit Online-Sicherung starten`.
+- Bestehende lokale Arbeitsbereiche können die Online-Sicherung später in den Einstellungen einrichten.
 - Lokale Daten gehen beim Verbinden nicht verloren.
+- Nach dem Verbinden fragt die App nach der Richtung: alles abgleichen, online sichern oder auf dieses Gerät holen.
+- Die Einstellungen zeigen, ob der Arbeitsbereich nur lokal liegt, bereit zum ersten Abgleich ist oder zuletzt online gesichert wurde.
+- Der Datenfluss zwischen diesem Gerät, Online-Sicherung und anderen Geräten ist sichtbar erklärt.
 - Konflikte werden nicht still überschrieben.
 - Lokale und Online-Identität bleiben nachvollziehbar verknüpft.
 
