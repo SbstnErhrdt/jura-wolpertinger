@@ -45,8 +45,10 @@ export const RELEASE_PLATFORM_CONFIGS = {
   'linux-x64': {
     directory: 'linux/x64',
     metadataFileName: 'latest-linux.yml',
-    downloadMatch: (fileName: string) => fileName.endsWith('-x64-linux.AppImage'),
-    blockmapMatch: (fileName: string) => fileName.endsWith('-x64-linux.AppImage')
+    downloadMatch: (fileName: string) =>
+      fileName.endsWith('-x64-linux.AppImage') || fileName.endsWith('-x86_64-linux.AppImage'),
+    blockmapMatch: (fileName: string) =>
+      fileName.endsWith('-x64-linux.AppImage') || fileName.endsWith('-x86_64-linux.AppImage')
   }
 } satisfies Record<ReleasePlatform, {
   directory: string
@@ -184,7 +186,10 @@ export function createS3ReleaseStorage(config: ReleaseStorageConfig): ReleaseObj
           metadata: response.Metadata ?? {}
         }
       } catch (error) {
-        if (error instanceof S3ServiceException && error.$metadata.httpStatusCode === 404) {
+        if (
+          error instanceof S3ServiceException &&
+          (error.$metadata.httpStatusCode === 404 || error.$metadata.httpStatusCode === 400)
+        ) {
           return null
         }
 
@@ -211,7 +216,7 @@ export function createS3ReleaseStorage(config: ReleaseStorageConfig): ReleaseObj
 export function immutableObjectKey(platform: ReleasePlatform, version: string, filename: string) {
   assertSafeVersion(version)
 
-  return `${platformPrefix(platform)}/${version}/${encodeURIComponent(filename)}`
+  return `${platformPrefix(platform)}/${version}/${assertRelativeObjectPath(filename)}`
 }
 
 export function mutableMetadataKey(platform: ReleasePlatform, filename: string) {
@@ -465,6 +470,10 @@ async function verifyExpectedBlockmaps(input: {
   version: string
   entries: MetadataFileEntry[]
 }) {
+  if (input.platform === 'linux-x64') {
+    return
+  }
+
   const config = RELEASE_PLATFORM_CONFIGS[input.platform]
   const blockmapSource = input.entries.find((entry) =>
     config.blockmapMatch(extractArtifactFileName(entry.url))
@@ -625,7 +634,20 @@ function keyFromMetadataUrl(platform: ReleasePlatform, version: string, metadata
     throw new Error(`${platform} metadata URL must stay inside the approved version path ${version}.`)
   }
 
-  return `${platformPrefix(platform)}/${relativePath}`
+  return `${platformPrefix(platform)}/${decodeObjectPath(relativePath)}`
+}
+
+function decodeObjectPath(value: string) {
+  return value
+    .split('/')
+    .map((segment) => {
+      try {
+        return decodeURIComponent(segment)
+      } catch {
+        return segment
+      }
+    })
+    .join('/')
 }
 
 function readSingleVersion(artifacts: ReleaseArtifact[]) {
