@@ -70,7 +70,7 @@ describe('readReleaseStorageConfig', () => {
 describe('release object keys', () => {
   it('builds immutable and mutable keys under the stable desktop feed prefix', () => {
     expect(immutableObjectKey('mac-arm64', VERSION, `${PRODUCT_NAME}-${VERSION}-arm64-mac.dmg`)).toBe(
-      `desktop/stable/mac/arm64/${VERSION}/${encodeURIComponent(`${PRODUCT_NAME}-${VERSION}-arm64-mac.dmg`)}`
+      `desktop/stable/mac/arm64/${VERSION}/${PRODUCT_NAME}-${VERSION}-arm64-mac.dmg`
     )
     expect(mutableMetadataKey('windows-x64', 'latest.yml')).toBe('desktop/stable/windows/x64/latest.yml')
   })
@@ -344,10 +344,10 @@ describe('publishRelease', () => {
 
   it('validates blockmap bytes and size against staged object data', async () => {
     const storage = await createCompleteRemoteStorage()
-    const key = immutableObjectKey('linux-x64', VERSION, `${PRODUCT_NAME}-${VERSION}-x64-linux.AppImage.blockmap`)
+    const key = immutableObjectKey('windows-x64', VERSION, `${PRODUCT_NAME}-${VERSION}-x64-win.exe.blockmap`)
     const existing = await storage.get({ key })
 
-    await storage.seed(key, new TextEncoder().encode('LINUX BLOCKMAP BYTES'), {
+    await storage.seed(key, new TextEncoder().encode('WINDOWS BLOCKMAP BYTES'), {
       contentType: 'application/octet-stream',
       cacheControl: IMMUTABLE_CACHE_CONTROL,
       metadata: {
@@ -365,12 +365,11 @@ describe('publishRelease', () => {
         publicBaseUrl: PUBLIC_BASE_URL,
         publishedAt: '2026-07-12T10:00:00.000Z'
       })
-    ).rejects.toThrow(/blockmap.*linux-x64/i)
+    ).rejects.toThrow(/blockmap.*windows-x64/i)
 
     expect(storage.puts.map(({ key: putKey }) => putKey)).toEqual([
       'desktop/stable/mac/arm64/latest-mac.yml',
-      'desktop/stable/mac/x64/latest-mac.yml',
-      'desktop/stable/windows/x64/latest.yml'
+      'desktop/stable/mac/x64/latest-mac.yml'
     ])
   })
 
@@ -628,7 +627,6 @@ function releaseFiles(platform: 'mac-arm64' | 'mac-x64' | 'windows-x64' | 'linux
 
   return [
     appImage,
-    artifact(`${PRODUCT_NAME}-${VERSION}-x64-linux.AppImage.blockmap`, 'linux blockmap bytes'),
     metadata('latest-linux.yml', [appImage])
   ]
 }

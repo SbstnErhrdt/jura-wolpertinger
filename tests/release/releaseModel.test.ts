@@ -135,11 +135,6 @@ const fixtureDefinitions: Record<ReleasePlatform, FixtureDefinition> = {
         kind: 'download'
       },
       {
-        fileName: `${PRODUCT_NAME}-${VERSION}-x64-linux.AppImage.blockmap`,
-        content: 'linux x64 appimage blockmap bytes',
-        kind: 'blockmap'
-      },
-      {
         fileName: 'latest-linux.yml',
         content: buildMetadataYaml({
           version: VERSION,
