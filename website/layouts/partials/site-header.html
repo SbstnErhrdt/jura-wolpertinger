@@ -4,12 +4,19 @@
     <span>Jura Wolpertinger</span>
   </a>
   <nav aria-label="Hauptnavigation">
-    <a href="/#features">Funktionen</a>
-    <a href="/karteikarten/">Karteikarten</a>
-    <a href="/pruefungen/">Prüfungen</a>
-    <a href="/#screenshots">Einblicke</a>
-    <a href="/download/">Download</a>
-    <a href="/installation/">Installation</a>
-    <a class="nav-cta" href="https://app.jura-wolpi.de/">Web-App</a>
+    {{- range site.Menus.main }}
+      {{- $attrs := dict "href" .URL }}
+      {{- with .Params.class }}
+        {{- $attrs = merge $attrs (dict "class" .) }}
+      {{- end }}
+      {{- if $.IsMenuCurrent .Menu . }}
+        {{- $attrs = merge $attrs (dict "aria-current" "page") }}
+      {{- end }}
+      <a
+        {{- range $key, $value := $attrs }}
+          {{- with $value }}{{ printf " %s=%q" $key $value | safeHTMLAttr }}{{ end }}
+        {{- end -}}
+      >{{ .Name }}</a>
+    {{- end }}
   </nav>
 </header>

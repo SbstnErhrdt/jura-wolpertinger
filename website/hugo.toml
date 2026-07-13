@@ -9,5 +9,33 @@ description = 'Jura Wolpertinger ist eine Desktop- und Web-App für Karteikarten
 image = 'https://jura-wolpi.de/assets/wolpi/hero.png'
 keywords = ['Jura Karteikarten', 'Jura Klausuren', 'Examensvorbereitung Jura', 'Zweites Staatsexamen', 'Jura lernen', 'Klausurtraining Jura']
 
+[menus]
+  [[menus.main]]
+    name = 'Funktionen'
+    url = '/#features'
+    weight = 10
+  [[menus.main]]
+    name = 'Karteikarten'
+    pageRef = '/karteikarten'
+    weight = 20
+  [[menus.main]]
+    name = 'Prüfungen'
+    pageRef = '/pruefungen'
+    weight = 30
+  [[menus.main]]
+    name = 'Download'
+    pageRef = '/download'
+    weight = 40
+  [[menus.main]]
+    name = 'Installation'
+    pageRef = '/installation'
+    weight = 50
+  [[menus.main]]
+    name = 'Web-App'
+    url = 'https://app.jura-wolpi.de/'
+    weight = 60
+    [menus.main.params]
+      class = 'nav-cta'
+
 [markup.goldmark.renderer]
 unsafe = true

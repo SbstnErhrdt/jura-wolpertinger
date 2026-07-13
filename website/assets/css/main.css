@@ -95,6 +95,11 @@ nav a:hover {
   color: var(--blue);
 }
 
+nav a[aria-current="page"] {
+  background: rgba(0, 90, 132, 0.12);
+  color: var(--blue);
+}
+
 .nav-cta {
   background: var(--blue);
   color: #ffffff;
