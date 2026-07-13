@@ -1,17 +1,5 @@
 {{ define "main" }}
-<header class="site-header">
-  <a class="brand" href="/" aria-label="Jura Wolpertinger Start">
-    <img src="/assets/icon.png" alt="">
-    <span>Jura Wolpertinger</span>
-  </a>
-  <nav aria-label="Hauptnavigation">
-    <a href="/karteikarten/">Karteikarten</a>
-    <a href="/pruefungen/">Prüfungen</a>
-    <a href="/installation/">Installation</a>
-    <a href="/">Startseite</a>
-    <a class="nav-cta" href="https://app.jura-wolpi.de/">Web-App</a>
-  </nav>
-</header>
+{{ partial "site-header.html" . }}
 
 <main>
   <section class="page-hero">
