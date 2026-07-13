@@ -196,6 +196,7 @@ function createWindow(): void {
 }
 
 function registerIpc(): void {
+  ipcMain.handle('app:version', () => app.getVersion())
   ipcMain.on(RELEASE_SMOKE_READY_CHANNEL, (event) => {
     if (event.sender !== mainWindow?.webContents) return
 

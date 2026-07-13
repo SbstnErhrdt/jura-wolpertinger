@@ -27,6 +27,7 @@ import {
 } from '@shared/releaseSmoke'
 
 const api: AppApi = {
+  getAppVersion: () => ipcRenderer.invoke('app:version'),
   getCurrentUser: () => ipcRenderer.invoke('users:current'),
   listUsers: () => ipcRenderer.invoke('users:list'),
   createUser: (displayName: string) => ipcRenderer.invoke('users:create', displayName),

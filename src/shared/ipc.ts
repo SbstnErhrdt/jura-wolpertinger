@@ -236,6 +236,7 @@ export type SaveAiCorrectionDraftInput = {
 }
 
 export type AppApi = {
+  getAppVersion(): Promise<string>
   getCurrentUser(): Promise<AppUser>
   listUsers(): Promise<AppUser[]>
   createUser(displayName: string): Promise<AppUser>

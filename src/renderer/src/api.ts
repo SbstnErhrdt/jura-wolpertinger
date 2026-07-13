@@ -1,4 +1,5 @@
 import { EDITOR_SCHEMA_VERSION, EMPTY_TIPTAP_DOCUMENT } from '@shared/constants'
+import packageJson from '../../../package.json'
 import type {
   AddInlineCommentInput,
   AiSettingsStatus,
@@ -112,6 +113,9 @@ function createBrowserDevApi(): AppApi {
   )
 
   return {
+    async getAppVersion() {
+      return packageJson.version
+    },
     async getCurrentUser() {
       const store = readStore()
       return ensureBrowserUser(store)
