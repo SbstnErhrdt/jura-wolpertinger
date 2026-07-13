@@ -118,6 +118,7 @@ const PLATFORM_CONFIGS: Record<ReleasePlatform, PlatformConfig> = {
     metadataFileName: 'latest-linux.yml',
     requiredFiles: [
       { kind: 'download', label: 'AppImage', match: (fileName) => fileName.endsWith('-x64-linux.AppImage') || fileName.endsWith('-x86_64-linux.AppImage') },
+      { kind: 'blockmap', label: 'blockmap', match: (fileName) => fileName.endsWith('-x64-linux.AppImage.blockmap') || fileName.endsWith('-x86_64-linux.AppImage.blockmap') },
       { kind: 'metadata', label: 'update metadata', match: (fileName) => fileName === 'latest-linux.yml' }
     ]
   }

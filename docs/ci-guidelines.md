@@ -1,6 +1,6 @@
 # CI Guidelines für Agents
 
-Diese Guideline beschreibt die für Jura Wolpertinger `0.1.5` implementierten CI- und Release-Gates. Maßgeblich sind `.github/workflows/ci.yml`, `.github/workflows/release.yml` und die Scripts in `package.json`.
+Diese Guideline beschreibt die für Jura Wolpertinger `0.1.7` implementierten CI- und Release-Gates. Maßgeblich sind `.github/workflows/ci.yml`, `.github/workflows/release.yml` und die Scripts in `package.json`.
 
 ## Laufzeit und Installation
 
@@ -108,7 +108,7 @@ Apple-Zugangsdaten gehören nicht in diesen Workflow. macOS wird lokal mit `APPL
 Nur ein Operator mit lokalen RustFS-Zugangsdaten führt die Live-Schaltung aus:
 
 ```bash
-corepack pnpm run release:publish --version 0.1.5 --confirm "publish 0.1.5"
+corepack pnpm run release:publish --version 0.1.7 --confirm "publish 0.1.7"
 ```
 
 Ohne die exakte Bestätigung verweigert das Skript den Vorgang. Pro Plattform werden versionierte YAML, Artefakte und Blockmaps remote gelesen und anhand von Version, Größe, SHA-512 und Cache Header validiert. Erst danach wird das Live-`latest*.yml` dieser Plattform geschrieben. Die Reihenfolge ist `mac-arm64`, `mac-x64`, `windows-x64`, `linux-x64`; `manifest.json` folgt zuletzt.
