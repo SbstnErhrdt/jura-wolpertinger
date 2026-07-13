@@ -6,10 +6,8 @@ enableRobotsTXT = true
 
 [params]
 description = 'Jura Wolpertinger ist eine Desktop- und Web-App für Karteikarten, Übungsklausuren, Autosave, Bewertungen und Lernfortschritt in der juristischen Examensvorbereitung.'
-image = 'https://jura-wolpi.de/assets/hello.png'
+image = 'https://jura-wolpi.de/assets/wolpi/hero.png'
+keywords = ['Jura Karteikarten', 'Jura Klausuren', 'Examensvorbereitung Jura', 'Zweites Staatsexamen', 'Jura lernen', 'Klausurtraining Jura']
 
 [markup.goldmark.renderer]
 unsafe = true
-
-[outputs]
-home = ['HTML', 'SITEMAP']
