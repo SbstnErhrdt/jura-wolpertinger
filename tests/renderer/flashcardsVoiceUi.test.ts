@@ -6,6 +6,9 @@ const source = readFileSync('src/renderer/src/views/FlashcardsReviewView.vue', '
 describe('flashcards voice UI contract', () => {
   it('gates the voice action behind flashcards_voice_agent', () => {
     expect(source).toContain('flashcards_voice_agent')
+    expect(source).toContain('featureFlags.value = await api.getFeatureFlags().catch(() => ({}))')
+    expect(source).toContain("const voiceEnabled = computed(() => hasFeatureFlag(featureFlags.value, 'flashcards_voice_agent'))")
+    expect(source).toContain('v-if="voiceEnabled"')
     expect(source).toContain('Mit Wolpi sprechen')
   })
 
