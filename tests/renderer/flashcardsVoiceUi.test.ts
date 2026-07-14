@@ -25,4 +25,13 @@ describe('flashcards voice UI contract', () => {
     expect(source).toContain('const completionGeneration = voiceRequestGeneration')
     expect(source).toContain('if (!isCurrentVoiceRequest(completionGeneration)) return')
   })
+
+  it('keeps answer completion available after assessment and clears voice state on card changes', () => {
+    expect(source).toContain('v-if="voiceClient && voiceInProgress"')
+    expect(source).not.toContain(':disabled="voiceStatus === \'assessing\'"')
+    expect(source).toContain('@click="finishVoiceReview"')
+    expect(source).toContain('function clearVoiceReview(): void')
+    expect(source).toContain("voiceStatus.value = 'idle'")
+    expect(source).toContain('clearVoiceReview()')
+  })
 })

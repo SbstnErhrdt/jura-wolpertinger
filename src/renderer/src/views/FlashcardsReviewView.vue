@@ -90,7 +90,6 @@
           type="button"
           color="neutral"
           variant="outline"
-          :disabled="voiceStatus === 'assessing'"
           @click="finishVoiceReview"
         >
           Antwort beenden
@@ -267,6 +266,7 @@ onUnmounted(() => {
 
 async function load(): Promise<void> {
   loading.value = true
+  clearVoiceReview()
   sessionCompleted.value = false
   featureFlags.value = await api.getFeatureFlags().catch(() => ({}))
   if (collectionId.value) {
@@ -297,16 +297,11 @@ async function load(): Promise<void> {
 async function startVoiceReview(): Promise<void> {
   const card = currentCard.value
   if (!card || voiceInProgress.value) return
-  stopVoiceClient()
+  clearVoiceReview()
   const requestGeneration = ++voiceRequestGeneration
   const abortController = new AbortController()
   voiceAbortController = abortController
   voiceStatus.value = 'connecting'
-  voiceTranscript.value = ''
-  voiceResult.value = null
-  voiceError.value = ''
-  voiceSessionId.value = null
-  voiceAssessment.value = null
 
   try {
     const session = await api.createVoiceReviewSession({ promptId: card.id })
@@ -383,6 +378,17 @@ function stopVoiceClient(): void {
   voiceClient.value = null
 }
 
+function clearVoiceReview(): void {
+  voiceRequestGeneration += 1
+  stopVoiceClient()
+  voiceStatus.value = 'idle'
+  voiceTranscript.value = ''
+  voiceResult.value = null
+  voiceError.value = ''
+  voiceSessionId.value = null
+  voiceAssessment.value = null
+}
+
 function isCurrentVoiceRequest(requestGeneration: number): boolean {
   return requestGeneration === voiceRequestGeneration
 }
@@ -438,6 +444,7 @@ function clearWolpiMilestoneTimer(): void {
 }
 
 function nextCard(): void {
+  clearVoiceReview()
   ratingBusy.value = false
   feedback.value = ''
   cardMotion.value = 'next'
@@ -459,6 +466,7 @@ function nextCard(): void {
 
 function previousCard(): void {
   if (!canGoPrevious.value || ratingBusy.value || voiceInProgress.value) return
+  clearVoiceReview()
   cardMotion.value = 'previous'
   currentIndex.value -= 1
   feedback.value = ''
@@ -472,6 +480,7 @@ function skipCard(): void {
 
 function removeFromSession(): void {
   if (voiceInProgress.value) return
+  clearVoiceReview()
   cardMotion.value = 'next'
   cards.value.splice(currentIndex.value, 1)
   if (currentIndex.value >= cards.value.length && currentIndex.value > 0) currentIndex.value -= 1

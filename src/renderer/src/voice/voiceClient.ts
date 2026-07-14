@@ -56,8 +56,10 @@ export function parseRealtimeEvent(input: string): ParsedRealtimeEvent | null {
   const parsed: ParsedRealtimeEvent = {}
   if (payload.type.includes('response.created')) parsed.status = 'prompting'
 
+  const isInputTranscript = payload.type === 'conversation.item.input_audio_transcription.delta'
+    || payload.type === 'conversation.item.input_audio_transcription.completed'
   const transcript = payload.transcript ?? payload.delta
-  if (payload.type.includes('transcript') && transcript) {
+  if (isInputTranscript && transcript) {
     parsed.transcript = transcript
     if (payload.transcript) parsed.replaceTranscript = true
   }

@@ -30,13 +30,22 @@ describe('voice realtime event parser', () => {
     })
   })
 
-  it('keeps transcript deltas without treating arbitrary event data as an assessment', () => {
+  it('keeps input transcript deltas without treating them as an assessment', () => {
     const parsed = parseRealtimeEvent(JSON.stringify({
-      type: 'response.output_audio_transcript.delta',
+      type: 'conversation.item.input_audio_transcription.delta',
       delta: 'Die Anspruchsgrundlage ist '
     }))
 
     expect(parsed).toEqual({ transcript: 'Die Anspruchsgrundlage ist ' })
+  })
+
+  it('rejects assistant output transcripts', () => {
+    const parsed = parseRealtimeEvent(JSON.stringify({
+      type: 'response.output_audio_transcript.delta',
+      delta: 'Das ist eine gute Antwort.'
+    }))
+
+    expect(parsed?.transcript).toBeUndefined()
   })
 
   it('rejects incomplete function-call arguments', () => {
