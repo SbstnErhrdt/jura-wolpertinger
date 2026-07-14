@@ -122,6 +122,7 @@ function isStringArray(value: unknown): value is string[] {
 
 export async function startVoiceClient(input: {
   clientSecret: string
+  questionText: string
   callbacks: VoiceClientCallbacks
   signal?: AbortSignal
 }): Promise<VoiceClient> {
@@ -188,7 +189,7 @@ export async function startVoiceClient(input: {
     dataChannel = peerConnection.createDataChannel('oai-events')
     dataChannel.addEventListener('open', () => {
       notifyStatus('listening')
-      sendGreetingResponse(dataChannel as RTCDataChannel)
+      sendGreetingResponse(dataChannel as RTCDataChannel, input.questionText)
     })
     dataChannel.addEventListener('message', (event) => {
       const parsed = parseRealtimeEvent(String(event.data))
@@ -234,15 +235,17 @@ export async function startVoiceClient(input: {
   }
 }
 
-function sendGreetingResponse(dataChannel: RTCDataChannel): void {
+function sendGreetingResponse(dataChannel: RTCDataChannel, questionText: string): void {
   if (dataChannel.readyState !== 'open') return
+  const normalizedQuestion = questionText.trim()
   dataChannel.send(JSON.stringify({
     type: 'response.create',
     response: {
       output_modalities: ['audio'],
       instructions: [
         'Stelle dich kurz als Wolpi vor.',
-        'Sag, dass du jetzt die Karteikartenantwort abfragst.',
+        'Stelle dann genau diese Karteikartenfrage:',
+        normalizedQuestion,
         'Bitte den Lernenden, die Antwort laut zu formulieren.',
         'Bleib knapp, freundlich und auf Deutsch. Verrate die Musterantwort nicht.'
       ].join(' ')

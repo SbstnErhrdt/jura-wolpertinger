@@ -309,6 +309,7 @@ async function startVoiceReview(): Promise<void> {
     voiceSessionId.value = session.sessionId
     const client = await startVoiceClient({
       clientSecret: session.clientSecret,
+      questionText: card.frontMarkdown,
       signal: abortController.signal,
       callbacks: {
         onStatus: (status) => {

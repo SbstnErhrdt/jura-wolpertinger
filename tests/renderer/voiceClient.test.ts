@@ -100,7 +100,11 @@ describe('voice client cancellation', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, text: async () => 'answer-sdp' }))
     const callbacks = createCallbacks()
 
-    const client = await startVoiceClient({ clientSecret: 'secret', callbacks })
+    const client = await startVoiceClient({
+      clientSecret: 'secret',
+      questionText: 'Was ist Verzug?',
+      callbacks
+    })
     const connection = FakePeerConnection.instances.at(-1)
     expect(connection).toBeDefined()
 
@@ -120,6 +124,7 @@ describe('voice client cancellation', () => {
     expect(greeting.type).toBe('response.create')
     expect(greeting.response.output_modalities).toEqual(['audio'])
     expect(greeting.response.instructions).toContain('Wolpi')
+    expect(greeting.response.instructions).toContain('Was ist Verzug?')
 
     client.stop()
     expect(audioElement.pause).toHaveBeenCalledOnce()
@@ -136,7 +141,12 @@ describe('voice client cancellation', () => {
     const controller = new AbortController()
     const callbacks = createCallbacks()
 
-    const start = startVoiceClient({ clientSecret: 'secret', callbacks, signal: controller.signal })
+    const start = startVoiceClient({
+      clientSecret: 'secret',
+      questionText: 'Was ist Verzug?',
+      callbacks,
+      signal: controller.signal
+    })
     controller.abort()
     media.resolve({ getTracks: () => [track] } as unknown as MediaStream)
 
@@ -156,7 +166,12 @@ describe('voice client cancellation', () => {
     vi.stubGlobal('fetch', fetchMock)
     const controller = new AbortController()
 
-    const start = startVoiceClient({ clientSecret: 'secret', callbacks: createCallbacks(), signal: controller.signal })
+    const start = startVoiceClient({
+      clientSecret: 'secret',
+      questionText: 'Was ist Verzug?',
+      callbacks: createCallbacks(),
+      signal: controller.signal
+    })
     await waitForCall(fetchMock)
     controller.abort()
     fetchResponse.resolve({ ok: true, text: async () => 'answer-sdp' } as Response)
