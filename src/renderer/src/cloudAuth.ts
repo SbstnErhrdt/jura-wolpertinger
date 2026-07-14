@@ -20,6 +20,11 @@ export function requiresCloudAuth(): boolean {
 
 export function getSupabaseAuthClient(): SupabaseClient | null {
   if (!requiresCloudAuth()) return null
+  return getVoiceSupabaseAuthClient()
+}
+
+export function getVoiceSupabaseAuthClient(): SupabaseClient | null {
+  if (typeof window === 'undefined') return null
   if (authClient) return authClient
   const configuredUrl = import.meta.env.VITE_SUPABASE_URL
   const url = resolveSupabaseUrl(configuredUrl, window.location.origin)
