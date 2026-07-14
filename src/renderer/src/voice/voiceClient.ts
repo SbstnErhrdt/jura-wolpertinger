@@ -134,6 +134,7 @@ export async function startVoiceClient(input: {
   let stream: MediaStream | null = null
   let peerConnection: RTCPeerConnection | null = null
   let dataChannel: RTCDataChannel | null = null
+  let remoteAudioElement: HTMLAudioElement | null = null
   let stopped = false
   let transcript = ''
   const canNotify = (): boolean => !stopped && !input.signal?.aborted
@@ -156,6 +157,12 @@ export async function startVoiceClient(input: {
     dataChannel?.close()
     peerConnection?.close()
     stream?.getTracks().forEach((track) => track.stop())
+    if (remoteAudioElement) {
+      remoteAudioElement.pause()
+      remoteAudioElement.srcObject = null
+      remoteAudioElement.remove()
+      remoteAudioElement = null
+    }
     input.signal?.removeEventListener('abort', stop)
   }
 
@@ -169,9 +176,20 @@ export async function startVoiceClient(input: {
       throw cancellationError()
     }
     peerConnection = new RTCPeerConnection()
+    peerConnection.addEventListener('track', (event) => {
+      if (!remoteAudioElement) {
+        remoteAudioElement = document.createElement('audio')
+        remoteAudioElement.autoplay = true
+        remoteAudioElement.setAttribute('playsinline', 'true')
+      }
+      remoteAudioElement.srcObject = event.streams[0] ?? new MediaStream([event.track])
+    })
     stream.getTracks().forEach((track) => peerConnection?.addTrack(track, stream as MediaStream))
     dataChannel = peerConnection.createDataChannel('oai-events')
-    dataChannel.addEventListener('open', () => notifyStatus('listening'))
+    dataChannel.addEventListener('open', () => {
+      notifyStatus('listening')
+      sendGreetingResponse(dataChannel as RTCDataChannel)
+    })
     dataChannel.addEventListener('message', (event) => {
       const parsed = parseRealtimeEvent(String(event.data))
       if (!parsed) return
@@ -214,6 +232,22 @@ export async function startVoiceClient(input: {
     notifyError('Das Gespräch konnte nicht gestartet werden. Du kannst die Karte manuell wiederholen.')
     throw error
   }
+}
+
+function sendGreetingResponse(dataChannel: RTCDataChannel): void {
+  if (dataChannel.readyState !== 'open') return
+  dataChannel.send(JSON.stringify({
+    type: 'response.create',
+    response: {
+      output_modalities: ['audio'],
+      instructions: [
+        'Stelle dich kurz als Wolpi vor.',
+        'Sag, dass du jetzt die Karteikartenantwort abfragst.',
+        'Bitte den Lernenden, die Antwort laut zu formulieren.',
+        'Bleib knapp, freundlich und auf Deutsch. Verrate die Musterantwort nicht.'
+      ].join(' ')
+    }
+  }))
 }
 
 function cancellationError(): Error {

@@ -80,6 +80,53 @@ describe('voice realtime event parser', () => {
 })
 
 describe('voice client cancellation', () => {
+  it('plays remote audio and asks Wolpi to greet when the data channel opens', async () => {
+    const track = { stop: vi.fn() }
+    const remoteStream = {} as MediaStream
+    const audioElement = {
+      autoplay: false,
+      srcObject: null as MediaStream | null,
+      setAttribute: vi.fn(),
+      pause: vi.fn(),
+      remove: vi.fn()
+    }
+    const createElement = vi.fn(() => audioElement)
+    vi.stubGlobal('document', { createElement })
+    vi.stubGlobal('navigator', {
+      mediaDevices: { getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [track] }) }
+    })
+    vi.stubGlobal('RTCPeerConnection', FakePeerConnection)
+    vi.stubGlobal('MediaStream', vi.fn())
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, text: async () => 'answer-sdp' }))
+    const callbacks = createCallbacks()
+
+    const client = await startVoiceClient({ clientSecret: 'secret', callbacks })
+    const connection = FakePeerConnection.instances.at(-1)
+    expect(connection).toBeDefined()
+
+    connection?.dispatch('track', { streams: [remoteStream], track: {} })
+    connection?.dataChannel.dispatch('open')
+
+    expect(createElement).toHaveBeenCalledWith('audio')
+    expect(audioElement.autoplay).toBe(true)
+    expect(audioElement.setAttribute).toHaveBeenCalledWith('playsinline', 'true')
+    expect(audioElement.srcObject).toBe(remoteStream)
+    expect(callbacks.onStatus).toHaveBeenCalledWith('listening')
+    expect(connection?.dataChannel.send).toHaveBeenCalledOnce()
+    const greeting = JSON.parse(String(connection?.dataChannel.send.mock.calls[0]?.[0])) as {
+      type: string
+      response: { output_modalities: string[]; instructions: string }
+    }
+    expect(greeting.type).toBe('response.create')
+    expect(greeting.response.output_modalities).toEqual(['audio'])
+    expect(greeting.response.instructions).toContain('Wolpi')
+
+    client.stop()
+    expect(audioElement.pause).toHaveBeenCalledOnce()
+    expect(audioElement.remove).toHaveBeenCalledOnce()
+    expect(audioElement.srcObject).toBeNull()
+  })
+
   it('stops microphone tracks when aborted while media permission is pending', async () => {
     const media = deferred<MediaStream>()
     const track = { stop: vi.fn() }
@@ -123,9 +170,29 @@ describe('voice client cancellation', () => {
   })
 })
 
+class FakeDataChannel {
+  closed = false
+  readyState: RTCDataChannelState = 'connecting'
+  readonly listeners = new Map<string, Array<(event: unknown) => void>>()
+  readonly send = vi.fn()
+  readonly addEventListener = vi.fn((type: string, listener: (event: unknown) => void) => {
+    this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener])
+  })
+  readonly close = vi.fn(() => {
+    this.closed = true
+    this.readyState = 'closed'
+  })
+
+  dispatch(type: string, event: unknown = {}): void {
+    if (type === 'open') this.readyState = 'open'
+    for (const listener of this.listeners.get(type) ?? []) listener(event)
+  }
+}
+
 class FakePeerConnection {
   static instances: FakePeerConnection[] = []
-  readonly dataChannel = { closed: false, addEventListener: vi.fn(), close: () => { this.dataChannel.closed = true } }
+  readonly dataChannel = new FakeDataChannel()
+  readonly listeners = new Map<string, Array<(event: unknown) => void>>()
   closed = false
   connectionState: RTCPeerConnectionState = 'new'
 
@@ -133,13 +200,19 @@ class FakePeerConnection {
     FakePeerConnection.instances.push(this)
   }
 
-  addEventListener = vi.fn()
+  addEventListener = vi.fn((type: string, listener: (event: unknown) => void) => {
+    this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener])
+  })
   addTrack = vi.fn()
   createDataChannel = vi.fn(() => this.dataChannel)
   createOffer = vi.fn().mockResolvedValue({ sdp: 'offer-sdp' })
   setLocalDescription = vi.fn().mockResolvedValue(undefined)
   setRemoteDescription = vi.fn().mockResolvedValue(undefined)
   close = vi.fn(() => { this.closed = true })
+
+  dispatch(type: string, event: unknown = {}): void {
+    for (const listener of this.listeners.get(type) ?? []) listener(event)
+  }
 }
 
 function createCallbacks() {
