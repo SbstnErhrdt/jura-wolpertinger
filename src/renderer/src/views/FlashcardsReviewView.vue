@@ -67,6 +67,34 @@
           <kbd class="key-hint" aria-hidden="true">→</kbd>
         </UButton>
       </div>
+      <UButton
+        v-if="voiceEnabled"
+        type="button"
+        icon="i-lucide-mic"
+        :disabled="voiceInProgress || ratingBusy"
+        @click="startVoiceReview"
+      >
+        Mit Wolpi sprechen
+      </UButton>
+      <section v-if="voiceStatus !== 'idle'" class="voice-review-panel" aria-live="polite">
+        <strong>{{ voiceStatusLabel }}</strong>
+        <p v-if="voiceTranscript">{{ voiceTranscript }}</p>
+        <p v-if="voiceError" class="review-feedback">{{ voiceError }}</p>
+        <div v-if="voiceResult">
+          <p>{{ voiceResult.assessment.reason }}</p>
+          <p v-if="!voiceResult.recorded">Antwort konnte nicht sicher bewertet werden.</p>
+        </div>
+        <UButton
+          v-if="voiceClient && voiceInProgress"
+          type="button"
+          color="neutral"
+          variant="outline"
+          :disabled="voiceStatus === 'assessing'"
+          @click="finishVoiceReview"
+        >
+          Antwort beenden
+        </UButton>
+      </section>
       <div v-if="showBack" class="rating-row">
         <UButton class="rating-option again" color="error" variant="soft" :disabled="ratingBusy" @click="rate(1)">
           <RotateCcw :size="18" aria-hidden="true" />
@@ -126,8 +154,11 @@
 import { computed, defineComponent, h, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { CircleCheck, RotateCcw, Sparkles, TriangleAlert } from 'lucide-vue-next'
+import type { FeatureFlags, VoiceSessionCompleteResult } from '@shared/ipc'
 import type { ReviewCard, ReviewRating } from '@shared/schemas'
 import { api } from '../api'
+import { hasFeatureFlag } from '../voice/featureFlags'
+import { startVoiceClient, type VoiceClient, type VoiceClientStatus } from '../voice/voiceClient'
 import type { AppActionMenuItem } from '../ui/actionMenu'
 import { type AppBreadcrumbItem, withHomeIcon } from '../ui/breadcrumbs'
 
@@ -140,6 +171,14 @@ const showBack = ref(false)
 const cardMotion = ref<'flip' | 'next' | 'previous'>('flip')
 const feedback = ref('')
 const ratingBusy = ref(false)
+const featureFlags = ref<FeatureFlags>({})
+const voiceStatus = ref<VoiceClientStatus>('idle')
+const voiceTranscript = ref('')
+const voiceResult = ref<VoiceSessionCompleteResult | null>(null)
+const voiceError = ref('')
+const voiceClient = ref<VoiceClient | null>(null)
+const voiceSessionId = ref<string | null>(null)
+const voiceAssessment = ref<unknown>(null)
 const collectionId = computed(() => (typeof route.query.collection === 'string' ? route.query.collection : null))
 const collectionName = ref('')
 const hasPracticeCards = ref(false)
@@ -163,6 +202,21 @@ const WOLPI_MILESTONE_COPY = [
 ]
 
 const currentCard = computed(() => cards.value[currentIndex.value] ?? againQueue.value[0] ?? null)
+const voiceEnabled = computed(() => hasFeatureFlag(featureFlags.value, 'flashcards_voice_agent'))
+const voiceInProgress = computed(() => ['connecting', 'listening', 'prompting', 'assessing'].includes(voiceStatus.value))
+const voiceStatusLabel = computed(() => {
+  const labels: Record<VoiceClientStatus, string> = {
+    idle: 'Bereit',
+    connecting: 'Verbindet',
+    listening: 'Hört zu',
+    prompting: 'Fragt nach',
+    assessing: 'Bewertet',
+    result: 'Ergebnis',
+    uncertain: 'Nicht sicher',
+    error: 'Nicht sicher'
+  }
+  return labels[voiceStatus.value]
+})
 const canGoPrevious = computed(() => currentIndex.value > 0 && !sessionCompleted.value)
 const positionLabel = computed(() => `${Math.min(currentIndex.value + 1, cards.value.length)} / ${cards.value.length}`)
 const breadcrumbItems = computed<AppBreadcrumbItem[]>(() => {
@@ -204,11 +258,13 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('keydown', handleReviewKeydown)
   clearWolpiMilestoneTimer()
+  stopVoiceClient()
 })
 
 async function load(): Promise<void> {
   loading.value = true
   sessionCompleted.value = false
+  featureFlags.value = await api.getFeatureFlags().catch(() => ({}))
   if (collectionId.value) {
     const collections = await api.listLearningCollections()
     collectionName.value = collections.find((collection) => collection.id === collectionId.value)?.name ?? ''
@@ -232,6 +288,73 @@ async function load(): Promise<void> {
   reviewedCardsInSession.value = 0
   dismissWolpiMilestone()
   loading.value = false
+}
+
+async function startVoiceReview(): Promise<void> {
+  const card = currentCard.value
+  if (!card || voiceInProgress.value) return
+  stopVoiceClient()
+  voiceStatus.value = 'connecting'
+  voiceTranscript.value = ''
+  voiceResult.value = null
+  voiceError.value = ''
+  voiceSessionId.value = null
+  voiceAssessment.value = null
+
+  try {
+    const session = await api.createVoiceReviewSession({ promptId: card.id })
+    voiceSessionId.value = session.sessionId
+    voiceClient.value = await startVoiceClient({
+      clientSecret: session.clientSecret,
+      callbacks: {
+        onStatus: (status) => {
+          voiceStatus.value = status
+        },
+        onTranscript: (transcript) => {
+          voiceTranscript.value = transcript
+        },
+        onAssessment: (assessment) => {
+          voiceAssessment.value = assessment
+        },
+        onError: (message) => {
+          voiceError.value = message
+          voiceStatus.value = 'error'
+        }
+      }
+    })
+  } catch {
+    voiceStatus.value = 'error'
+    voiceError.value ||= 'Das Gespräch konnte nicht gestartet werden. Du kannst die Karte manuell wiederholen.'
+  }
+}
+
+async function finishVoiceReview(): Promise<void> {
+  const sessionId = voiceSessionId.value
+  stopVoiceClient()
+  if (!sessionId || !voiceTranscript.value.trim() || voiceAssessment.value === null) {
+    voiceStatus.value = 'uncertain'
+    voiceError.value = 'Deine Antwort konnte noch nicht bewertet werden. Du kannst die Karte manuell wiederholen.'
+    return
+  }
+
+  voiceStatus.value = 'assessing'
+  voiceError.value = ''
+  try {
+    voiceResult.value = await api.completeVoiceReviewSession({
+      sessionId,
+      transcript: voiceTranscript.value,
+      assessment: voiceAssessment.value
+    })
+    voiceStatus.value = voiceResult.value.recorded ? 'result' : 'uncertain'
+  } catch {
+    voiceStatus.value = 'uncertain'
+    voiceError.value = 'Deine Antwort konnte nicht bewertet werden. Du kannst die Karte manuell wiederholen.'
+  }
+}
+
+function stopVoiceClient(): void {
+  voiceClient.value?.stop()
+  voiceClient.value = null
 }
 
 async function restartPractice(): Promise<void> {

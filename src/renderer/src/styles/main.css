@@ -1425,6 +1425,23 @@ body {
   min-height: 40px;
 }
 
+.voice-review-panel {
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-card);
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+}
+
+.voice-review-panel p {
+  margin: 0;
+}
+
+.voice-review-panel > button {
+  justify-self: start;
+}
+
 .key-hint {
   align-items: center;
   background: linear-gradient(180deg, var(--keycap-bg-top), var(--keycap-bg));
