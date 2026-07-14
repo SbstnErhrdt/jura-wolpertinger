@@ -193,6 +193,7 @@ const wolpiMilestone = ref<{
 } | null>(null)
 let wolpiMilestoneTimer: number | null = null
 let voiceRequestGeneration = 0
+let voiceAbortController: AbortController | null = null
 
 const WOLPI_MILESTONE_IMAGE_COUNT = 39
 const WOLPI_MILESTONE_COPY = [
@@ -296,8 +297,10 @@ async function load(): Promise<void> {
 async function startVoiceReview(): Promise<void> {
   const card = currentCard.value
   if (!card || voiceInProgress.value) return
-  const requestGeneration = ++voiceRequestGeneration
   stopVoiceClient()
+  const requestGeneration = ++voiceRequestGeneration
+  const abortController = new AbortController()
+  voiceAbortController = abortController
   voiceStatus.value = 'connecting'
   voiceTranscript.value = ''
   voiceResult.value = null
@@ -311,6 +314,7 @@ async function startVoiceReview(): Promise<void> {
     voiceSessionId.value = session.sessionId
     const client = await startVoiceClient({
       clientSecret: session.clientSecret,
+      signal: abortController.signal,
       callbacks: {
         onStatus: (status) => {
           if (!isCurrentVoiceRequest(requestGeneration)) return
@@ -338,6 +342,7 @@ async function startVoiceReview(): Promise<void> {
     voiceClient.value = client
   } catch {
     if (!isCurrentVoiceRequest(requestGeneration)) return
+    if (voiceAbortController === abortController) voiceAbortController = null
     voiceStatus.value = 'error'
     voiceError.value ||= 'Das Gespräch konnte nicht gestartet werden. Du kannst die Karte manuell wiederholen.'
   }
@@ -345,6 +350,7 @@ async function startVoiceReview(): Promise<void> {
 
 async function finishVoiceReview(): Promise<void> {
   const sessionId = voiceSessionId.value
+  const completionGeneration = voiceRequestGeneration
   stopVoiceClient()
   if (!sessionId || !voiceTranscript.value.trim() || voiceAssessment.value === null) {
     voiceStatus.value = 'uncertain'
@@ -355,19 +361,24 @@ async function finishVoiceReview(): Promise<void> {
   voiceStatus.value = 'assessing'
   voiceError.value = ''
   try {
-    voiceResult.value = await api.completeVoiceReviewSession({
+    const result = await api.completeVoiceReviewSession({
       sessionId,
       transcript: voiceTranscript.value,
       assessment: voiceAssessment.value
     })
-    voiceStatus.value = voiceResult.value.recorded ? 'result' : 'uncertain'
+    if (!isCurrentVoiceRequest(completionGeneration)) return
+    voiceResult.value = result
+    voiceStatus.value = result.recorded ? 'result' : 'uncertain'
   } catch {
+    if (!isCurrentVoiceRequest(completionGeneration)) return
     voiceStatus.value = 'uncertain'
     voiceError.value = 'Deine Antwort konnte nicht bewertet werden. Du kannst die Karte manuell wiederholen.'
   }
 }
 
 function stopVoiceClient(): void {
+  voiceAbortController?.abort()
+  voiceAbortController = null
   voiceClient.value?.stop()
   voiceClient.value = null
 }

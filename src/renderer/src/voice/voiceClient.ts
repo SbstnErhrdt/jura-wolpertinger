@@ -30,6 +30,7 @@ export type VoiceAssessment = {
 
 type RealtimeEvent = {
   type?: string
+  name?: string
   transcript?: string
   delta?: string
   arguments?: string
@@ -73,10 +74,11 @@ export function parseRealtimeEvent(input: string): ParsedRealtimeEvent | null {
 function parseFunctionCallAssessment(payload: RealtimeEvent): VoiceAssessment | null {
   let argumentsJson: unknown
   if (payload.type === 'response.function_call_arguments.done') {
+    if (payload.name !== 'assess_flashcard_answer') return null
     argumentsJson = payload.arguments
   } else if (payload.type === 'response.output_item.done') {
     const item = payload.item
-    if (!isRecord(item) || item.type !== 'function_call') return null
+    if (!isRecord(item) || item.type !== 'function_call' || item.name !== 'assess_flashcard_answer') return null
     argumentsJson = item.arguments
   } else {
     return null
@@ -119,18 +121,32 @@ function isStringArray(value: unknown): value is string[] {
 export async function startVoiceClient(input: {
   clientSecret: string
   callbacks: VoiceClientCallbacks
+  signal?: AbortSignal
 }): Promise<VoiceClient> {
+  if (input.signal?.aborted) throw cancellationError()
   if (!navigator.mediaDevices?.getUserMedia) {
     input.callbacks.onError('Dein Gerät unterstützt keine Sprachaufnahme. Du kannst die Karte manuell wiederholen.')
     throw new Error('Audio capture is not available')
   }
 
-  input.callbacks.onStatus('connecting')
   let stream: MediaStream | null = null
   let peerConnection: RTCPeerConnection | null = null
   let dataChannel: RTCDataChannel | null = null
   let stopped = false
   let transcript = ''
+  const canNotify = (): boolean => !stopped && !input.signal?.aborted
+  const notifyStatus = (status: VoiceClientStatus): void => {
+    if (canNotify()) input.callbacks.onStatus(status)
+  }
+  const notifyTranscript = (value: string): void => {
+    if (canNotify()) input.callbacks.onTranscript(value)
+  }
+  const notifyAssessment = (assessment: VoiceAssessment): void => {
+    if (canNotify()) input.callbacks.onAssessment(assessment)
+  }
+  const notifyError = (message: string): void => {
+    if (canNotify()) input.callbacks.onError(message)
+  }
 
   const stop = (): void => {
     if (stopped) return
@@ -138,26 +154,34 @@ export async function startVoiceClient(input: {
     dataChannel?.close()
     peerConnection?.close()
     stream?.getTracks().forEach((track) => track.stop())
+    input.signal?.removeEventListener('abort', stop)
   }
+
+  input.signal?.addEventListener('abort', stop, { once: true })
+  notifyStatus('connecting')
 
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    if (stopped) {
+      stream.getTracks().forEach((track) => track.stop())
+      throw cancellationError()
+    }
     peerConnection = new RTCPeerConnection()
     stream.getTracks().forEach((track) => peerConnection?.addTrack(track, stream as MediaStream))
     dataChannel = peerConnection.createDataChannel('oai-events')
-    dataChannel.addEventListener('open', () => input.callbacks.onStatus('listening'))
+    dataChannel.addEventListener('open', () => notifyStatus('listening'))
     dataChannel.addEventListener('message', (event) => {
       const parsed = parseRealtimeEvent(String(event.data))
       if (!parsed) return
-      if (parsed.status) input.callbacks.onStatus(parsed.status)
-      if (parsed.assessment) input.callbacks.onAssessment(parsed.assessment)
+      if (parsed.status) notifyStatus(parsed.status)
+      if (parsed.assessment) notifyAssessment(parsed.assessment)
       if (!parsed.transcript) return
       transcript = parsed.replaceTranscript ? parsed.transcript : `${transcript}${parsed.transcript}`
-      input.callbacks.onTranscript(transcript)
+      notifyTranscript(transcript)
     })
     peerConnection.addEventListener('connectionstatechange', () => {
       if (peerConnection?.connectionState === 'failed') {
-        input.callbacks.onError('Das Gespräch wurde unterbrochen. Du kannst die Karte manuell wiederholen.')
+        notifyError('Das Gespräch wurde unterbrochen. Du kannst die Karte manuell wiederholen.')
         stop()
       }
     })
@@ -170,17 +194,26 @@ export async function startVoiceClient(input: {
         authorization: `Bearer ${input.clientSecret}`,
         'content-type': 'application/sdp'
       },
-      body: offer.sdp
+      body: offer.sdp,
+      signal: input.signal
     })
+    if (stopped) throw cancellationError()
     if (!response.ok) throw new Error(`Realtime SDP request failed: ${response.status}`)
     const sdp = await response.text()
     if (!sdp) throw new Error('Realtime SDP response is empty')
     await peerConnection.setRemoteDescription({ type: 'answer', sdp })
+    if (stopped) throw cancellationError()
 
     return { stop }
   } catch (error) {
+    const cancelled = stopped || input.signal?.aborted
     stop()
-    input.callbacks.onError('Das Gespräch konnte nicht gestartet werden. Du kannst die Karte manuell wiederholen.')
+    if (cancelled) throw cancellationError()
+    notifyError('Das Gespräch konnte nicht gestartet werden. Du kannst die Karte manuell wiederholen.')
     throw error
   }
+}
+
+function cancellationError(): Error {
+  return new Error('Voice session cancelled')
 }

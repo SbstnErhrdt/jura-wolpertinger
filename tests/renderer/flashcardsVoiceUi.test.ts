@@ -22,5 +22,7 @@ describe('flashcards voice UI contract', () => {
     expect(source).toContain('if (voiceInProgress.value) return')
     expect(source).toContain('voiceRequestGeneration')
     expect(source).toContain('client.stop()')
+    expect(source).toContain('const completionGeneration = voiceRequestGeneration')
+    expect(source).toContain('if (!isCurrentVoiceRequest(completionGeneration)) return')
   })
 })
