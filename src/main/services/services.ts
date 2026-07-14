@@ -192,7 +192,7 @@ export class AppServices {
   }
 
   async getFeatureFlags(): Promise<FeatureFlags> {
-    return this.requireVoiceSyncClient().getFeatureFlags()
+    return this.syncClient ? this.syncClient.getFeatureFlags() : {}
   }
 
   async createVoiceReviewSession(input: VoiceSessionStartInput): Promise<VoiceSessionStart> {

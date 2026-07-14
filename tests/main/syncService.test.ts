@@ -21,6 +21,10 @@ afterEach(async () => {
 })
 
 describe('workspace sync snapshots', () => {
+  it('returns disabled Voice feature flags without an online connection', async () => {
+    await expect(services.getFeatureFlags()).resolves.toEqual({})
+  })
+
   it('does not report an active online connection when only remembered account metadata exists', () => {
     services.db
       .prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)')
