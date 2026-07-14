@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { parseRealtimeEvent, startVoiceClient } from '../../src/renderer/src/voice/voiceClient'
+import { parseRealtimeEvent, parseVoiceCommand, startVoiceClient } from '../../src/renderer/src/voice/voiceClient'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -79,6 +79,25 @@ describe('voice realtime event parser', () => {
   })
 })
 
+describe('parseVoiceCommand', () => {
+  it('detects next-card commands in German transcripts', () => {
+    expect(parseVoiceCommand('nächste Karte bitte')).toBe('next_card')
+    expect(parseVoiceCommand('weiter zur nächsten')).toBe('next_card')
+    expect(parseVoiceCommand('überspringen')).toBe('next_card')
+  })
+
+  it('detects previous-card commands in German transcripts', () => {
+    expect(parseVoiceCommand('vorherige Karte')).toBe('previous_card')
+    expect(parseVoiceCommand('zurück bitte')).toBe('previous_card')
+    expect(parseVoiceCommand('zur letzten Karte')).toBe('previous_card')
+  })
+
+  it('does not treat legal answer text as navigation', () => {
+    expect(parseVoiceCommand('Der nächste Prüfungspunkt ist die Begründetheit.')).toBeNull()
+    expect(parseVoiceCommand('Zurückbehaltungsrechte wären als Einrede zu prüfen.')).toBeNull()
+  })
+})
+
 describe('voice client cancellation', () => {
   it('plays remote audio and asks Wolpi to greet when the data channel opens', async () => {
     const track = { stop: vi.fn() }
@@ -130,6 +149,34 @@ describe('voice client cancellation', () => {
     expect(audioElement.pause).toHaveBeenCalledOnce()
     expect(audioElement.remove).toHaveBeenCalledOnce()
     expect(audioElement.srcObject).toBeNull()
+  })
+
+  it('emits a next-card command from completed input transcripts', async () => {
+    const track = { stop: vi.fn() }
+    vi.stubGlobal('navigator', {
+      mediaDevices: { getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [track] }) }
+    })
+    vi.stubGlobal('RTCPeerConnection', FakePeerConnection)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, text: async () => 'answer-sdp' }))
+    const callbacks = createCallbacks()
+
+    const client = await startVoiceClient({
+      clientSecret: 'secret',
+      questionText: 'Was ist Verzug?',
+      callbacks
+    })
+    const connection = FakePeerConnection.instances.at(-1)
+    connection?.dataChannel.dispatch('message', {
+      data: JSON.stringify({
+        type: 'conversation.item.input_audio_transcription.completed',
+        transcript: 'nächste Karte bitte'
+      })
+    })
+
+    expect(callbacks.onCommand).toHaveBeenCalledWith('next_card')
+    expect(callbacks.onTranscript).not.toHaveBeenCalledWith('nächste Karte bitte')
+
+    client.stop()
   })
 
   it('stops microphone tracks when aborted while media permission is pending', async () => {
@@ -235,7 +282,8 @@ function createCallbacks() {
     onStatus: vi.fn(),
     onTranscript: vi.fn(),
     onAssessment: vi.fn(),
-    onError: vi.fn()
+    onError: vi.fn(),
+    onCommand: vi.fn()
   }
 }
 

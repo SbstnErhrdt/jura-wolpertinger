@@ -38,4 +38,14 @@ describe('flashcards voice UI contract', () => {
     expect(source).toContain("voiceStatus.value = 'idle'")
     expect(source).toContain('clearVoiceReview()')
   })
+
+  it('handles voice navigation commands without recording a review', () => {
+    expect(source).toContain('onCommand: (command) =>')
+    expect(source).toContain('void handleVoiceCommand(command)')
+    expect(source).toContain('async function handleVoiceCommand')
+    expect(source).toContain("command === 'next_card'")
+    expect(source).toContain("command === 'previous_card'")
+    expect(source).toContain('await nextTick()')
+    expect(source).toContain('void startVoiceReview()')
+  })
 })

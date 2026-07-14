@@ -13,11 +13,14 @@ export type VoiceClientCallbacks = {
   onTranscript(transcript: string): void
   onAssessment(assessment: VoiceAssessment): void
   onError(message: string): void
+  onCommand?(command: VoiceCommand): void
 }
 
 export type VoiceClient = {
   stop(): void
 }
+
+export type VoiceCommand = 'next_card' | 'previous_card'
 
 export type VoiceAssessment = {
   rating: 1 | 2 | 3 | 4
@@ -42,6 +45,61 @@ export type ParsedRealtimeEvent = {
   status?: 'prompting' | 'assessing'
   transcript?: string
   replaceTranscript?: true
+}
+
+export function parseVoiceCommand(transcript: string): VoiceCommand | null {
+  const normalized = normalizeCommandText(transcript)
+  if (!normalized) return null
+
+  const nextPhrases = [
+    'weiter',
+    'weiter bitte',
+    'naechste',
+    'naechste bitte',
+    'naechste karte',
+    'naechste karte bitte',
+    'weiter zur naechsten',
+    'weiter zur naechsten karte',
+    'karte ueberspringen',
+    'ueberspringen',
+    'ueberspringen bitte'
+  ]
+  if (nextPhrases.includes(normalized)) return 'next_card'
+  if (/\bnaechste karte\b/.test(normalized)) return 'next_card'
+  if (/\bweiter zur naechsten( karte)?\b/.test(normalized)) return 'next_card'
+
+  const previousPhrases = [
+    'zurueck',
+    'zurueck bitte',
+    'vorherige',
+    'vorherige bitte',
+    'vorherige karte',
+    'vorherige karte bitte',
+    'letzte karte',
+    'zur letzten karte',
+    'eine karte zurueck'
+  ]
+  if (previousPhrases.includes(normalized)) return 'previous_card'
+  if (/\bvorherige karte\b/.test(normalized)) return 'previous_card'
+  if (/\bzur letzten karte\b/.test(normalized)) return 'previous_card'
+  if (/\beine karte zurueck\b/.test(normalized)) return 'previous_card'
+
+  return null
+}
+
+function normalizeCommandText(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/ä/g, 'ae')
+    .replace(/ö/g, 'oe')
+    .replace(/ü/g, 'ue')
+    .replace(/ß/g, 'ss')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 export function parseRealtimeEvent(input: string): ParsedRealtimeEvent | null {
@@ -148,6 +206,9 @@ export async function startVoiceClient(input: {
   const notifyAssessment = (assessment: VoiceAssessment): void => {
     if (canNotify()) input.callbacks.onAssessment(assessment)
   }
+  const notifyCommand = (command: VoiceCommand): void => {
+    if (canNotify()) input.callbacks.onCommand?.(command)
+  }
   const notifyError = (message: string): void => {
     if (canNotify()) input.callbacks.onError(message)
   }
@@ -197,6 +258,13 @@ export async function startVoiceClient(input: {
       if (parsed.status) notifyStatus(parsed.status)
       if (parsed.assessment) notifyAssessment(parsed.assessment)
       if (!parsed.transcript) return
+      if (parsed.replaceTranscript) {
+        const command = parseVoiceCommand(parsed.transcript)
+        if (command) {
+          notifyCommand(command)
+          return
+        }
+      }
       transcript = parsed.replaceTranscript ? parsed.transcript : `${transcript}${parsed.transcript}`
       notifyTranscript(transcript)
     })

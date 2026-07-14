@@ -151,14 +151,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineComponent, h, onMounted, onUnmounted, ref } from 'vue'
+import { computed, defineComponent, h, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { CircleCheck, RotateCcw, Sparkles, TriangleAlert } from 'lucide-vue-next'
 import type { FeatureFlags, VoiceSessionCompleteResult } from '@shared/ipc'
 import type { ReviewCard, ReviewRating } from '@shared/schemas'
 import { api } from '../api'
 import { hasFeatureFlag } from '../voice/featureFlags'
-import { startVoiceClient, type VoiceAssessment, type VoiceClient, type VoiceClientStatus } from '../voice/voiceClient'
+import { startVoiceClient, type VoiceAssessment, type VoiceClient, type VoiceClientStatus, type VoiceCommand } from '../voice/voiceClient'
 import type { AppActionMenuItem } from '../ui/actionMenu'
 import { type AppBreadcrumbItem, withHomeIcon } from '../ui/breadcrumbs'
 
@@ -328,6 +328,10 @@ async function startVoiceReview(): Promise<void> {
           if (!isCurrentVoiceRequest(requestGeneration)) return
           voiceError.value = message
           voiceStatus.value = 'error'
+        },
+        onCommand: (command) => {
+          if (!isCurrentVoiceRequest(requestGeneration)) return
+          void handleVoiceCommand(command)
         }
       }
     })
@@ -370,6 +374,24 @@ async function finishVoiceReview(): Promise<void> {
     voiceStatus.value = 'uncertain'
     voiceError.value = 'Deine Antwort konnte nicht bewertet werden. Du kannst die Karte manuell wiederholen.'
   }
+}
+
+async function handleVoiceCommand(command: VoiceCommand): Promise<void> {
+  if (command === 'next_card') {
+    nextCard()
+  } else if (command === 'previous_card') {
+    if (!canGoPrevious.value) {
+      clearVoiceReview()
+      voiceStatus.value = 'uncertain'
+      voiceError.value = 'Das ist schon die erste Karte.'
+      return
+    }
+    moveToPreviousCard(true)
+  }
+
+  if (!currentCard.value || sessionCompleted.value || !voiceEnabled.value) return
+  await nextTick()
+  void startVoiceReview()
 }
 
 function stopVoiceClient(): void {
@@ -466,7 +488,11 @@ function nextCard(): void {
 }
 
 function previousCard(): void {
-  if (!canGoPrevious.value || ratingBusy.value || voiceInProgress.value) return
+  moveToPreviousCard(false)
+}
+
+function moveToPreviousCard(allowDuringVoice: boolean): void {
+  if (!canGoPrevious.value || ratingBusy.value || (!allowDuringVoice && voiceInProgress.value)) return
   clearVoiceReview()
   cardMotion.value = 'previous'
   currentIndex.value -= 1
