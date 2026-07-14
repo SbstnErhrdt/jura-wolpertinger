@@ -209,6 +209,38 @@ export type RecordReviewResult = {
   intervalLabel: string
 }
 
+export type FeatureFlags = Record<string, boolean>
+
+export type VoiceSessionStartInput = {
+  promptId: string
+}
+
+export type VoiceSessionStart = {
+  sessionId: string
+  clientSecret: string
+  model: string
+  voice: string
+}
+
+export type VoiceSessionCompleteInput = {
+  sessionId: string
+  transcript: string
+  assessment: unknown
+}
+
+export type VoiceSessionCompleteResult = {
+  assessment: {
+    rating: ReviewRating
+    confidence: 'low' | 'medium' | 'high'
+    reason: string
+    matchedPoints: string[]
+    missedPoints: string[]
+    nextStep: string
+  }
+  recorded: boolean
+  reviewEventId: string | null
+}
+
 export type SaveAiCorrectionDraftInput = {
   submissionId: string
   provider: 'openai'
@@ -237,6 +269,9 @@ export type SaveAiCorrectionDraftInput = {
 
 export type AppApi = {
   getAppVersion(): Promise<string>
+  getFeatureFlags(): Promise<FeatureFlags>
+  createVoiceReviewSession(input: VoiceSessionStartInput): Promise<VoiceSessionStart>
+  completeVoiceReviewSession(input: VoiceSessionCompleteInput): Promise<VoiceSessionCompleteResult>
   getCurrentUser(): Promise<AppUser>
   listUsers(): Promise<AppUser[]>
   createUser(displayName: string): Promise<AppUser>

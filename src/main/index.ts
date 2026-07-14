@@ -197,6 +197,13 @@ function createWindow(): void {
 
 function registerIpc(): void {
   ipcMain.handle('app:version', () => app.getVersion())
+  ipcMain.handle('voice:featureFlags', () => ({}))
+  ipcMain.handle('voice:createSession', () => {
+    throw new Error('Voice ist nur mit einer Online-Anmeldung verfügbar.')
+  })
+  ipcMain.handle('voice:completeSession', () => {
+    throw new Error('Voice ist nur mit einer Online-Anmeldung verfügbar.')
+  })
   ipcMain.on(RELEASE_SMOKE_READY_CHANNEL, (event) => {
     if (event.sender !== mainWindow?.webContents) return
 

@@ -22,6 +22,7 @@
     "scripts/**/*.ts",
     "src/main/**/*.ts",
     "src/preload/**/*.ts",
+    "src/renderer/src/voice/featureFlags.ts",
     "src/renderer/src/syncWorkspaceUx.ts",
     "src/renderer/src/utils/browserPdfExport.ts",
     "src/shared/**/*.ts",

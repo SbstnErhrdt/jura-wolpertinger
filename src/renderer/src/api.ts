@@ -45,6 +45,7 @@ import type {
 } from '@shared/schemas'
 import { getSupabaseAuthClient, requiresCloudAuth } from './cloudAuth'
 import { createCloudLearningApi } from './cloudLearningApi'
+import { completeVoiceReviewSession, createVoiceReviewSession } from './voice/voiceApi'
 import { downloadExamPdf } from './utils/browserPdfExport'
 import {
   examStatusSchema,
@@ -116,6 +117,16 @@ function createBrowserDevApi(): AppApi {
     async getAppVersion() {
       return packageJson.version
     },
+    async getFeatureFlags() {
+      if (!requiresCloudAuth()) return {}
+      const client = getSupabaseAuthClient()
+      if (!client) return {}
+      const { data, error } = await client.rpc('get_effective_feature_flags')
+      if (error) return {}
+      return typeof data === 'object' && data ? data as Record<string, boolean> : {}
+    },
+    createVoiceReviewSession,
+    completeVoiceReviewSession,
     async getCurrentUser() {
       const store = readStore()
       return ensureBrowserUser(store)

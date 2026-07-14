@@ -28,6 +28,9 @@ import {
 
 const api: AppApi = {
   getAppVersion: () => ipcRenderer.invoke('app:version'),
+  getFeatureFlags: () => ipcRenderer.invoke('voice:featureFlags'),
+  createVoiceReviewSession: (input) => ipcRenderer.invoke('voice:createSession', input),
+  completeVoiceReviewSession: (input) => ipcRenderer.invoke('voice:completeSession', input),
   getCurrentUser: () => ipcRenderer.invoke('users:current'),
   listUsers: () => ipcRenderer.invoke('users:list'),
   createUser: (displayName: string) => ipcRenderer.invoke('users:create', displayName),

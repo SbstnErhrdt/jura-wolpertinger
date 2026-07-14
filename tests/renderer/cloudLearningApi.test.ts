@@ -370,6 +370,9 @@ function createQueryBuilder(table: string) {
 function createLocalApiStub(): AppApi {
   return {
     getAppVersion: async () => '0.0.0',
+    getFeatureFlags: unimplemented,
+    createVoiceReviewSession: unimplemented,
+    completeVoiceReviewSession: unimplemented,
     getCurrentUser: unimplemented,
     listUsers: unimplemented,
     createUser: unimplemented,
