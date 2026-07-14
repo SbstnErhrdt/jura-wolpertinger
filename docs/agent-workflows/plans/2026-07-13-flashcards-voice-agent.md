@@ -1852,7 +1852,9 @@ Run from local machine:
 git -C ../jura-supabase push
 git -C ../jura-voice-api push
 git push
-ssh server.02 'cd /home/docker-compose/jura-wolpi && docker compose --env-file .env -f docker-compose.yml -f docker-compose.production.yml up -d --build voice-api nginx'
+rsync -av --delete ../jura-supabase/deploy/production/ server.02:/home/docker-compose/jura-wolpi/
+rsync -av --delete --exclude .git --exclude node_modules --exclude dist ../jura-voice-api/ server.02:/home/docker-compose/jura-wolpi/voice-api/
+ssh server.02 'cd /home/docker-compose/jura-wolpi && docker compose --env-file .env up -d --build voice-api && docker compose --env-file .env up -d --force-recreate nginx'
 ```
 
 Expected: `voice-api` and `nginx` containers restart successfully.

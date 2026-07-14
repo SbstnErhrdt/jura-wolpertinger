@@ -1,15 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
+import { hasFeatureFlag } from '../../src/renderer/src/voice/featureFlags'
 
 const source = readFileSync('src/renderer/src/views/FlashcardsReviewView.vue', 'utf8')
 
 describe('flashcards voice UI contract', () => {
   it('gates the voice action behind flashcards_voice_agent', () => {
-    expect(source).toContain('flashcards_voice_agent')
+    expect(hasFeatureFlag({}, 'flashcards_voice_agent')).toBe(false)
+    expect(hasFeatureFlag({ flashcards_voice_agent: true }, 'flashcards_voice_agent')).toBe(true)
     expect(source).toContain('featureFlags.value = await api.getFeatureFlags().catch(() => ({}))')
     expect(source).toContain("const voiceEnabled = computed(() => hasFeatureFlag(featureFlags.value, 'flashcards_voice_agent'))")
-    expect(source).toContain('v-if="voiceEnabled"')
-    expect(source).toContain('Mit Wolpi sprechen')
+    expect(source).toMatch(/<UButton\s+v-if="voiceEnabled"[\s\S]*?>\s*Mit Wolpi sprechen\s*<\/UButton>/)
   })
 
   it('renders voice status and assessment result copy', () => {
