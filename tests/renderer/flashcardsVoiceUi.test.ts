@@ -14,4 +14,13 @@ describe('flashcards voice UI contract', () => {
     expect(source).toContain('Bewertet')
     expect(source).toContain('Antwort konnte nicht sicher bewertet werden')
   })
+
+  it('locks review controls and disposes late voice starts while a conversation is active', () => {
+    expect(source).toContain(':disabled="!canGoPrevious || ratingBusy || voiceInProgress"')
+    expect(source).toContain(':disabled="ratingBusy || voiceInProgress"')
+    expect(source).toContain(':disabled="voiceInProgress"')
+    expect(source).toContain('if (voiceInProgress.value) return')
+    expect(source).toContain('voiceRequestGeneration')
+    expect(source).toContain('client.stop()')
+  })
 })

@@ -32,7 +32,7 @@
         </div>
         <span>{{ positionLabel }}</span>
         <UDropdownMenu :items="reviewActions">
-          <UButton color="neutral" variant="ghost" icon="i-lucide-ellipsis" aria-label="Kartenaktionen" />
+          <UButton color="neutral" variant="ghost" icon="i-lucide-ellipsis" aria-label="Kartenaktionen" :disabled="voiceInProgress" />
         </UDropdownMenu>
       </div>
       <UButton
@@ -49,6 +49,7 @@
         type="button"
         color="neutral"
         variant="ghost"
+        :disabled="voiceInProgress"
         @click="revealBack"
       >
         <MarkdownBlock :markdown="showBack ? currentCard.backMarkdown : currentCard.frontMarkdown" />
@@ -58,11 +59,11 @@
       </div>
       <p v-if="feedback" class="review-feedback">{{ feedback }}</p>
       <div class="review-navigation">
-        <UButton type="button" color="neutral" variant="outline" :disabled="!canGoPrevious || ratingBusy" @click="previousCard">
+        <UButton type="button" color="neutral" variant="outline" :disabled="!canGoPrevious || ratingBusy || voiceInProgress" @click="previousCard">
           <kbd class="key-hint" aria-hidden="true">←</kbd>
           Vorherige
         </UButton>
-        <UButton type="button" color="neutral" variant="outline" :disabled="ratingBusy" @click="skipCard">
+        <UButton type="button" color="neutral" variant="outline" :disabled="ratingBusy || voiceInProgress" @click="skipCard">
           Überspringen
           <kbd class="key-hint" aria-hidden="true">→</kbd>
         </UButton>
@@ -96,32 +97,32 @@
         </UButton>
       </section>
       <div v-if="showBack" class="rating-row">
-        <UButton class="rating-option again" color="error" variant="soft" :disabled="ratingBusy" @click="rate(1)">
+        <UButton class="rating-option again" color="error" variant="soft" :disabled="ratingBusy || voiceInProgress" @click="rate(1)">
           <RotateCcw :size="18" aria-hidden="true" />
           <span>Nochmal</span>
           <kbd class="key-hint">1</kbd>
           <small>nicht sicher</small>
         </UButton>
-        <UButton class="rating-option hard" color="warning" variant="soft" :disabled="ratingBusy" @click="rate(2)">
+        <UButton class="rating-option hard" color="warning" variant="soft" :disabled="ratingBusy || voiceInProgress" @click="rate(2)">
           <TriangleAlert :size="18" aria-hidden="true" />
           <span>Schwer</span>
           <kbd class="key-hint">2</kbd>
           <small>wackelig</small>
         </UButton>
-        <UButton class="rating-option good" color="success" variant="soft" :disabled="ratingBusy" @click="rate(3)">
+        <UButton class="rating-option good" color="success" variant="soft" :disabled="ratingBusy || voiceInProgress" @click="rate(3)">
           <CircleCheck :size="18" aria-hidden="true" />
           <span>Gut</span>
           <kbd class="key-hint">3</kbd>
           <small>sauber</small>
         </UButton>
-        <UButton class="rating-option easy" color="info" variant="soft" :disabled="ratingBusy" @click="rate(4)">
+        <UButton class="rating-option easy" color="info" variant="soft" :disabled="ratingBusy || voiceInProgress" @click="rate(4)">
           <Sparkles :size="18" aria-hidden="true" />
           <span>Leicht</span>
           <kbd class="key-hint">4</kbd>
           <small>sicher</small>
         </UButton>
       </div>
-      <UButton v-else color="neutral" variant="outline" class="reveal-button" @click="revealBack">
+      <UButton v-else color="neutral" variant="outline" class="reveal-button" :disabled="voiceInProgress" @click="revealBack">
         Rückseite zeigen
         <kbd class="key-hint">Enter</kbd>
       </UButton>
@@ -158,7 +159,7 @@ import type { FeatureFlags, VoiceSessionCompleteResult } from '@shared/ipc'
 import type { ReviewCard, ReviewRating } from '@shared/schemas'
 import { api } from '../api'
 import { hasFeatureFlag } from '../voice/featureFlags'
-import { startVoiceClient, type VoiceClient, type VoiceClientStatus } from '../voice/voiceClient'
+import { startVoiceClient, type VoiceAssessment, type VoiceClient, type VoiceClientStatus } from '../voice/voiceClient'
 import type { AppActionMenuItem } from '../ui/actionMenu'
 import { type AppBreadcrumbItem, withHomeIcon } from '../ui/breadcrumbs'
 
@@ -178,7 +179,7 @@ const voiceResult = ref<VoiceSessionCompleteResult | null>(null)
 const voiceError = ref('')
 const voiceClient = ref<VoiceClient | null>(null)
 const voiceSessionId = ref<string | null>(null)
-const voiceAssessment = ref<unknown>(null)
+const voiceAssessment = ref<VoiceAssessment | null>(null)
 const collectionId = computed(() => (typeof route.query.collection === 'string' ? route.query.collection : null))
 const collectionName = ref('')
 const hasPracticeCards = ref(false)
@@ -191,6 +192,7 @@ const wolpiMilestone = ref<{
   imageUrl: string
 } | null>(null)
 let wolpiMilestoneTimer: number | null = null
+let voiceRequestGeneration = 0
 
 const WOLPI_MILESTONE_IMAGE_COUNT = 39
 const WOLPI_MILESTONE_COPY = [
@@ -258,6 +260,7 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('keydown', handleReviewKeydown)
   clearWolpiMilestoneTimer()
+  voiceRequestGeneration += 1
   stopVoiceClient()
 })
 
@@ -293,6 +296,7 @@ async function load(): Promise<void> {
 async function startVoiceReview(): Promise<void> {
   const card = currentCard.value
   if (!card || voiceInProgress.value) return
+  const requestGeneration = ++voiceRequestGeneration
   stopVoiceClient()
   voiceStatus.value = 'connecting'
   voiceTranscript.value = ''
@@ -303,26 +307,37 @@ async function startVoiceReview(): Promise<void> {
 
   try {
     const session = await api.createVoiceReviewSession({ promptId: card.id })
+    if (!isCurrentVoiceRequest(requestGeneration)) return
     voiceSessionId.value = session.sessionId
-    voiceClient.value = await startVoiceClient({
+    const client = await startVoiceClient({
       clientSecret: session.clientSecret,
       callbacks: {
         onStatus: (status) => {
+          if (!isCurrentVoiceRequest(requestGeneration)) return
           voiceStatus.value = status
         },
         onTranscript: (transcript) => {
+          if (!isCurrentVoiceRequest(requestGeneration)) return
           voiceTranscript.value = transcript
         },
         onAssessment: (assessment) => {
+          if (!isCurrentVoiceRequest(requestGeneration)) return
           voiceAssessment.value = assessment
         },
         onError: (message) => {
+          if (!isCurrentVoiceRequest(requestGeneration)) return
           voiceError.value = message
           voiceStatus.value = 'error'
         }
       }
     })
+    if (!isCurrentVoiceRequest(requestGeneration)) {
+      client.stop()
+      return
+    }
+    voiceClient.value = client
   } catch {
+    if (!isCurrentVoiceRequest(requestGeneration)) return
     voiceStatus.value = 'error'
     voiceError.value ||= 'Das Gespräch konnte nicht gestartet werden. Du kannst die Karte manuell wiederholen.'
   }
@@ -357,13 +372,17 @@ function stopVoiceClient(): void {
   voiceClient.value = null
 }
 
+function isCurrentVoiceRequest(requestGeneration: number): boolean {
+  return requestGeneration === voiceRequestGeneration
+}
+
 async function restartPractice(): Promise<void> {
   await load()
 }
 
 async function rate(rating: ReviewRating): Promise<void> {
   const card = currentCard.value
-  if (!card || ratingBusy.value) return
+  if (!card || ratingBusy.value || voiceInProgress.value) return
   ratingBusy.value = true
   try {
     const result = await api.recordReview({ cardId: card.id, rating })
@@ -428,7 +447,7 @@ function nextCard(): void {
 }
 
 function previousCard(): void {
-  if (!canGoPrevious.value || ratingBusy.value) return
+  if (!canGoPrevious.value || ratingBusy.value || voiceInProgress.value) return
   cardMotion.value = 'previous'
   currentIndex.value -= 1
   feedback.value = ''
@@ -436,11 +455,12 @@ function previousCard(): void {
 }
 
 function skipCard(): void {
-  if (!currentCard.value || ratingBusy.value) return
+  if (!currentCard.value || ratingBusy.value || voiceInProgress.value) return
   nextCard()
 }
 
 function removeFromSession(): void {
+  if (voiceInProgress.value) return
   cardMotion.value = 'next'
   cards.value.splice(currentIndex.value, 1)
   if (currentIndex.value >= cards.value.length && currentIndex.value > 0) currentIndex.value -= 1
@@ -448,6 +468,7 @@ function removeFromSession(): void {
 }
 
 function revealBack(): void {
+  if (voiceInProgress.value) return
   cardMotion.value = 'flip'
   showBack.value = true
 }
@@ -455,6 +476,7 @@ function revealBack(): void {
 function handleReviewKeydown(event: KeyboardEvent): void {
   if (event.altKey || event.ctrlKey || event.metaKey || isTypingTarget(event.target)) return
   if (!currentCard.value || loading.value || sessionCompleted.value) return
+  if (voiceInProgress.value) return
 
   if (event.key === 'Enter' && !showBack.value) {
     event.preventDefault()

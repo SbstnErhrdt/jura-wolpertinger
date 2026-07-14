@@ -11,7 +11,7 @@ export type VoiceClientStatus =
 export type VoiceClientCallbacks = {
   onStatus(status: VoiceClientStatus): void
   onTranscript(transcript: string): void
-  onAssessment(assessment: unknown): void
+  onAssessment(assessment: VoiceAssessment): void
   onError(message: string): void
 }
 
@@ -19,11 +19,101 @@ export type VoiceClient = {
   stop(): void
 }
 
+export type VoiceAssessment = {
+  rating: 1 | 2 | 3 | 4
+  confidence: 'low' | 'medium' | 'high'
+  reason: string
+  matched_points: string[]
+  missed_points: string[]
+  next_step: string
+}
+
 type RealtimeEvent = {
   type?: string
   transcript?: string
   delta?: string
-  assessment?: unknown
+  arguments?: string
+  item?: unknown
+}
+
+export type ParsedRealtimeEvent = {
+  assessment?: VoiceAssessment
+  status?: 'prompting' | 'assessing'
+  transcript?: string
+  replaceTranscript?: true
+}
+
+export function parseRealtimeEvent(input: string): ParsedRealtimeEvent | null {
+  let payload: RealtimeEvent
+  try {
+    payload = JSON.parse(input) as RealtimeEvent
+  } catch {
+    return null
+  }
+
+  if (!payload || typeof payload !== 'object' || typeof payload.type !== 'string') return null
+  const parsed: ParsedRealtimeEvent = {}
+  if (payload.type.includes('response.created')) parsed.status = 'prompting'
+
+  const transcript = payload.transcript ?? payload.delta
+  if (payload.type.includes('transcript') && transcript) {
+    parsed.transcript = transcript
+    if (payload.transcript) parsed.replaceTranscript = true
+  }
+
+  const assessment = parseFunctionCallAssessment(payload)
+  if (assessment) {
+    parsed.assessment = assessment
+    parsed.status = 'assessing'
+  }
+
+  return parsed
+}
+
+function parseFunctionCallAssessment(payload: RealtimeEvent): VoiceAssessment | null {
+  let argumentsJson: unknown
+  if (payload.type === 'response.function_call_arguments.done') {
+    argumentsJson = payload.arguments
+  } else if (payload.type === 'response.output_item.done') {
+    const item = payload.item
+    if (!isRecord(item) || item.type !== 'function_call') return null
+    argumentsJson = item.arguments
+  } else {
+    return null
+  }
+  if (typeof argumentsJson !== 'string') return null
+
+  try {
+    return parseVoiceAssessment(JSON.parse(argumentsJson))
+  } catch {
+    return null
+  }
+}
+
+function parseVoiceAssessment(value: unknown): VoiceAssessment | null {
+  if (!isRecord(value)) return null
+  if (![1, 2, 3, 4].includes(value.rating as number)) return null
+  if (value.confidence !== 'low' && value.confidence !== 'medium' && value.confidence !== 'high') return null
+  if (typeof value.reason !== 'string' || !value.reason.trim()) return null
+  if (!isStringArray(value.matched_points) || !isStringArray(value.missed_points)) return null
+  if (typeof value.next_step !== 'string') return null
+
+  return {
+    rating: value.rating as VoiceAssessment['rating'],
+    confidence: value.confidence,
+    reason: value.reason,
+    matched_points: value.matched_points,
+    missed_points: value.missed_points,
+    next_step: value.next_step
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string')
 }
 
 export async function startVoiceClient(input: {
@@ -57,20 +147,12 @@ export async function startVoiceClient(input: {
     dataChannel = peerConnection.createDataChannel('oai-events')
     dataChannel.addEventListener('open', () => input.callbacks.onStatus('listening'))
     dataChannel.addEventListener('message', (event) => {
-      let payload: RealtimeEvent
-      try {
-        payload = JSON.parse(String(event.data)) as RealtimeEvent
-      } catch {
-        return
-      }
-
-      if (payload.type?.includes('response.created')) input.callbacks.onStatus('prompting')
-      if (payload.type?.includes('assessment')) input.callbacks.onStatus('assessing')
-      if (payload.assessment !== undefined) input.callbacks.onAssessment(payload.assessment)
-
-      const nextTranscript = payload.transcript ?? payload.delta
-      if (!payload.type?.includes('transcript') || !nextTranscript) return
-      transcript = payload.transcript ?? `${transcript}${nextTranscript}`
+      const parsed = parseRealtimeEvent(String(event.data))
+      if (!parsed) return
+      if (parsed.status) input.callbacks.onStatus(parsed.status)
+      if (parsed.assessment) input.callbacks.onAssessment(parsed.assessment)
+      if (!parsed.transcript) return
+      transcript = parsed.replaceTranscript ? parsed.transcript : `${transcript}${parsed.transcript}`
       input.callbacks.onTranscript(transcript)
     })
     peerConnection.addEventListener('connectionstatechange', () => {
