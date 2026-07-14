@@ -86,7 +86,12 @@ import type {
   TrashFolderInput,
   UpdateCorrectionInput,
   UpdateFolderInput,
-  UpdateExamInput
+  UpdateExamInput,
+  FeatureFlags,
+  VoiceSessionCompleteInput,
+  VoiceSessionCompleteResult,
+  VoiceSessionStart,
+  VoiceSessionStartInput
 } from '@shared/ipc'
 import { selectExamRevisionIdsForDeletion } from '@shared/revisionRetention'
 import { openDatabase, type SqliteDatabase } from './database'
@@ -186,6 +191,20 @@ export class AppServices {
     return this.getSyncStatus()
   }
 
+  async getFeatureFlags(): Promise<FeatureFlags> {
+    return this.requireVoiceSyncClient().getFeatureFlags()
+  }
+
+  async createVoiceReviewSession(input: VoiceSessionStartInput): Promise<VoiceSessionStart> {
+    return this.requireVoiceSyncClient().createVoiceReviewSession(input)
+  }
+
+  async completeVoiceReviewSession(
+    input: VoiceSessionCompleteInput
+  ): Promise<VoiceSessionCompleteResult> {
+    return this.requireVoiceSyncClient().completeVoiceReviewSession(input)
+  }
+
   async runSync(input: SyncRunInput): Promise<SyncRunResult> {
     if (!this.syncClient) {
       throw new Error('Bitte verbinde dich erneut mit der Online-Version.')
@@ -238,6 +257,13 @@ export class AppServices {
     })
     this.rememberSyncResult(result)
     return result
+  }
+
+  private requireVoiceSyncClient(): SupabaseSyncClient {
+    if (!this.syncClient) {
+      throw new Error('Bitte verbinde dein Online-Konto, um Voice zu nutzen.')
+    }
+    return this.syncClient
   }
 
   getCurrentUser(): User {

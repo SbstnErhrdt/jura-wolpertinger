@@ -4,10 +4,10 @@ import type {
   VoiceSessionStart,
   VoiceSessionStartInput
 } from '@shared/ipc'
-import { getVoiceSupabaseAuthClient } from '../cloudAuth'
+import { getSupabaseAuthClient } from '../cloudAuth'
 
 async function authHeaders(): Promise<HeadersInit> {
-  const client = getVoiceSupabaseAuthClient()
+  const client = getSupabaseAuthClient()
   const { data } = client ? await client.auth.getSession() : { data: { session: null } }
   const token = data.session?.access_token
   if (!token) throw new Error('Bitte melde dich online an, um Voice zu nutzen.')

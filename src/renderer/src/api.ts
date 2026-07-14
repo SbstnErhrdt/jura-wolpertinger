@@ -43,11 +43,7 @@ import type {
   Submission,
   User
 } from '@shared/schemas'
-import {
-  getSupabaseAuthClient,
-  getVoiceSupabaseAuthClient,
-  requiresCloudAuth
-} from './cloudAuth'
+import { getSupabaseAuthClient, requiresCloudAuth } from './cloudAuth'
 import { createCloudLearningApi } from './cloudLearningApi'
 import { completeVoiceReviewSession, createVoiceReviewSession } from './voice/voiceApi'
 import { downloadExamPdf } from './utils/browserPdfExport'
@@ -103,32 +99,13 @@ export const isElectronApiAvailable = Boolean(window.juraApi)
 export const api: AppApi = getApi()
 
 export function getApi(): AppApi {
-  if (window.juraApi) {
-    return getVoiceSupabaseAuthClient() ? createElectronVoiceApi(window.juraApi) : window.juraApi
-  }
+  if (window.juraApi) return window.juraApi
   browserDevApi ??= createBrowserDevApi()
   if (requiresCloudAuth() && getSupabaseAuthClient()) {
     cloudLearningApi ??= createCloudLearningApi(browserDevApi)
     return cloudLearningApi
   }
   return browserDevApi
-}
-
-function createElectronVoiceApi(localApi: AppApi): AppApi {
-  return {
-    ...localApi,
-    getFeatureFlags: getVoiceFeatureFlags,
-    createVoiceReviewSession,
-    completeVoiceReviewSession
-  }
-}
-
-async function getVoiceFeatureFlags() {
-  const client = getVoiceSupabaseAuthClient()
-  if (!client) return {}
-  const { data, error } = await client.rpc('get_effective_feature_flags')
-  if (error) return {}
-  return typeof data === 'object' && data ? data as Record<string, boolean> : {}
 }
 
 function createBrowserDevApi(): AppApi {
@@ -142,7 +119,11 @@ function createBrowserDevApi(): AppApi {
     },
     async getFeatureFlags() {
       if (!requiresCloudAuth()) return {}
-      return getVoiceFeatureFlags()
+      const client = getSupabaseAuthClient()
+      if (!client) return {}
+      const { data, error } = await client.rpc('get_effective_feature_flags')
+      if (error) return {}
+      return typeof data === 'object' && data ? data as Record<string, boolean> : {}
     },
     createVoiceReviewSession,
     completeVoiceReviewSession,

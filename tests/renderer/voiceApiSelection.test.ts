@@ -6,33 +6,27 @@ describe('Voice API selection', () => {
     vi.resetModules()
   })
 
-  it('uses the online Voice client in Electron when an online client is configured', async () => {
+  it('keeps Voice calls on Electron IPC even when a renderer online client is configured', async () => {
     const desktopApi = createDesktopApi()
     const rpc = vi.fn().mockResolvedValue({ data: { flashcards_voice_agent: true }, error: null })
-    const createVoiceReviewSession = vi.fn()
-    const completeVoiceReviewSession = vi.fn()
     vi.stubGlobal('window', { juraApi: desktopApi })
     vi.doMock('../../src/renderer/src/cloudAuth', () => ({
       requiresCloudAuth: () => false,
-      getSupabaseAuthClient: () => null,
-      getVoiceSupabaseAuthClient: () => ({ rpc })
-    }))
-    vi.doMock('../../src/renderer/src/voice/voiceApi', () => ({
-      createVoiceReviewSession,
-      completeVoiceReviewSession
+      getSupabaseAuthClient: () => ({ rpc })
     }))
 
     const apiModulePath = '../../src/renderer/src/api'
     const { getApi } = await import(/* @vite-ignore */ apiModulePath)
     const api = getApi()
 
-    await expect(api.getFeatureFlags()).resolves.toEqual({ flashcards_voice_agent: true })
-    await api.createVoiceReviewSession({ promptId: 'prompt-1' })
+    await expect(api.getFeatureFlags()).resolves.toEqual({})
+    await expect(api.createVoiceReviewSession({ promptId: 'prompt-1' })).rejects.toThrow(
+      'Bitte verbinde dein Online-Konto, um Voice zu nutzen.'
+    )
 
-    expect(rpc).toHaveBeenCalledWith('get_effective_feature_flags')
-    expect(desktopApi.getFeatureFlags).not.toHaveBeenCalled()
-    expect(createVoiceReviewSession).toHaveBeenCalledWith({ promptId: 'prompt-1' })
-    expect(desktopApi.createVoiceReviewSession).not.toHaveBeenCalled()
+    expect(rpc).not.toHaveBeenCalled()
+    expect(desktopApi.getFeatureFlags).toHaveBeenCalledOnce()
+    expect(desktopApi.createVoiceReviewSession).toHaveBeenCalledWith({ promptId: 'prompt-1' })
   })
 
   it('keeps the Electron Voice IPC methods when no online client is available', async () => {

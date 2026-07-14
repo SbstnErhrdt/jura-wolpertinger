@@ -30,7 +30,9 @@ import type {
   TrashFolderInput,
   UpdateCorrectionInput,
   UpdateFolderInput,
-  UpdateExamInput
+  UpdateExamInput,
+  VoiceSessionCompleteInput,
+  VoiceSessionStartInput
 } from '@shared/ipc'
 import type { AttachmentRole, LearningTask } from '@shared/schemas'
 import { AppServices } from './services/services'
@@ -197,13 +199,13 @@ function createWindow(): void {
 
 function registerIpc(): void {
   ipcMain.handle('app:version', () => app.getVersion())
-  ipcMain.handle('voice:featureFlags', () => ({}))
-  ipcMain.handle('voice:createSession', () => {
-    throw new Error('Voice ist nur mit einer Online-Anmeldung verfügbar.')
-  })
-  ipcMain.handle('voice:completeSession', () => {
-    throw new Error('Voice ist nur mit einer Online-Anmeldung verfügbar.')
-  })
+  ipcMain.handle('voice:featureFlags', () => services.getFeatureFlags())
+  ipcMain.handle('voice:createSession', (_event, input: VoiceSessionStartInput) =>
+    services.createVoiceReviewSession(input)
+  )
+  ipcMain.handle('voice:completeSession', (_event, input: VoiceSessionCompleteInput) =>
+    services.completeVoiceReviewSession(input)
+  )
   ipcMain.on(RELEASE_SMOKE_READY_CHANNEL, (event) => {
     if (event.sender !== mainWindow?.webContents) return
 

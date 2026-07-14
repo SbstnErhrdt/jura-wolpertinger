@@ -4,6 +4,13 @@ import { createClient, type SupabaseClient, type User } from '@supabase/supabase
 import WsWebSocket from 'ws'
 import type { SyncAuthInput } from '@shared/schemas'
 import type {
+  FeatureFlags,
+  VoiceSessionCompleteInput,
+  VoiceSessionCompleteResult,
+  VoiceSessionStart,
+  VoiceSessionStartInput
+} from '@shared/ipc'
+import type {
   CloudLearningCard,
   CloudLearningCollection,
   CloudLearningReviewEvent,
@@ -27,12 +34,14 @@ export type SyncAccount = {
 
 export class SupabaseSyncClient {
   private readonly client: SupabaseClient
+  private readonly voiceBaseUrl: string
   private account: SyncAccount | null = null
 
   constructor(url = readSyncUrl(), anonKey = readSyncAnonKey()) {
     if (!anonKey) {
       throw new Error('Die Online-Verbindung ist in dieser Version noch nicht eingerichtet.')
     }
+    this.voiceBaseUrl = resolveAppOrigin(url)
     this.client = createClient(url, anonKey, {
       auth: {
         persistSession: false,
@@ -55,6 +64,35 @@ export class SupabaseSyncClient {
     }
     this.account = accountFromUser(data.user)
     return this.account
+  }
+
+  async getFeatureFlags(): Promise<FeatureFlags> {
+    await this.getVoiceAccessToken()
+    const { data, error } = await this.client.rpc('get_effective_feature_flags')
+    if (error) return {}
+    return typeof data === 'object' && data ? data as FeatureFlags : {}
+  }
+
+  async createVoiceReviewSession(input: VoiceSessionStartInput): Promise<VoiceSessionStart> {
+    const response = await fetch(`${this.voiceBaseUrl}/voice/sessions`, {
+      method: 'POST',
+      headers: await this.voiceHeaders(),
+      body: JSON.stringify(input)
+    })
+    if (!response.ok) throw new Error('Voice konnte nicht gestartet werden.')
+    return response.json() as Promise<VoiceSessionStart>
+  }
+
+  async completeVoiceReviewSession(
+    input: VoiceSessionCompleteInput
+  ): Promise<VoiceSessionCompleteResult> {
+    const response = await fetch(`${this.voiceBaseUrl}/voice/sessions/${input.sessionId}/complete`, {
+      method: 'POST',
+      headers: await this.voiceHeaders(),
+      body: JSON.stringify({ transcript: input.transcript, assessment: input.assessment })
+    })
+    if (!response.ok) throw new Error('Voice-Bewertung konnte nicht gespeichert werden.')
+    return response.json() as Promise<VoiceSessionCompleteResult>
   }
 
   async uploadSnapshot(snapshot: WorkspaceSnapshot): Promise<void> {
@@ -331,6 +369,23 @@ export class SupabaseSyncClient {
     return this.account
   }
 
+  private async voiceHeaders(): Promise<Record<string, string>> {
+    const accessToken = await this.getVoiceAccessToken()
+    return {
+      authorization: `Bearer ${accessToken}`,
+      'content-type': 'application/json'
+    }
+  }
+
+  private async getVoiceAccessToken(): Promise<string> {
+    const { data, error } = await this.client.auth.getSession()
+    const accessToken = data.session?.access_token
+    if (error || !accessToken) {
+      throw new Error('Bitte verbinde dein Online-Konto, um Voice zu nutzen.')
+    }
+    return accessToken
+  }
+
   private async replaceLearningTags(cards: CloudLearningCard[]): Promise<void> {
     const account = this.requireAccount()
     const tagNames = [...new Set(cards.flatMap((card) => card.tags))]
@@ -390,6 +445,14 @@ function readSyncAnonKey(): string {
     readEnvValue('ANON_KEY') ||
     ''
   )
+}
+
+function resolveAppOrigin(syncUrl: string): string {
+  const url = new URL(syncUrl)
+  url.pathname = url.pathname.replace(/\/api\/?$/, '') || '/'
+  url.search = ''
+  url.hash = ''
+  return url.toString().replace(/\/$/, '')
 }
 
 async function selectInChunks<TInput, TOutput>(
