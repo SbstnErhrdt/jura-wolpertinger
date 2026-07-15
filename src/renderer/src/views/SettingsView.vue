@@ -42,6 +42,27 @@
       <section class="settings-panel">
         <div class="panel-header">
           <div>
+            <h2>Profil</h2>
+            <p class="settings-copy">Diese Angaben nutzt Wolpi für die persönliche Ansprache.</p>
+          </div>
+        </div>
+
+        <div class="settings-ai-status">
+          <strong>{{ profileDisplayName }}</strong>
+          <p>{{ profileDetail }}</p>
+          <span v-if="profile?.updatedAt">Gespeichert {{ formatDateTime(profile.updatedAt) }}</span>
+        </div>
+
+        <div class="settings-actions">
+          <UButton type="button" icon="i-lucide-user-round-pen" @click="openProfileModal">
+            Profil bearbeiten
+          </UButton>
+        </div>
+      </section>
+
+      <section class="settings-panel">
+        <div class="panel-header">
+          <div>
             <h2>Neuer Nutzer</h2>
             <p class="settings-copy">
               Lege einen getrennten lokalen Arbeitsbereich für eigene Klausuren oder Tests an.
@@ -160,6 +181,30 @@
       </template>
     </UModal>
 
+    <UModal :open="showProfileModal" @update:open="showProfileModal = $event">
+      <template #content>
+        <form class="modal-card" aria-labelledby="settings-profile-title" @submit.prevent="saveProfile">
+          <h2 id="settings-profile-title">Profil bearbeiten</h2>
+          <p>Dein Name wird für die persönliche Ansprache beim Lernen genutzt.</p>
+          <UFormField class="settings-field" label="Vorname" required>
+            <UInput v-model="profileFirstName" autocomplete="given-name" required />
+          </UFormField>
+          <UFormField class="settings-field" label="Nachname">
+            <UInput v-model="profileLastName" autocomplete="family-name" />
+          </UFormField>
+          <p v-if="profileError" class="form-error">{{ profileError }}</p>
+          <div class="modal-actions">
+            <UButton type="button" color="neutral" variant="outline" :disabled="profileSaving" @click="showProfileModal = false">
+              Abbrechen
+            </UButton>
+            <UButton type="submit" :loading="profileSaving" :disabled="!profileFirstName.trim()">
+              Speichern
+            </UButton>
+          </div>
+        </form>
+      </template>
+    </UModal>
+
     <UModal :open="Boolean(syncConfirmAction)" @update:open="!$event && (syncConfirmAction = null)">
       <template #content>
         <section class="modal-card" aria-labelledby="sync-confirm-title">
@@ -188,7 +233,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { AppUser } from '@shared/ipc'
-import type { SyncRunAction, SyncStatus } from '@shared/schemas'
+import type { SyncRunAction, SyncStatus, UserProfile } from '@shared/schemas'
 import { api, isElectronApiAvailable } from '../api'
 import { getSyncStatusView, getWorkspaceSyncAction, getWorkspaceSyncActions } from '../syncWorkspaceUx'
 import { type AppBreadcrumbItem, withHomeIcon } from '../ui/breadcrumbs'
@@ -205,7 +250,13 @@ const route = useRoute()
 const router = useRouter()
 const users = ref<AppUser[]>([])
 const currentUser = ref<AppUser | null>(null)
+const profile = ref<UserProfile | null>(null)
 const currentUserName = ref('')
+const profileFirstName = ref('')
+const profileLastName = ref('')
+const profileError = ref('')
+const profileSaving = ref(false)
+const showProfileModal = ref(false)
 const newUserName = ref('')
 const actionError = ref('')
 const actionNotice = ref('')
@@ -228,6 +279,15 @@ const userOptions = computed(() =>
     value: user.id
   }))
 )
+const profileDisplayName = computed(() => {
+  const parts = [profile.value?.firstName, profile.value?.lastName].filter(Boolean)
+  return parts.length ? parts.join(' ') : 'Noch nicht hinterlegt'
+})
+const profileDetail = computed(() => (
+  profile.value?.firstName
+    ? 'Wolpi nutzt deinen Vornamen in der Begrüßung.'
+    : 'Ergänze deinen Vornamen, damit Wolpi dich persönlich begrüßen kann.'
+))
 const syncStatusView = computed(() => {
   if (!isElectronApiAvailable && syncStatus.value.connected) {
     return {
@@ -275,6 +335,9 @@ async function load(): Promise<void> {
   applyTheme()
   currentUser.value = await api.getCurrentUser()
   users.value = await api.listUsers()
+  profile.value = await api.getUserProfile().catch(() => null)
+  profileFirstName.value = profile.value?.firstName ?? ''
+  profileLastName.value = profile.value?.lastName ?? ''
   currentUserName.value = currentUser.value.displayName
   syncStatus.value = await api.getSyncStatus()
   if (route.query.connectOnline === '1' && isElectronApiAvailable) {
@@ -317,6 +380,35 @@ async function connectSync(): Promise<void> {
     actionError.value = error instanceof Error ? error.message : String(error)
   } finally {
     syncBusy.value = false
+  }
+}
+
+function openProfileModal(): void {
+  actionError.value = ''
+  actionNotice.value = ''
+  profileError.value = ''
+  profileFirstName.value = profile.value?.firstName ?? ''
+  profileLastName.value = profile.value?.lastName ?? ''
+  showProfileModal.value = true
+}
+
+async function saveProfile(): Promise<void> {
+  if (!profileFirstName.value.trim()) return
+  profileSaving.value = true
+  profileError.value = ''
+  actionError.value = ''
+  actionNotice.value = ''
+  try {
+    profile.value = await api.updateUserProfile({
+      firstName: profileFirstName.value,
+      lastName: profileLastName.value
+    })
+    showProfileModal.value = false
+    actionNotice.value = 'Profil gespeichert.'
+  } catch {
+    profileError.value = 'Das Profil konnte nicht gespeichert werden. Bitte versuche es noch einmal.'
+  } finally {
+    profileSaving.value = false
   }
 }
 
