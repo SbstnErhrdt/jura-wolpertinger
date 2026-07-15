@@ -80,6 +80,8 @@ function createSchema(db: SqliteDatabase): void {
       CREATE TABLE users (
         id TEXT PRIMARY KEY,
         display_name TEXT NOT NULL,
+        first_name TEXT,
+        last_name TEXT,
         kind TEXT NOT NULL,
         remote_user_id TEXT,
         onboarding_completed_at TEXT,
@@ -260,6 +262,7 @@ function migrateV1ToV2(db: SqliteDatabase): void {
 function migrateV2ToV3(db: SqliteDatabase): void {
   const migratedAt = nowIso()
   db.transaction(() => {
+    addUserProfileColumns(db)
     addColumnIfMissing(db, 'exams', 'legal_area TEXT')
     addColumnIfMissing(db, 'exams', 'exam_type TEXT')
     addColumnIfMissing(db, 'exams', 'source_name TEXT')
@@ -323,6 +326,7 @@ function migrateV2ToV3(db: SqliteDatabase): void {
 function migrateV3ToV4(db: SqliteDatabase): void {
   const migratedAt = nowIso()
   db.transaction(() => {
+    addUserProfileColumns(db)
     createLearningSchema(db)
     db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run('schema_version', '4')
     db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run('last_migrated_at', migratedAt)
@@ -428,6 +432,7 @@ function repairMissingV4Schema(db: SqliteDatabase): void {
     tableExists(db, 'learning_card_schedules')
 
   if (!hasV4Schema) migrateV3ToV4(db)
+  addUserProfileColumns(db)
 }
 
 function addUserScopeToLegacySchema(db: SqliteDatabase, targetSchemaVersion: number): void {
@@ -439,6 +444,8 @@ function addUserScopeToLegacySchema(db: SqliteDatabase, targetSchemaVersion: num
       CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
         display_name TEXT NOT NULL,
+        first_name TEXT,
+        last_name TEXT,
         kind TEXT NOT NULL,
         remote_user_id TEXT,
         onboarding_completed_at TEXT,
@@ -504,4 +511,10 @@ function columnExists(db: SqliteDatabase, table: string, column: string): boolea
 function addColumnIfMissing(db: SqliteDatabase, table: string, definition: string): void {
   const column = definition.split(/\s+/)[0]
   if (!columnExists(db, table, column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${definition}`)
+}
+
+function addUserProfileColumns(db: SqliteDatabase): void {
+  if (!tableExists(db, 'users')) return
+  addColumnIfMissing(db, 'users', 'first_name TEXT')
+  addColumnIfMissing(db, 'users', 'last_name TEXT')
 }

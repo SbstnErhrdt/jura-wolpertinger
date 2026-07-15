@@ -241,6 +241,11 @@ export type VoiceSessionCompleteResult = {
   reviewEventId: string | null
 }
 
+export type UpdateUserProfileInput = {
+  firstName: string | null
+  lastName: string | null
+}
+
 export type SaveAiCorrectionDraftInput = {
   submissionId: string
   provider: 'openai'
@@ -272,6 +277,8 @@ export type AppApi = {
   getFeatureFlags(): Promise<FeatureFlags>
   createVoiceReviewSession(input: VoiceSessionStartInput): Promise<VoiceSessionStart>
   completeVoiceReviewSession(input: VoiceSessionCompleteInput): Promise<VoiceSessionCompleteResult>
+  getUserProfile(): Promise<import('./schemas').UserProfile>
+  updateUserProfile(input: UpdateUserProfileInput): Promise<import('./schemas').UserProfile>
   getCurrentUser(): Promise<AppUser>
   listUsers(): Promise<AppUser[]>
   createUser(displayName: string): Promise<AppUser>

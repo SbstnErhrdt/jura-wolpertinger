@@ -92,9 +92,17 @@ describe('parseVoiceCommand', () => {
     expect(parseVoiceCommand('zur letzten Karte')).toBe('previous_card')
   })
 
+  it('detects session ending commands in German transcripts', () => {
+    expect(parseVoiceCommand('beenden')).toBe('end_session')
+    expect(parseVoiceCommand('Session beenden')).toBe('end_session')
+    expect(parseVoiceCommand('Wolpi stopp')).toBe('end_session')
+    expect(parseVoiceCommand('abbrechen')).toBe('end_session')
+  })
+
   it('does not treat legal answer text as navigation', () => {
     expect(parseVoiceCommand('Der nächste Prüfungspunkt ist die Begründetheit.')).toBeNull()
     expect(parseVoiceCommand('Zurückbehaltungsrechte wären als Einrede zu prüfen.')).toBeNull()
+    expect(parseVoiceCommand('Die Klage ist nach § 253 ZPO zu begründen.')).toBeNull()
   })
 })
 
@@ -122,6 +130,8 @@ describe('voice client cancellation', () => {
     const client = await startVoiceClient({
       clientSecret: 'secret',
       questionText: 'Was ist Verzug?',
+      introduce: true,
+      firstName: 'Sebastian',
       callbacks
     })
     const connection = FakePeerConnection.instances.at(-1)
@@ -142,13 +152,44 @@ describe('voice client cancellation', () => {
     }
     expect(greeting.type).toBe('response.create')
     expect(greeting.response.output_modalities).toEqual(['audio'])
+    expect(greeting.response.instructions).toContain('Hallo Sebastian')
     expect(greeting.response.instructions).toContain('Wolpi')
+    expect(greeting.response.instructions).toContain('Sprich ausschließlich Deutsch')
     expect(greeting.response.instructions).toContain('Was ist Verzug?')
 
     client.stop()
     expect(audioElement.pause).toHaveBeenCalledOnce()
     expect(audioElement.remove).toHaveBeenCalledOnce()
     expect(audioElement.srcObject).toBeNull()
+  })
+
+  it('asks the question directly without introduction after the first voice card', async () => {
+    const track = { stop: vi.fn() }
+    vi.stubGlobal('navigator', {
+      mediaDevices: { getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [track] }) }
+    })
+    vi.stubGlobal('RTCPeerConnection', FakePeerConnection)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, text: async () => 'answer-sdp' }))
+
+    const client = await startVoiceClient({
+      clientSecret: 'secret',
+      questionText: 'Was ist Verzug?',
+      introduce: false,
+      firstName: 'Sebastian',
+      callbacks: createCallbacks()
+    })
+    const connection = FakePeerConnection.instances.at(-1)
+    connection?.dataChannel.dispatch('open')
+
+    const greeting = JSON.parse(String(connection?.dataChannel.send.mock.calls[0]?.[0])) as {
+      response: { instructions: string }
+    }
+    expect(greeting.response.instructions).not.toContain('ich bin Wolpi')
+    expect(greeting.response.instructions).not.toContain('Hallo Sebastian')
+    expect(greeting.response.instructions).toContain('Stelle direkt diese Karteikartenfrage')
+    expect(greeting.response.instructions).toContain('Was ist Verzug?')
+
+    client.stop()
   })
 
   it('emits a next-card command from completed input transcripts', async () => {
@@ -175,6 +216,34 @@ describe('voice client cancellation', () => {
 
     expect(callbacks.onCommand).toHaveBeenCalledWith('next_card')
     expect(callbacks.onTranscript).not.toHaveBeenCalledWith('nächste Karte bitte')
+
+    client.stop()
+  })
+
+  it('emits an end-session command from completed input transcripts', async () => {
+    const track = { stop: vi.fn() }
+    vi.stubGlobal('navigator', {
+      mediaDevices: { getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [track] }) }
+    })
+    vi.stubGlobal('RTCPeerConnection', FakePeerConnection)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, text: async () => 'answer-sdp' }))
+    const callbacks = createCallbacks()
+
+    const client = await startVoiceClient({
+      clientSecret: 'secret',
+      questionText: 'Was ist Verzug?',
+      callbacks
+    })
+    const connection = FakePeerConnection.instances.at(-1)
+    connection?.dataChannel.dispatch('message', {
+      data: JSON.stringify({
+        type: 'conversation.item.input_audio_transcription.completed',
+        transcript: 'Session beenden'
+      })
+    })
+
+    expect(callbacks.onCommand).toHaveBeenCalledWith('end_session')
+    expect(callbacks.onTranscript).not.toHaveBeenCalledWith('Session beenden')
 
     client.stop()
   })

@@ -17,7 +17,8 @@ import {
   submissionSchema,
   syncAuthInputSchema,
   syncRunResultSchema,
-  syncStatusSchema
+  syncStatusSchema,
+  userProfileSchema
 } from '@shared/schemas'
 import {
   APP_VERSION,
@@ -29,6 +30,24 @@ import {
 import { hashJson } from '@main/services/utils'
 
 describe('shared schemas', () => {
+  it('validates user profile names used for Wolpi personalization', () => {
+    const profile = userProfileSchema.parse({
+      userId: crypto.randomUUID(),
+      firstName: 'Sebastian',
+      lastName: 'Erhardt',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    })
+
+    expect(profile.firstName).toBe('Sebastian')
+    expect(profile.lastName).toBe('Erhardt')
+    expect(userProfileSchema.parse({
+      ...profile,
+      firstName: null,
+      lastName: null
+    }).firstName).toBeNull()
+  })
+
   it('validates .jura manifest version 1', () => {
     expect(
       juraManifestSchema.parse({

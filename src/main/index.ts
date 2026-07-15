@@ -31,6 +31,7 @@ import type {
   UpdateCorrectionInput,
   UpdateFolderInput,
   UpdateExamInput,
+  UpdateUserProfileInput,
   VoiceSessionCompleteInput,
   VoiceSessionStartInput
 } from '@shared/ipc'
@@ -216,6 +217,10 @@ function registerIpc(): void {
     })
   })
   ipcMain.handle('users:current', () => services.getCurrentUser())
+  ipcMain.handle('users:getProfile', () => services.getUserProfile())
+  ipcMain.handle('users:updateProfile', (_event, input: UpdateUserProfileInput) =>
+    services.updateUserProfile(input)
+  )
   ipcMain.handle('users:list', () => services.listUsers())
   ipcMain.handle('users:create', (_event, displayName: string) => services.createUser(displayName))
   ipcMain.handle('users:update', (_event, input: { id: string; displayName: string }) =>

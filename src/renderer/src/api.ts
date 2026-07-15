@@ -37,6 +37,7 @@ import type {
   LearningImportResult,
   LearningReviewEvent,
   LearningTask,
+  UserProfile,
   LegalArea,
   ReviewCard,
   ReviewRating,
@@ -90,6 +91,7 @@ type BrowserStore = {
     lastRating: ReviewRating | null
     lastReviewedAt: string | null
   }>
+  userProfiles: UserProfile[]
 }
 
 let browserDevApi: AppApi | null = null
@@ -127,6 +129,24 @@ function createBrowserDevApi(): AppApi {
     },
     createVoiceReviewSession,
     completeVoiceReviewSession,
+    async getUserProfile() {
+      const store = readStore()
+      const user = ensureBrowserUser(store)
+      const profile = ensureBrowserUserProfile(store, user.id)
+      writeStore(store)
+      return profile
+    },
+    async updateUserProfile(input) {
+      const store = readStore()
+      const user = ensureBrowserUser(store)
+      const now = nowIso()
+      const profile = ensureBrowserUserProfile(store, user.id)
+      profile.firstName = cleanProfileName(input.firstName)
+      profile.lastName = cleanProfileName(input.lastName)
+      profile.updatedAt = now
+      writeStore(store)
+      return profile
+    },
     async getCurrentUser() {
       const store = readStore()
       return ensureBrowserUser(store)
@@ -1137,8 +1157,30 @@ function emptyStore(): BrowserStore {
     learningCollections: [],
     learningCards: [],
     learningReviewEvents: [],
-    learningSchedules: []
+    learningSchedules: [],
+    userProfiles: []
   }
+}
+
+function ensureBrowserUserProfile(store: BrowserStore, userId: string): UserProfile {
+  let profile = store.userProfiles.find((candidate) => candidate.userId === userId)
+  if (!profile) {
+    const now = nowIso()
+    profile = {
+      userId,
+      firstName: null,
+      lastName: null,
+      createdAt: now,
+      updatedAt: now
+    }
+    store.userProfiles.push(profile)
+  }
+  return profile
+}
+
+function cleanProfileName(value: string | null | undefined): string | null {
+  const trimmed = value?.trim() ?? ''
+  return trimmed || null
 }
 
 function ensureBrowserUser(store: BrowserStore): User {

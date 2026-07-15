@@ -18,7 +18,8 @@ import type {
   TrashFolderInput,
   UpdateCorrectionInput,
   UpdateFolderInput,
-  UpdateExamInput
+  UpdateExamInput,
+  UpdateUserProfileInput
 } from '@shared/ipc'
 import type { AttachmentRole, LearningTask } from '@shared/schemas'
 import {
@@ -32,6 +33,8 @@ const api: AppApi = {
   createVoiceReviewSession: (input) => ipcRenderer.invoke('voice:createSession', input),
   completeVoiceReviewSession: (input) => ipcRenderer.invoke('voice:completeSession', input),
   getCurrentUser: () => ipcRenderer.invoke('users:current'),
+  getUserProfile: () => ipcRenderer.invoke('users:getProfile'),
+  updateUserProfile: (input: UpdateUserProfileInput) => ipcRenderer.invoke('users:updateProfile', input),
   listUsers: () => ipcRenderer.invoke('users:list'),
   createUser: (displayName: string) => ipcRenderer.invoke('users:create', displayName),
   updateUser: (input: { id: string; displayName: string }) => ipcRenderer.invoke('users:update', input),

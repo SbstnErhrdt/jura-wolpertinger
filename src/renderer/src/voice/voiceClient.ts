@@ -20,7 +20,7 @@ export type VoiceClient = {
   stop(): void
 }
 
-export type VoiceCommand = 'next_card' | 'previous_card'
+export type VoiceCommand = 'next_card' | 'previous_card' | 'end_session'
 
 export type VoiceAssessment = {
   rating: 1 | 2 | 3 | 4
@@ -83,6 +83,23 @@ export function parseVoiceCommand(transcript: string): VoiceCommand | null {
   if (/\bvorherige karte\b/.test(normalized)) return 'previous_card'
   if (/\bzur letzten karte\b/.test(normalized)) return 'previous_card'
   if (/\beine karte zurueck\b/.test(normalized)) return 'previous_card'
+
+  const endPhrases = [
+    'beenden',
+    'session beenden',
+    'sprachrunde beenden',
+    'gespraech beenden',
+    'wolpi stopp',
+    'wolpi stop',
+    'stopp wolpi',
+    'stop wolpi',
+    'abbrechen',
+    'voice beenden',
+    'sprache beenden'
+  ]
+  if (endPhrases.includes(normalized)) return 'end_session'
+  if (/\b(session|sprachrunde|gespraech|voice|sprache) beenden\b/.test(normalized)) return 'end_session'
+  if (/\bwolpi sto+p\b/.test(normalized)) return 'end_session'
 
   return null
 }
@@ -181,6 +198,8 @@ function isStringArray(value: unknown): value is string[] {
 export async function startVoiceClient(input: {
   clientSecret: string
   questionText: string
+  introduce?: boolean
+  firstName?: string | null
   callbacks: VoiceClientCallbacks
   signal?: AbortSignal
 }): Promise<VoiceClient> {
@@ -250,7 +269,11 @@ export async function startVoiceClient(input: {
     dataChannel = peerConnection.createDataChannel('oai-events')
     dataChannel.addEventListener('open', () => {
       notifyStatus('listening')
-      sendGreetingResponse(dataChannel as RTCDataChannel, input.questionText)
+      sendGreetingResponse(dataChannel as RTCDataChannel, {
+        questionText: input.questionText,
+        introduce: input.introduce ?? true,
+        firstName: input.firstName ?? null
+      })
     })
     dataChannel.addEventListener('message', (event) => {
       const parsed = parseRealtimeEvent(String(event.data))
@@ -303,20 +326,30 @@ export async function startVoiceClient(input: {
   }
 }
 
-function sendGreetingResponse(dataChannel: RTCDataChannel, questionText: string): void {
+function sendGreetingResponse(
+  dataChannel: RTCDataChannel,
+  input: { questionText: string; introduce: boolean; firstName: string | null }
+): void {
   if (dataChannel.readyState !== 'open') return
-  const normalizedQuestion = questionText.trim()
+  const normalizedQuestion = input.questionText.trim()
+  const normalizedFirstName = input.firstName?.trim()
+  const introduction = normalizedFirstName
+    ? `Hallo ${normalizedFirstName}, ich bin Wolpi.`
+    : 'Hallo, ich bin Wolpi.'
   dataChannel.send(JSON.stringify({
     type: 'response.create',
     response: {
       output_modalities: ['audio'],
       instructions: [
-        'Stelle dich kurz als Wolpi vor.',
-        'Stelle dann genau diese Karteikartenfrage:',
+        'Sprich ausschließlich Deutsch.',
+        input.introduce
+          ? `${introduction} Ich begleite dich kurz durch diese Karte.`
+          : 'Stelle direkt diese Karteikartenfrage.',
+        input.introduce ? 'Stelle dann genau diese Karteikartenfrage:' : '',
         normalizedQuestion,
         'Bitte den Lernenden, die Antwort laut zu formulieren.',
         'Bleib knapp, freundlich und auf Deutsch. Verrate die Musterantwort nicht.'
-      ].join(' ')
+      ].filter(Boolean).join(' ')
     }
   }))
 }

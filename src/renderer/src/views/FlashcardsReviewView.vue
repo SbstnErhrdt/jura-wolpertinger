@@ -179,6 +179,8 @@ const voiceError = ref('')
 const voiceClient = ref<VoiceClient | null>(null)
 const voiceSessionId = ref<string | null>(null)
 const voiceAssessment = ref<VoiceAssessment | null>(null)
+const wolpiIntroduced = ref(false)
+const profileFirstName = ref<string | null>(null)
 const collectionId = computed(() => (typeof route.query.collection === 'string' ? route.query.collection : null))
 const collectionName = ref('')
 const hasPracticeCards = ref(false)
@@ -267,8 +269,14 @@ onUnmounted(() => {
 async function load(): Promise<void> {
   loading.value = true
   clearVoiceReview()
+  wolpiIntroduced.value = false
   sessionCompleted.value = false
-  featureFlags.value = await api.getFeatureFlags().catch(() => ({}))
+  const [nextFeatureFlags, nextProfile] = await Promise.all([
+    api.getFeatureFlags().catch(() => ({})),
+    api.getUserProfile().catch(() => null)
+  ])
+  featureFlags.value = nextFeatureFlags
+  profileFirstName.value = nextProfile?.firstName ?? null
   if (collectionId.value) {
     const collections = await api.listLearningCollections()
     collectionName.value = collections.find((collection) => collection.id === collectionId.value)?.name ?? ''
@@ -310,6 +318,8 @@ async function startVoiceReview(): Promise<void> {
     const client = await startVoiceClient({
       clientSecret: session.clientSecret,
       questionText: card.frontMarkdown,
+      introduce: !wolpiIntroduced.value,
+      firstName: profileFirstName.value,
       signal: abortController.signal,
       callbacks: {
         onStatus: (status) => {
@@ -339,6 +349,7 @@ async function startVoiceReview(): Promise<void> {
       client.stop()
       return
     }
+    wolpiIntroduced.value = true
     voiceClient.value = client
   } catch {
     if (!isCurrentVoiceRequest(requestGeneration)) return
@@ -387,6 +398,11 @@ async function handleVoiceCommand(command: VoiceCommand): Promise<void> {
       return
     }
     moveToPreviousCard(true)
+  } else if (command === 'end_session') {
+    stopVoiceClient()
+    voiceStatus.value = 'uncertain'
+    voiceError.value = 'Sprachrunde beendet. Du kannst manuell weitermachen.'
+    return
   }
 
   if (!currentCard.value || sessionCompleted.value || !voiceEnabled.value) return

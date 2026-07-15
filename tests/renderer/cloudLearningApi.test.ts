@@ -148,6 +148,53 @@ describe('cloud learning API', () => {
     expect(queryCalls.some((call) => call.table === 'learning_prompts')).toBe(false)
   })
 
+  it('loads and upserts the signed-in user profile', async () => {
+    tableData = {
+      user_profiles: [{
+        user_id: userId,
+        first_name: 'Sebastian',
+        last_name: 'Erhardt',
+        created_at: now,
+        updated_at: now
+      }]
+    }
+
+    const authModulePath = '../../src/renderer/src/cloudAuth'
+    vi.doMock(authModulePath, () => ({
+      getSupabaseAuthClient: () => createSupabaseClientMock()
+    }))
+    const apiModulePath = '../../src/renderer/src/cloudLearningApi'
+    const { createCloudLearningApi } = (await import(/* @vite-ignore */ apiModulePath)) as {
+      createCloudLearningApi: (localApi: AppApi) => AppApi
+    }
+    const api = createCloudLearningApi(createLocalApiStub())
+
+    await expect(api.getUserProfile()).resolves.toMatchObject({
+      userId,
+      firstName: 'Sebastian',
+      lastName: 'Erhardt'
+    })
+    await expect(api.updateUserProfile({ firstName: 'Sebi', lastName: 'E.' })).resolves.toMatchObject({
+      userId,
+      firstName: 'Sebi',
+      lastName: 'E.'
+    })
+
+    expect(queryCalls).toEqual(expect.arrayContaining([
+      expect.objectContaining({ table: 'user_profiles', operation: 'select' }),
+      expect.objectContaining({ table: 'user_profiles', operation: 'eq', column: 'user_id', value: userId }),
+      expect.objectContaining({ table: 'user_profiles', operation: 'upsert' })
+    ]))
+    expect(upsertCalls).toContainEqual(expect.objectContaining({
+      table: 'user_profiles',
+      value: expect.objectContaining({
+        user_id: userId,
+        first_name: 'Sebi',
+        last_name: 'E.'
+      })
+    }))
+  })
+
   it('loads cloud card pages with ranged item queries and page-local details', async () => {
     const total = 30
     const items = Array.from({ length: total }, (_, index) => ({
@@ -373,6 +420,8 @@ function createLocalApiStub(): AppApi {
     getFeatureFlags: unimplemented,
     createVoiceReviewSession: unimplemented,
     completeVoiceReviewSession: unimplemented,
+    getUserProfile: unimplemented,
+    updateUserProfile: unimplemented,
     getCurrentUser: unimplemented,
     listUsers: unimplemented,
     createUser: unimplemented,

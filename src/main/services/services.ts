@@ -37,6 +37,7 @@ import {
   scoreSchema,
   submissionSchema,
   userSchema,
+  userProfileSchema,
   type Attachment,
   type AttachmentRole,
   type AiCorrectionDraft,
@@ -57,7 +58,8 @@ import {
   type ReviewCard,
   type ReviewRating,
   type Submission,
-  type User
+  type User,
+  type UserProfile
 } from '@shared/schemas'
 import type {
   AddInlineCommentInput,
@@ -87,6 +89,7 @@ import type {
   UpdateCorrectionInput,
   UpdateFolderInput,
   UpdateExamInput,
+  UpdateUserProfileInput,
   FeatureFlags,
   VoiceSessionCompleteInput,
   VoiceSessionCompleteResult,
@@ -273,6 +276,22 @@ export class AppServices {
     return userFromRow(row)
   }
 
+  getUserProfile(): UserProfile {
+    const currentUserId = this.getCurrentUserId()
+    const row = this.db.prepare('SELECT * FROM users WHERE id = ?').get(currentUserId) as Row | undefined
+    if (!row) {
+      const user = this.ensureCurrentUser()
+      return userProfileFromRow({
+        id: user.id,
+        first_name: null,
+        last_name: null,
+        created_at: user.createdAt,
+        updated_at: user.updatedAt
+      })
+    }
+    return userProfileFromRow(row)
+  }
+
   listUsers(): User[] {
     const rows = this.db.prepare('SELECT * FROM users ORDER BY updated_at DESC').all() as Row[]
     return rows.map(userFromRow)
@@ -304,6 +323,15 @@ export class AppServices {
       .prepare('UPDATE users SET display_name = ?, updated_at = ? WHERE id = ?')
       .run(input.displayName.trim() || 'Lokaler Nutzer', now, input.id)
     return this.getCurrentUser()
+  }
+
+  updateUserProfile(input: UpdateUserProfileInput): UserProfile {
+    const currentUserId = this.getCurrentUserId()
+    const now = nowIso()
+    this.db
+      .prepare('UPDATE users SET first_name = ?, last_name = ?, updated_at = ? WHERE id = ?')
+      .run(cleanProfileName(input.firstName), cleanProfileName(input.lastName), now, currentUserId)
+    return this.getUserProfile()
   }
 
   switchUser(userId: string): User {
@@ -2422,6 +2450,21 @@ function userFromRow(row: Row): User {
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at)
   })
+}
+
+function userProfileFromRow(row: Row): UserProfile {
+  return userProfileSchema.parse({
+    userId: String(row.id),
+    firstName: row.first_name ? String(row.first_name) : null,
+    lastName: row.last_name ? String(row.last_name) : null,
+    createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at)
+  })
+}
+
+function cleanProfileName(value: string | null | undefined): string | null {
+  const trimmed = value?.trim() ?? ''
+  return trimmed ? trimmed : null
 }
 
 function folderFromRow(row: Row): FolderDto {

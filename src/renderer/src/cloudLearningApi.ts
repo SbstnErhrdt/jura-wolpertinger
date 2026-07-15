@@ -31,13 +31,15 @@ import type {
   ReviewCard,
   ReviewRating,
   Submission,
-  User
+  User,
+  UserProfile
 } from '@shared/schemas'
 import {
   learningExportFileSchema,
   learningImportResultSchema,
   learningReviewEventSchema,
-  reviewRatingSchema
+  reviewRatingSchema,
+  userProfileSchema
 } from '@shared/schemas'
 import { getSupabaseAuthClient } from './cloudAuth'
 
@@ -126,6 +128,12 @@ let cloudBrowserSnapshotUploadQueued = false
 export function createCloudLearningApi(localApi: AppApi): AppApi {
   return {
     ...localApi,
+    async getUserProfile() {
+      return getCloudUserProfile()
+    },
+    async updateUserProfile(input) {
+      return updateCloudUserProfile(input)
+    },
     async getCurrentUser() {
       const { user } = await requireCloudContext()
       return cloudUserFromSupabaseUser(user)
@@ -440,6 +448,48 @@ function cloudUserFromSupabaseUser(user: SupabaseUser): User {
     createdAt,
     updatedAt: user.updated_at ?? createdAt
   }
+}
+
+async function getCloudUserProfile(): Promise<UserProfile> {
+  const { client, user } = await requireCloudContext()
+  const { data, error } = await client
+    .from('user_profiles')
+    .select('user_id, first_name, last_name, created_at, updated_at')
+    .eq('user_id', user.id)
+    .maybeSingle()
+  if (error) throw error
+  return cloudUserProfileFromRow(data, user.id)
+}
+
+async function updateCloudUserProfile(input: { firstName: string | null; lastName: string | null }): Promise<UserProfile> {
+  const { client, user } = await requireCloudContext()
+  const { error } = await client
+    .from('user_profiles')
+    .upsert({
+      user_id: user.id,
+      first_name: cleanProfileName(input.firstName),
+      last_name: cleanProfileName(input.lastName),
+      updated_at: nowIso()
+    }, { onConflict: 'user_id' })
+  if (error) throw error
+  return getCloudUserProfile()
+}
+
+function cloudUserProfileFromRow(row: unknown, userId: string): UserProfile {
+  const record = row && typeof row === 'object' ? row as Record<string, unknown> : {}
+  const now = nowIso()
+  return userProfileSchema.parse({
+    userId,
+    firstName: cleanProfileName(record.first_name),
+    lastName: cleanProfileName(record.last_name),
+    createdAt: typeof record.created_at === 'string' ? record.created_at : now,
+    updatedAt: typeof record.updated_at === 'string' ? record.updated_at : now
+  })
+}
+
+function cleanProfileName(value: unknown): string | null {
+  const trimmed = typeof value === 'string' ? value.trim() : ''
+  return trimmed || null
 }
 
 async function ensureCloudBrowserWorkspaceLoaded(): Promise<void> {

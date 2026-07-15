@@ -746,6 +746,31 @@ body {
   padding: 28px;
 }
 
+.profile-completion-card article {
+  align-items: center;
+  background: #fff;
+  border-color: var(--color-border);
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+}
+
+.profile-completion-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.profile-completion-copy h2 {
+  font-size: 22px;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.profile-completion-copy p {
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
 .home-hero h1 {
   font-size: 36px;
   letter-spacing: 0;
@@ -2869,6 +2894,11 @@ button:active .key-hint,
   gap: 8px;
   justify-content: flex-end;
   margin-top: 18px;
+}
+
+.form-error {
+  color: var(--color-danger);
+  font-weight: 700;
 }
 
 .form-field {

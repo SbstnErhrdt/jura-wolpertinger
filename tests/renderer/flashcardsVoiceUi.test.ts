@@ -8,7 +8,8 @@ describe('flashcards voice UI contract', () => {
   it('gates the voice action behind flashcards_voice_agent', () => {
     expect(hasFeatureFlag({}, 'flashcards_voice_agent')).toBe(false)
     expect(hasFeatureFlag({ flashcards_voice_agent: true }, 'flashcards_voice_agent')).toBe(true)
-    expect(source).toContain('featureFlags.value = await api.getFeatureFlags().catch(() => ({}))')
+    expect(source).toContain('api.getFeatureFlags().catch(() => ({}))')
+    expect(source).toContain('api.getUserProfile().catch(() => null)')
     expect(source).toContain("const voiceEnabled = computed(() => hasFeatureFlag(featureFlags.value, 'flashcards_voice_agent'))")
     expect(source).toMatch(/<UButton\s+v-if="voiceEnabled"[\s\S]*?>\s*Mit Wolpi sprechen\s*<\/UButton>/)
   })
@@ -47,5 +48,14 @@ describe('flashcards voice UI contract', () => {
     expect(source).toContain("command === 'previous_card'")
     expect(source).toContain('await nextTick()')
     expect(source).toContain('void startVoiceReview()')
+  })
+
+  it('handles voice ending commands and introduces Wolpi only once', () => {
+    expect(source).toContain('const wolpiIntroduced = ref(false)')
+    expect(source).toContain('introduce: !wolpiIntroduced.value')
+    expect(source).toContain('wolpiIntroduced.value = true')
+    expect(source).toContain("command === 'end_session'")
+    expect(source).toContain('Sprachrunde beendet. Du kannst manuell weitermachen.')
+    expect(source).toContain('stopVoiceClient()')
   })
 })

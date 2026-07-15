@@ -64,6 +64,14 @@ export const userSchema = z.object({
   updatedAt: isoDateSchema
 })
 
+export const userProfileSchema = z.object({
+  userId: uuidSchema,
+  firstName: z.string().trim().min(1).nullable(),
+  lastName: z.string().trim().min(1).nullable(),
+  createdAt: isoDateSchema,
+  updatedAt: isoDateSchema
+})
+
 export const folderSchema = z.object({
   id: uuidSchema,
   userId: uuidSchema,
@@ -395,6 +403,7 @@ export type LearningTaskStatus = z.infer<typeof learningTaskStatusSchema>
 export type LearningTaskPriority = z.infer<typeof learningTaskPrioritySchema>
 export type ReviewRating = z.infer<typeof reviewRatingSchema>
 export type User = z.infer<typeof userSchema>
+export type UserProfile = z.infer<typeof userProfileSchema>
 export type Folder = z.infer<typeof folderSchema>
 export type ExamListItem = z.infer<typeof examListItemSchema>
 export type JuraManifest = z.infer<typeof juraManifestSchema>

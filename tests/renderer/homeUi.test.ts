@@ -14,4 +14,17 @@ describe('home UI affordances', () => {
     expect(view).toContain("name: 'flashcards-review'")
     expect(view).toContain("name: 'dashboard'")
   })
+
+  it('prompts signed-in cloud users to complete their profile in a modal', async () => {
+    const view = await readFile(resolve(rendererRoot, 'views/HomeView.vue'), 'utf8')
+
+    expect(view).toContain('profilePromptVisible')
+    expect(view).toContain('Wie dürfen wir dich ansprechen?')
+    expect(view).toContain('Profil vervollständigen')
+    expect(view).toContain('<UModal')
+    expect(view).toContain('Vorname')
+    expect(view).toContain('Nachname')
+    expect(view).toContain('api.getUserProfile()')
+    expect(view).toContain('api.updateUserProfile')
+  })
 })
