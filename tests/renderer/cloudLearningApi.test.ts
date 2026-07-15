@@ -154,8 +154,8 @@ describe('cloud learning API', () => {
         user_id: userId,
         first_name: 'Sebastian',
         last_name: 'Erhardt',
-        created_at: now,
-        updated_at: now
+        created_at: '2026-07-15T06:11:01.038141+00:00',
+        updated_at: '2026-07-15T06:11:00.926+00:00'
       }]
     }
 

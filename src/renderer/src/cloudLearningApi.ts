@@ -437,7 +437,7 @@ async function requireCloudContext(): Promise<{
 }
 
 function cloudUserFromSupabaseUser(user: SupabaseUser): User {
-  const createdAt = user.created_at ?? nowIso()
+  const createdAt = normalizeCloudTimestamp(user.created_at)
   return {
     id: user.id,
     displayName: user.user_metadata?.display_name || user.email || 'Cloud-Nutzer',
@@ -446,7 +446,7 @@ function cloudUserFromSupabaseUser(user: SupabaseUser): User {
     onboardingCompletedAt: nowIso(),
     tourCompletedAt: nowIso(),
     createdAt,
-    updatedAt: user.updated_at ?? createdAt
+    updatedAt: normalizeCloudTimestamp(user.updated_at, createdAt)
   }
 }
 
@@ -482,14 +482,20 @@ function cloudUserProfileFromRow(row: unknown, userId: string): UserProfile {
     userId,
     firstName: cleanProfileName(record.first_name),
     lastName: cleanProfileName(record.last_name),
-    createdAt: typeof record.created_at === 'string' ? record.created_at : now,
-    updatedAt: typeof record.updated_at === 'string' ? record.updated_at : now
+    createdAt: normalizeCloudTimestamp(record.created_at, now),
+    updatedAt: normalizeCloudTimestamp(record.updated_at, now)
   })
 }
 
 function cleanProfileName(value: unknown): string | null {
   const trimmed = typeof value === 'string' ? value.trim() : ''
   return trimmed || null
+}
+
+function normalizeCloudTimestamp(value: unknown, fallback = nowIso()): string {
+  if (typeof value !== 'string') return fallback
+  const time = new Date(value).getTime()
+  return Number.isNaN(time) ? fallback : new Date(time).toISOString()
 }
 
 async function ensureCloudBrowserWorkspaceLoaded(): Promise<void> {
