@@ -156,6 +156,8 @@ describe('voice client cancellation', () => {
     expect(greeting.response.instructions).toContain('Wolpi')
     expect(greeting.response.instructions).toContain('Sprich ausschließlich Deutsch')
     expect(greeting.response.instructions).toContain('Was ist Verzug?')
+    expect(greeting.response.instructions).toContain('Nimm dir ruhig einen Moment Zeit')
+    expect(greeting.response.instructions).toContain('Lass kurze Denkpausen zu')
 
     client.stop()
     expect(audioElement.pause).toHaveBeenCalledOnce()

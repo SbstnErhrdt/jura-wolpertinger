@@ -347,7 +347,8 @@ function sendGreetingResponse(
           : 'Stelle direkt diese Karteikartenfrage.',
         input.introduce ? 'Stelle dann genau diese Karteikartenfrage:' : '',
         normalizedQuestion,
-        'Bitte den Lernenden, die Antwort laut zu formulieren.',
+        'Sage danach: "Nimm dir ruhig einen Moment Zeit und formuliere deine Antwort laut."',
+        'Lass kurze Denkpausen zu und antworte nicht sofort, wenn der Lernende noch überlegt.',
         'Bleib knapp, freundlich und auf Deutsch. Verrate die Musterantwort nicht.'
       ].filter(Boolean).join(' ')
     }
