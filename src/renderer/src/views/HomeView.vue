@@ -38,7 +38,7 @@
       </UCard>
       <UCard>
         <span>{{ dashboard?.dueCount ?? 0 }}</span>
-        <strong>Karten fällig</strong>
+        <strong>Karten empfohlen</strong>
         <small>{{ dashboard?.totalCards ?? 0 }} Karten insgesamt</small>
       </UCard>
       <UCard>

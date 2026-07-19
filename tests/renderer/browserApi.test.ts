@@ -446,4 +446,39 @@ describe('browser development API', () => {
       })
     ])
   })
+
+  it('keeps reviewed flashcards available in browser review batches after their next suggestion', async () => {
+    const apiModulePath = '../../src/renderer/src/api'
+    const { getApi } = (await import(/* @vite-ignore */ apiModulePath)) as {
+      getApi: () => AppApi
+    }
+    const api = getApi()
+    const collection = await api.createLearningCollection({
+      name: 'Arbeitsrecht',
+      subject: 'Arbeitsrecht'
+    })
+    const reviewedCard = await api.createLearningCard({
+      collectionId: collection.id,
+      title: 'Kündigungsschutz',
+      frontMarkdown: 'Wann ist das KSchG anwendbar?',
+      backMarkdown: 'Regelmäßig nach sechs Monaten und bei mehr als zehn Arbeitnehmern.',
+      tags: ['arbeitsrecht']
+    })
+    await api.recordReview({ cardId: reviewedCard.id, rating: 4, elapsedMs: 1000 })
+
+    await expect(api.getReviewBatch({ collectionId: collection.id, limit: 5 })).resolves.toEqual([
+      expect.objectContaining({ id: reviewedCard.id, lastRating: 4, reps: 1 })
+    ])
+
+    const newCard = await api.createLearningCard({
+      collectionId: collection.id,
+      title: 'Abmahnung',
+      frontMarkdown: 'Wozu dient die Abmahnung?',
+      backMarkdown: 'Warn- und Hinweisfunktion.',
+      tags: ['arbeitsrecht']
+    })
+
+    const batch = await api.getReviewBatch({ collectionId: collection.id, limit: 5 })
+    expect(batch.map((card) => card.id)).toEqual([newCard.id, reviewedCard.id])
+  })
 })

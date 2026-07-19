@@ -339,7 +339,7 @@ describe('AppServices', () => {
     expect(services.updateUser({ id: user.id, displayName: ' ' }).displayName).toBe('Lokaler Nutzer')
   })
 
-  it('creates flashcards, returns due review cards and records spaced repetition ratings', () => {
+  it('creates flashcards, returns prioritized review cards and records spaced repetition ratings', () => {
     const dashboardBefore = services.getLearningDashboard()
     expect(dashboardBefore.totalCards).toBe(0)
 
@@ -369,11 +369,45 @@ describe('AppServices', () => {
     const again = services.recordReview({ cardId: card.id, rating: 1, elapsedMs: 1000 })
     expect(again.event.rating).toBe(1)
     expect(again.intervalLabel).toBe('gleich nochmal')
-    expect(services.getReviewBatch({ limit: 5 })).toEqual([])
+    expect(services.getReviewBatch({ limit: 5 })).toEqual([
+      expect.objectContaining({ id: card.id, lastRating: 1, reps: 1 })
+    ])
 
     const dashboardAfter = services.getLearningDashboard()
     expect(dashboardAfter.totalCards).toBe(1)
     expect(dashboardAfter.learnedToday).toBe(true)
+  })
+
+  it('keeps future-suggested cards learnable but sorts currently suggested cards first', () => {
+    const collection = services.createLearningCollection({
+      name: 'Arbeitsrecht',
+      subject: 'Arbeitsrecht'
+    })
+    const reviewedCard = services.createLearningCard({
+      collectionId: collection.id,
+      title: 'Kündigungsschutz',
+      frontMarkdown: 'Wann ist das KSchG anwendbar?',
+      backMarkdown: 'Regelmäßig nach sechs Monaten und bei mehr als zehn Arbeitnehmern.',
+      tags: ['arbeitsrecht']
+    })
+    services.recordReview({ cardId: reviewedCard.id, rating: 4, elapsedMs: 1000 })
+
+    expect(services.getReviewBatch({ collectionId: collection.id, limit: 5 })).toEqual([
+      expect.objectContaining({ id: reviewedCard.id, lastRating: 4, reps: 1 })
+    ])
+
+    const newCard = services.createLearningCard({
+      collectionId: collection.id,
+      title: 'Abmahnung',
+      frontMarkdown: 'Wozu dient die Abmahnung?',
+      backMarkdown: 'Warn- und Hinweisfunktion.',
+      tags: ['arbeitsrecht']
+    })
+
+    expect(services.getReviewBatch({ collectionId: collection.id, limit: 5 }).map((card) => card.id)).toEqual([
+      newCard.id,
+      reviewedCard.id
+    ])
   })
 
   it('archives flashcards instead of leaving deleted cards in collection lists', () => {

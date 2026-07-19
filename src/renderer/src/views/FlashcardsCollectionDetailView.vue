@@ -5,7 +5,7 @@
         <UBreadcrumb class="app-breadcrumb" :items="withHomeIcon(breadcrumbItems)" />
         <p class="eyebrow">Sammlung</p>
         <h1>{{ collection?.name || 'Sammlung' }}</h1>
-        <p>{{ collection?.subject || 'Allgemein' }} · {{ cardsTotal }} Karten · {{ collection?.dueCount ?? 0 }} fällig</p>
+        <p>{{ collection?.subject || 'Allgemein' }} · {{ cardsTotal }} Karten · {{ collection?.dueCount ?? 0 }} empfohlen</p>
       </div>
       <div class="header-actions">
         <UButton color="neutral" variant="outline" :to="{ name: 'flashcards-collections' }">Zurück</UButton>
@@ -55,7 +55,7 @@
         </div>
         <dl class="card-performance">
           <div class="performance-cell">
-            <dt>Fällig</dt>
+            <dt>Empfehlung</dt>
             <dd>{{ dueLabel(card.dueAt) }}</dd>
           </div>
           <div :class="['performance-cell', 'performance-cell-rating', ratingStatusClass(card.lastRating)]">
@@ -162,7 +162,7 @@ const pageSizeOptions = [10, 25, 50, 100]
 const sortOptions = [
   { label: 'Zuletzt bearbeitet', value: 'updated' },
   { label: 'Titel', value: 'title' },
-  { label: 'Fälligkeit', value: 'due' },
+  { label: 'Empfehlung', value: 'due' },
   { label: 'Letzte Bewertung', value: 'rating' }
 ]
 const transferMessage = ref('')

@@ -107,6 +107,89 @@ describe('cloud learning API', () => {
     ).toBe(false)
   })
 
+  it('keeps future-suggested tagged cloud cards available after recommended cards', async () => {
+    const future = '2999-01-01T00:00:00.000Z'
+    tableData = {
+      learning_items: [
+        {
+          id: uuidFor(1, 'item'),
+          primary_collection_id: collectionId,
+          owner_user_id: userId,
+          title: 'Heute empfohlen',
+          external_id: 'due-card',
+          is_archived: false,
+          created_at: now,
+          updated_at: now
+        },
+        {
+          id: uuidFor(2, 'item'),
+          primary_collection_id: collectionId,
+          owner_user_id: userId,
+          title: 'Frei wiederholen',
+          external_id: 'future-card',
+          is_archived: false,
+          created_at: now,
+          updated_at: now
+        }
+      ],
+      learning_prompts: [
+        {
+          id: uuidFor(1, 'prompt'),
+          item_id: uuidFor(1, 'item'),
+          front_markdown: 'Was ist eine Abmahnung?',
+          back_markdown: 'Hinweis- und Warnfunktion.',
+          is_archived: false,
+          created_at: now,
+          updated_at: now
+        },
+        {
+          id: uuidFor(2, 'prompt'),
+          item_id: uuidFor(2, 'item'),
+          front_markdown: 'Wann ist das KSchG anwendbar?',
+          back_markdown: 'Nach Wartezeit und Betriebsgröße.',
+          is_archived: false,
+          created_at: now,
+          updated_at: now
+        }
+      ],
+      learning_prompt_schedules: [
+        {
+          user_id: userId,
+          prompt_id: uuidFor(1, 'prompt'),
+          due_at: now,
+          reps: 0,
+          lapses: 0,
+          last_rating: null
+        },
+        {
+          user_id: userId,
+          prompt_id: uuidFor(2, 'prompt'),
+          due_at: future,
+          reps: 1,
+          lapses: 0,
+          last_rating: 4
+        }
+      ],
+      learning_item_tags: [
+        { item_id: uuidFor(1, 'item'), learning_tags: { name: 'arbeitsrecht' } },
+        { item_id: uuidFor(2, 'item'), learning_tags: { name: 'arbeitsrecht' } }
+      ]
+    }
+
+    vi.doMock('../../src/renderer/src/cloudAuth', () => ({
+      getSupabaseAuthClient: () => createSupabaseClientMock()
+    }))
+    const apiModulePath = '../../src/renderer/src/cloudLearningApi'
+    const { createCloudLearningApi } = (await import(/* @vite-ignore */ apiModulePath)) as {
+      createCloudLearningApi: (localApi: AppApi) => AppApi
+    }
+    const api = createCloudLearningApi(createLocalApiStub())
+    const cards = await api.getReviewBatch({ collectionId, tag: 'arbeitsrecht', limit: 5 })
+
+    expect(cards.map((card) => card.id)).toEqual([uuidFor(1, 'prompt'), uuidFor(2, 'prompt')])
+    expect(cards[1]).toEqual(expect.objectContaining({ lastRating: 4, reps: 1 }))
+  })
+
   it('loads collection summaries without fetching card details', async () => {
     tableData = {
       learning_collections: [

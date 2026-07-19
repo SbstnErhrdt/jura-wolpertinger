@@ -52,7 +52,7 @@
           <span :class="{ due: collection.dueCount > 0 }">
             <Clock3 :size="15" aria-hidden="true" />
             <strong>{{ collection.dueCount }}</strong>
-            fällig
+            empfohlen
           </span>
         </div>
         <div class="collection-card-actions">

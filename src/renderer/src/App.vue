@@ -622,7 +622,7 @@ async function openOnboardingTarget(target: 'flashcards' | 'exam' | 'import' | '
   }
   if (target === 'flashcards') {
     const dashboard = await api.getLearningDashboard()
-    await router.push({ name: dashboard.dueCount > 0 ? 'flashcards-review' : 'flashcards-collections' })
+    await router.push({ name: dashboard.totalCards > 0 ? 'flashcards-review' : 'flashcards-collections' })
     return
   }
   if (target === 'exam') {

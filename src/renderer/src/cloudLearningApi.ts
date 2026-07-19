@@ -381,10 +381,9 @@ export function createCloudLearningApi(localApi: AppApi): AppApi {
       const now = nowIso()
       const limit = Math.min(Math.max(input.limit ?? 30, 1), 100)
       return cards
-        .filter((card) => card.dueAt <= now)
         .filter((card) => card.tags.includes(input.tag ?? ''))
         .filter((card) => !excluded.has(card.id))
-        .sort((left, right) => left.dueAt.localeCompare(right.dueAt))
+        .sort((left, right) => compareSuggestedReviewOrder(left.dueAt, right.dueAt, now))
         .slice(0, limit)
     },
     async recordReview(input: RecordReviewInput): Promise<RecordReviewResult> {
@@ -1515,6 +1514,13 @@ function formatDueIntervalLabel(nextDueAt: string): string {
   if (minutes < 60) return 'gleich nochmal'
   const days = Math.max(1, Math.round(minutes / 1440))
   return days === 1 ? 'morgen' : `in ${days} Tagen`
+}
+
+function compareSuggestedReviewOrder(leftDueAt: string, rightDueAt: string, now: string): number {
+  const leftFuture = leftDueAt > now ? 1 : 0
+  const rightFuture = rightDueAt > now ? 1 : 0
+  if (leftFuture !== rightFuture) return leftFuture - rightFuture
+  return leftDueAt.localeCompare(rightDueAt)
 }
 
 function calculateCloudStreakDays(activityDays: Set<string>): number {

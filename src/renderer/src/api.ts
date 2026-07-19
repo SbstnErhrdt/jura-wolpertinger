@@ -846,8 +846,7 @@ function createBrowserDevApi(): AppApi {
             lapses: schedule.lapses
           }
         })
-        .filter((card) => card.dueAt <= now)
-        .sort((left, right) => left.dueAt.localeCompare(right.dueAt))
+        .sort((left, right) => compareSuggestedReviewOrder(left.dueAt, right.dueAt, now))
         .slice(0, limit)
     },
     async recordReview(input: RecordReviewInput): Promise<RecordReviewResult> {
@@ -1517,6 +1516,13 @@ function scheduleBrowserNextReview(
   }
   const days = Math.min(90, daysByRating[rating] * Math.max(1, reps))
   return { nextDueAt: addBrowserDaysIso(days), intervalLabel: days === 1 ? 'morgen' : `in ${days} Tagen` }
+}
+
+function compareSuggestedReviewOrder(leftDueAt: string, rightDueAt: string, now: string): number {
+  const leftFuture = leftDueAt > now ? 1 : 0
+  const rightFuture = rightDueAt > now ? 1 : 0
+  if (leftFuture !== rightFuture) return leftFuture - rightFuture
+  return leftDueAt.localeCompare(rightDueAt)
 }
 
 function addBrowserMinutesIso(minutes: number): string {

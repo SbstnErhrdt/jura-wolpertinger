@@ -1571,8 +1571,11 @@ export class AppServices {
           SELECT c.*, COALESCE(s.due_at, c.created_at) AS due_at, s.last_rating, COALESCE(s.reps, 0) AS reps, COALESCE(s.lapses, 0) AS lapses
           FROM learning_cards c
           LEFT JOIN learning_card_schedules s ON s.card_id = c.id AND s.user_id = c.user_id
-          WHERE c.user_id = ? AND c.collection_id = ? AND c.is_archived = 0 AND COALESCE(s.due_at, c.created_at) <= ?
-          ORDER BY COALESCE(s.due_at, c.created_at) ASC, c.created_at ASC
+          WHERE c.user_id = ? AND c.collection_id = ? AND c.is_archived = 0
+          ORDER BY
+            CASE WHEN COALESCE(s.due_at, c.created_at) <= ? THEN 0 ELSE 1 END ASC,
+            COALESCE(s.due_at, c.created_at) ASC,
+            c.created_at ASC
         `
         )
         .all(this.getCurrentUserId(), input.collectionId, now) as Row[]
@@ -1583,8 +1586,11 @@ export class AppServices {
           SELECT c.*, COALESCE(s.due_at, c.created_at) AS due_at, s.last_rating, COALESCE(s.reps, 0) AS reps, COALESCE(s.lapses, 0) AS lapses
           FROM learning_cards c
           LEFT JOIN learning_card_schedules s ON s.card_id = c.id AND s.user_id = c.user_id
-          WHERE c.user_id = ? AND c.is_archived = 0 AND COALESCE(s.due_at, c.created_at) <= ?
-          ORDER BY COALESCE(s.due_at, c.created_at) ASC, c.created_at ASC
+          WHERE c.user_id = ? AND c.is_archived = 0
+          ORDER BY
+            CASE WHEN COALESCE(s.due_at, c.created_at) <= ? THEN 0 ELSE 1 END ASC,
+            COALESCE(s.due_at, c.created_at) ASC,
+            c.created_at ASC
         `
         )
         .all(this.getCurrentUserId(), now) as Row[]

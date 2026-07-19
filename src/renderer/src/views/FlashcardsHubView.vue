@@ -10,7 +10,7 @@
     </header>
 
     <nav class="mobile-hub-grid" aria-label="Karteikartenbereiche">
-      <UPageCard class="mobile-hub-link" icon="i-lucide-layers" title="Wiederholen" description="Fällige Karten schnell durcharbeiten." :to="{ name: 'flashcards-review' }" />
+      <UPageCard class="mobile-hub-link" icon="i-lucide-layers" title="Wiederholen" description="Empfohlene und freie Karten schnell durcharbeiten." :to="{ name: 'flashcards-review' }" />
       <UPageCard class="mobile-hub-link" icon="i-lucide-folder-kanban" title="Sammlungen" description="Karten erstellen, suchen, importieren und organisieren." :to="{ name: 'flashcards-collections' }" />
     </nav>
   </section>
