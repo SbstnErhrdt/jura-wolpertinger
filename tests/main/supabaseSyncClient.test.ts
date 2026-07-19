@@ -7,6 +7,7 @@ import { SupabaseSyncClient } from '@main/services/supabaseSyncClient'
 const originalCwd = process.cwd()
 const originalEnv = {
   JURA_SYNC_SUPABASE_ANON_KEY: process.env.JURA_SYNC_SUPABASE_ANON_KEY,
+  JURA_EMBEDDED_SYNC_SUPABASE_ANON_KEY: process.env.JURA_EMBEDDED_SYNC_SUPABASE_ANON_KEY,
   VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY,
   ANON_KEY: process.env.ANON_KEY
 }
@@ -33,6 +34,17 @@ describe('SupabaseSyncClient configuration', () => {
     delete process.env.VITE_SUPABASE_ANON_KEY
     delete process.env.ANON_KEY
     await writeFile(join(tempDir, '.env'), 'ANON_KEY=local-anon-key\n')
+
+    expect(() => new SupabaseSyncClient()).not.toThrow()
+  })
+
+  it('uses the public sync key embedded in an installed desktop build', async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'jura-sync-config-'))
+    process.chdir(tempDir)
+    delete process.env.JURA_SYNC_SUPABASE_ANON_KEY
+    delete process.env.VITE_SUPABASE_ANON_KEY
+    delete process.env.ANON_KEY
+    process.env.JURA_EMBEDDED_SYNC_SUPABASE_ANON_KEY = 'embedded-anon-key'
 
     expect(() => new SupabaseSyncClient()).not.toThrow()
   })

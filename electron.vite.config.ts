@@ -5,6 +5,9 @@ import vue from '@vitejs/plugin-vue'
 import ui from '@nuxt/ui/vite'
 import { NuxtIconBundle } from '@nuxt/icon/vite'
 import type { Plugin } from 'vite'
+import { readDesktopSyncBuildConfig } from './scripts/desktop-sync-build-config'
+
+const desktopSyncBuildConfig = readDesktopSyncBuildConfig()
 
 const rendererAssets = [
   {
@@ -48,6 +51,10 @@ function syncRendererAssetsPlugin(): Plugin {
 
 export default defineConfig({
   main: {
+    define: {
+      'process.env.JURA_EMBEDDED_SYNC_SUPABASE_URL': JSON.stringify(desktopSyncBuildConfig.url),
+      'process.env.JURA_EMBEDDED_SYNC_SUPABASE_ANON_KEY': JSON.stringify(desktopSyncBuildConfig.anonKey)
+    },
     plugins: [externalizeDepsPlugin()],
     resolve: {
       alias: {

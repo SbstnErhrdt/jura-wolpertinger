@@ -59,6 +59,8 @@ jobs:
           RELEASE_VERSION: ${{ inputs.version }}
 
       - name: Build ${{ matrix.target }}
+        env:
+          JURA_SYNC_SUPABASE_ANON_KEY: ${{ secrets.JURA_SYNC_SUPABASE_ANON_KEY }}
         run: ${{ matrix.build-command }}
 
       - name: Stage immutable RustFS release objects

@@ -90,6 +90,7 @@ Jeder Job ruft danach `release:stage` für genau seine Plattform auf. Staging pr
 Der manuelle Kandidaten-Workflow referenziert exakt diese Repository Secrets:
 
 ```text
+JURA_SYNC_SUPABASE_ANON_KEY
 UPDATE_S3_ENDPOINT
 UPDATE_S3_BUCKET
 UPDATE_S3_ACCESS_KEY_ID
@@ -97,7 +98,7 @@ UPDATE_S3_SECRET_ACCESS_KEY
 UPDATE_PUBLIC_BASE_URL
 ```
 
-Keine weiteren RustFS-Namen werden vom aktuellen Workflow gelesen. `UPDATE_PUBLIC_BASE_URL` muss eine HTTPS-URL sein. Secret-Werte dürfen weder in Workflow-YAML, `.env.example`, Logs noch Build-Artefakten stehen. Für RustFS sollte der Actions-Schlüssel nur Objekte unter `desktop/stable/**` schreiben und lesen dürfen.
+`JURA_SYNC_SUPABASE_ANON_KEY` ist der öffentliche Supabase-Client-Key, der in die installierbare Desktop-App eingebettet wird. Der Release-Build bricht ohne ihn ab. Keine weiteren RustFS-Namen werden vom aktuellen Workflow gelesen. `UPDATE_PUBLIC_BASE_URL` muss eine HTTPS-URL sein. Private Secret-Werte dürfen weder in Workflow-YAML, `.env.example`, Logs noch Build-Artefakten stehen. Für RustFS sollte der Actions-Schlüssel nur Objekte unter `desktop/stable/**` schreiben und lesen dürfen.
 
 Apple-Zugangsdaten gehören nicht in diesen Workflow. macOS wird lokal mit `APPLE_API_KEY`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER`, `APPLE_TEAM_ID` und einer Keychain-Identität oder `CSC_LINK` gebaut.
 

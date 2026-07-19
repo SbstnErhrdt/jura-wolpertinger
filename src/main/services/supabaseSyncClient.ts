@@ -435,7 +435,12 @@ function accountFromUser(user: User): SyncAccount {
 }
 
 function readSyncUrl(): string {
-  return readEnvValue('JURA_SYNC_SUPABASE_URL') || readEnvValue('VITE_SUPABASE_URL') || DEFAULT_SYNC_URL
+  return (
+    readEnvValue('JURA_SYNC_SUPABASE_URL') ||
+    readEnvValue('VITE_SUPABASE_URL') ||
+    process.env.JURA_EMBEDDED_SYNC_SUPABASE_URL ||
+    DEFAULT_SYNC_URL
+  )
 }
 
 function readSyncAnonKey(): string {
@@ -443,6 +448,7 @@ function readSyncAnonKey(): string {
     readEnvValue('JURA_SYNC_SUPABASE_ANON_KEY') ||
     readEnvValue('VITE_SUPABASE_ANON_KEY') ||
     readEnvValue('ANON_KEY') ||
+    process.env.JURA_EMBEDDED_SYNC_SUPABASE_ANON_KEY ||
     ''
   )
 }

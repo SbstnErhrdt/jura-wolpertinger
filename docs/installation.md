@@ -73,7 +73,7 @@ UPDATE_S3_SECRET_ACCESS_KEY
 UPDATE_PUBLIC_BASE_URL
 ```
 
-`UPDATE_PUBLIC_BASE_URL` ist der Feed-Basisendpunkt ohne Objektpfad dahinter, produktiv also `https://downloads.jura-wolpi.de/desktop/stable`. Der S3-Client nutzt den konfigurierten Endpunkt mit Region `auto` und Path-Style-Zugriff. Im manuellen GitHub-Release-Workflow müssen alle fünf Namen als Repository Secrets angelegt sein. Vor einem Stage-Upload werden immer alle vorgesehenen Versionsobjekte geprüft. Fehlende Objekte werden mit `If-None-Match: *` hochgeladen und können daher auch bei einem konkurrierenden Lauf kein inzwischen angelegtes Objekt überschreiben. Ein Konflikt wird erneut vollständig geprüft. Vorhandene Objekte werden nur akzeptiert, wenn Bytes, MIME-Typ, immutable Cache Header sowie SHA-512- und Größenmetadaten übereinstimmen. Schon eine Abweichung beendet den Lauf ohne weiteren Upload.
+`UPDATE_PUBLIC_BASE_URL` ist der Feed-Basisendpunkt ohne Objektpfad dahinter, produktiv also `https://downloads.jura-wolpi.de/desktop/stable`. Der S3-Client nutzt den konfigurierten Endpunkt mit Region `auto` und Path-Style-Zugriff. Im manuellen GitHub-Release-Workflow müssen alle fünf Namen als Repository Secrets angelegt sein. Zusätzlich benötigt der Build `JURA_SYNC_SUPABASE_ANON_KEY`, damit die installierte Desktop-App die Online-Verbindung herstellen kann. Vor einem Stage-Upload werden immer alle vorgesehenen Versionsobjekte geprüft. Fehlende Objekte werden mit `If-None-Match: *` hochgeladen und können daher auch bei einem konkurrierenden Lauf kein inzwischen angelegtes Objekt überschreiben. Ein Konflikt wird erneut vollständig geprüft. Vorhandene Objekte werden nur akzeptiert, wenn Bytes, MIME-Typ, immutable Cache Header sowie SHA-512- und Größenmetadaten übereinstimmen. Schon eine Abweichung beendet den Lauf ohne weiteren Upload.
 
 ## Release-Ablauf für `0.1.7`
 
@@ -94,7 +94,7 @@ Beide Matrix-Jobs müssen erfolgreich sein. Ein einzelner erfolgreicher Job ist 
 
 ### 3. macOS lokal bauen und prüfen
 
-Voraussetzungen sind macOS, installierte Projektabhängigkeiten, Xcode-Werkzeuge und eine `Developer ID Application`-Identität in der Keychain oder `CSC_LINK`. Zusätzlich verlangt das Skript exakt:
+Voraussetzungen sind macOS, installierte Projektabhängigkeiten, Xcode-Werkzeuge, ein öffentlicher Supabase-Key als `JURA_SYNC_SUPABASE_ANON_KEY` oder `ANON_KEY` in der lokalen Supabase-Env und eine `Developer ID Application`-Identität in der Keychain oder `CSC_LINK`. Zusätzlich verlangt das Skript exakt:
 
 ```text
 APPLE_API_KEY

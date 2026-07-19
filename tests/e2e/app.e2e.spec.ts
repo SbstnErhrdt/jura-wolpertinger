@@ -37,7 +37,7 @@ test.describe('Jura Wolpertinger Electron app', () => {
             .evaluate((image) => (image as HTMLImageElement).naturalWidth)
         )
         .toBeGreaterThan(0)
-      await page.click('.onboarding-card button:has-text("Nicht mehr anzeigen")')
+      await page.getByRole('button', { name: 'Später entscheiden' }).click()
       await expect(page.locator('.onboarding-card')).toHaveCount(0)
       await scanAccessibility(page, 'home')
       await expect(page.locator('.sidebar-user .user-switcher')).toContainText('Lokaler Nutzer')
@@ -107,8 +107,8 @@ test.describe('Jura Wolpertinger Electron app', () => {
       await expect(page).toHaveURL(/#\/more\/help/)
       await expect(page.locator('.help-item', { hasText: 'Gehen meine Klausuren verloren' })).toBeVisible()
       await expect.poll(() => page.locator('.help-view').evaluate((element) => element.getBoundingClientRect().width)).toBeGreaterThan(1550)
-      await expect(page.locator('.help-item', { hasText: 'Was passiert bei einer KI-Korrektur?' })).toContainText(
-        'Korrekturentwurf'
+      await expect(page.locator('.help-item', { hasText: 'Was passiert, wenn ich die Online-Sicherung einrichte?' })).toContainText(
+        'Nach der Anmeldung'
       )
       await page.click('.nav a:has-text("Einstellungen")')
       await expect(page).toHaveURL(/#\/more\/settings/)
@@ -118,41 +118,6 @@ test.describe('Jura Wolpertinger Electron app', () => {
       const newUserSettingsPanel = page.locator('.settings-panel').filter({ has: page.locator('h2:text-is("Neuer Nutzer")') })
       await expect(userSettingsPanel).toContainText('Lokaler Nutzer')
       await expect(newUserSettingsPanel).toContainText('Anlegen')
-      const aiSettingsPanel = page.locator('.settings-panel', { hasText: 'KI-Korrektur' })
-      await expect(aiSettingsPanel).toContainText(/OpenAI-Key (fehlt|gespeichert)|Entwicklungs-Key aktiv/)
-      await expect(aiSettingsPanel.locator('input[type="password"]')).toHaveCount(0)
-      await aiSettingsPanel
-        .getByRole('button', {
-          name: /OpenAI-Key einrichten|Eigenen App-Key speichern|Key oder Modell ändern/
-        })
-        .click()
-      await expect(aiSettingsPanel).toContainText('OpenAI API-Key')
-      await expect(aiSettingsPanel.locator('input[type="password"]')).toBeVisible()
-      await expect(aiSettingsPanel.locator('input[placeholder="gpt-5.5"]')).toBeVisible()
-      await aiSettingsPanel.locator('input[type="password"]').fill('sk-visible-test')
-      await aiSettingsPanel.getByRole('button', { name: 'Speichern' }).click()
-      await expect(aiSettingsPanel).toContainText('OpenAI-Key gespeichert')
-      await expect(aiSettingsPanel).toContainText('...test')
-      await expect(aiSettingsPanel.locator('input[type="password"]')).toHaveCount(0)
-      await aiSettingsPanel.getByRole('button', { name: 'App-Key entfernen' }).click()
-      await expect(aiSettingsPanel).toContainText('App-Key entfernen?')
-      await aiSettingsPanel.getByRole('button', { name: 'Abbrechen' }).click()
-      await expect(aiSettingsPanel).toContainText('OpenAI-Key gespeichert')
-      await aiSettingsPanel.getByRole('button', { name: 'App-Key entfernen' }).click()
-      await aiSettingsPanel.getByRole('button', { name: 'Entfernen', exact: true }).click()
-      await expect(aiSettingsPanel).toContainText(/OpenAI-Key fehlt|Entwicklungs-Key aktiv/)
-      await expect(aiSettingsPanel).not.toContainText('...test')
-      await aiSettingsPanel
-        .getByRole('button', {
-          name: /OpenAI-Key einrichten|Eigenen App-Key speichern/
-        })
-        .click()
-      await aiSettingsPanel.locator('input[type="password"]').fill('sk-visible-test')
-      await aiSettingsPanel.getByRole('button', { name: 'Speichern' }).click()
-      await aiSettingsPanel.getByRole('button', { name: 'Key oder Modell ändern' }).click()
-      await expect(aiSettingsPanel.locator('input[type="password"]')).toBeVisible()
-      await aiSettingsPanel.getByRole('button', { name: 'Abbrechen' }).click()
-      await expect(aiSettingsPanel.locator('input[type="password"]')).toHaveCount(0)
       await expect(page.locator('.settings-panel', { hasText: 'Oberfläche' })).toContainText('Dunkelmodus')
       await userSettingsPanel.locator('input[placeholder="Name"]').fill('Sebastian')
       await userSettingsPanel.locator('button:has-text("Speichern")').click()
