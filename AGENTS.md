@@ -19,6 +19,7 @@ Wichtige Begriffe:
 Vor größeren Änderungen zuerst lesen:
 
 - [README.md](README.md)
+- [deployment.md](deployment.md)
 - [docs/architecture.md](docs/architecture.md)
 - [docs/ci-guidelines.md](docs/ci-guidelines.md)
 - [docs/user-stories.md](docs/user-stories.md)
@@ -74,6 +75,17 @@ Vor größeren Änderungen zuerst lesen:
 - `docs/user-stories.md` bei neuen Features, UI-Konzepten oder geänderten Nutzerflows aktuell halten.
 - Nach Änderungen passende Checks aus `docs/ci-guidelines.md` ausführen.
 - Im Abschluss nennen, welche Checks gelaufen sind und welche bewusst nicht.
+
+## Deployment-Regeln
+
+- Vor Web-, Website-, Server- oder Desktop-Deployments zuerst [deployment.md](deployment.md), [docs/releases.md](docs/releases.md) und [docs/installation.md](docs/installation.md) lesen.
+- Desktop-Releases laufen über den Stable-Feed `https://downloads.jura-wolpi.de/desktop/stable`, nicht über GitHub Releases.
+- Versionsobjekte im Download-Storage sind immutable. Bei `Immutable ... mismatch` niemals vorhandene Release-Objekte überschreiben oder löschen, sondern die App-Version erhöhen und alle Plattformen neu stagen.
+- Ein Desktop-Release ist erst publishbar, wenn der GitHub-Release-Workflow alle vier Plattformen erfolgreich gestaged hat: macOS ARM64, macOS x64, Windows x64 und Linux x64.
+- `release:publish` darf erst nach vollständigem Staging laufen und muss anschließend mit `pnpm run release:verify --base-url https://downloads.jura-wolpi.de/desktop/stable` geprüft werden.
+- Die Downloadseite lädt Release-Links dynamisch aus `manifest.json`; statische Platzhalter im HTML sind kein Fehler, wenn Manifest und `/js/downloads.js` korrekt erreichbar sind.
+- Secrets und produktive Keys dürfen nie in Markdown, Git, Logs oder Abschlussnachrichten ausgegeben werden. Nur Variablennamen dokumentieren.
+- Nach Deployments immer den öffentlichen Zustand prüfen, nicht nur lokale Builds oder CI-Erfolg melden.
 
 ## Pflichtchecks nach Änderungsart
 
