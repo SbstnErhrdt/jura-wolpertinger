@@ -1,6 +1,6 @@
 # Installation und Distribution
 
-Diese Anleitung gilt für Jura Wolpertinger `0.1.7`. Öffentliche Desktop-Builds kommen ausschließlich aus dem eigenen Stable-Feed. Ein öffentliches GitHub-Repository oder GitHub Release ist für Download und Updates nicht erforderlich.
+Diese Anleitung gilt für Jura Wolpertinger `0.1.8`. Öffentliche Desktop-Builds kommen ausschließlich aus dem eigenen Stable-Feed. Ein öffentliches GitHub-Repository oder GitHub Release ist für Download und Updates nicht erforderlich.
 
 ## Download und Installation
 
@@ -8,7 +8,7 @@ Die Projektseite liest `https://downloads.jura-wolpi.de/desktop/stable/manifest.
 
 ### Windows x64
 
-1. `Jura Wolpertinger-0.1.7-x64-win.exe` herunterladen und starten.
+1. `Jura Wolpertinger-0.1.8-x64-win.exe` herunterladen und starten.
 2. Dem Installationsdialog folgen.
 3. Die App über Startmenü oder Desktop-Verknüpfung öffnen.
 
@@ -16,15 +16,15 @@ Windows-Builds sind derzeit nicht produktiv signiert. SmartScreen kann deshalb w
 
 ### macOS
 
-Für Apple Silicon `Jura Wolpertinger-0.1.7-arm64-mac.dmg`, für Intel-Macs `Jura Wolpertinger-0.1.7-x64-mac.dmg` herunterladen. Die DMG öffnen, `Jura Wolpertinger.app` nach `Programme` ziehen und dort starten. Stable-macOS-Builds müssen mit einer Developer-ID signiert, von Apple notarisiert und mit dem Notarisierungsticket versehen sein.
+Für Apple Silicon `Jura Wolpertinger-0.1.8-arm64-mac.dmg`, für Intel-Macs `Jura Wolpertinger-0.1.8-x64-mac.dmg` herunterladen. Die DMG öffnen, `Jura Wolpertinger.app` nach `Programme` ziehen und dort starten. Stable-macOS-Builds müssen mit einer Developer-ID signiert, von Apple notarisiert und mit dem Notarisierungsticket versehen sein.
 
 ### Linux x64
 
-`Jura Wolpertinger-0.1.7-x64-linux.AppImage` herunterladen und ausführen:
+`Jura Wolpertinger-0.1.8-x64-linux.AppImage` herunterladen und ausführen:
 
 ```bash
-chmod +x "Jura Wolpertinger-0.1.7-x64-linux.AppImage"
-./Jura\ Wolpertinger-0.1.7-x64-linux.AppImage
+chmod +x "Jura Wolpertinger-0.1.8-x64-linux.AppImage"
+./Jura\ Wolpertinger-0.1.8-x64-linux.AppImage
 ```
 
 Linux AppImages sind derzeit nicht mit GPG signiert. Größe und SHA-512 stehen im Stable-Manifest und in den Update-Metadaten.
@@ -75,21 +75,21 @@ UPDATE_PUBLIC_BASE_URL
 
 `UPDATE_PUBLIC_BASE_URL` ist der Feed-Basisendpunkt ohne Objektpfad dahinter, produktiv also `https://downloads.jura-wolpi.de/desktop/stable`. Der S3-Client nutzt den konfigurierten Endpunkt mit Region `auto` und Path-Style-Zugriff. Im manuellen GitHub-Release-Workflow müssen alle fünf Namen als Repository Secrets angelegt sein. Zusätzlich benötigt der Build `JURA_SYNC_SUPABASE_ANON_KEY`, damit die installierte Desktop-App die Online-Verbindung herstellen kann. Vor einem Stage-Upload werden immer alle vorgesehenen Versionsobjekte geprüft. Fehlende Objekte werden mit `If-None-Match: *` hochgeladen und können daher auch bei einem konkurrierenden Lauf kein inzwischen angelegtes Objekt überschreiben. Ein Konflikt wird erneut vollständig geprüft. Vorhandene Objekte werden nur akzeptiert, wenn Bytes, MIME-Typ, immutable Cache Header sowie SHA-512- und Größenmetadaten übereinstimmen. Schon eine Abweichung beendet den Lauf ohne weiteren Upload.
 
-## Release-Ablauf für `0.1.7`
+## Release-Ablauf für `0.1.8`
 
 ### 1. Ausgangslage prüfen
 
-Der Branch enthält die freizugebende Version und `package.json` meldet exakt `0.1.7`. Vor dem Staging müssen die vorgesehenen Tests und Builds erfolgreich sein. Ein Stage-Befehl lädt nur unveränderliche Kandidaten hoch; ein normaler Build und `--dry-run` schreiben keine Live-Metadaten.
+Der Branch enthält die freizugebende Version und `package.json` meldet exakt `0.1.8`. Vor dem Staging müssen die vorgesehenen Tests und Builds erfolgreich sein. Ein Stage-Befehl lädt nur unveränderliche Kandidaten hoch; ein normaler Build und `--dry-run` schreiben keine Live-Metadaten.
 
 ### 2. Alle Plattformen in CI stagen
 
-Den Workflow `.github/workflows/release.yml` manuell mit dem Input `version` = `0.1.7` starten. Die Matrix:
+Den Workflow `.github/workflows/release.yml` manuell mit dem Input `version` = `0.1.8` starten. Die Matrix:
 
 - baut macOS ARM64 und macOS x64 mit Developer-ID-Signierung und Apple-Notarisierung;
-- baut Windows x64 mit `corepack pnpm run release:win --x64` und staged aus `release/0.1.7`;
-- baut Linux x64 mit `corepack pnpm run release:linux --x64` und staged aus `release/0.1.7`;
+- baut Windows x64 mit `corepack pnpm run release:win --x64` und staged aus `release/0.1.8`;
+- baut Linux x64 mit `corepack pnpm run release:linux --x64` und staged aus `release/0.1.8`;
 - bricht ab, wenn der Workflow-Input nicht exakt `package.json.version` entspricht;
-- lädt nur `desktop/stable/<plattform>/<arch>/0.1.7/**` hoch und verändert weder `latest*.yml` noch `manifest.json`.
+- lädt nur `desktop/stable/<plattform>/<arch>/0.1.8/**` hoch und verändert weder `latest*.yml` noch `manifest.json`.
 
 Alle vier Matrix-Jobs müssen erfolgreich sein. Ein einzelner erfolgreicher Job ist nur ein unvollständiger, noch nicht live geschalteter Kandidat.
 
@@ -142,12 +142,12 @@ Auch `release:stage` selbst führt für macOS beide App-Bundle-Prüfungen und de
 Erst wenn alle vier Kandidaten vollständig gestaged sind:
 
 ```bash
-corepack pnpm run release:publish --version 0.1.7 --confirm "publish 0.1.7"
+corepack pnpm run release:publish --version 0.1.8 --confirm "publish 0.1.8"
 ```
 
-Die Bestätigung muss exakt `publish 0.1.7` lauten. Der Publisher validiert jede Plattform vollständig, bevor er deren Live-YAML schreibt, und veröffentlicht `manifest.json` zuletzt. Die Reihenfolge ist macOS ARM64, macOS x64, Windows x64, Linux x64, globales Manifest.
+Die Bestätigung muss exakt `publish 0.1.8` lauten. Der Publisher validiert jede Plattform vollständig, bevor er deren Live-YAML schreibt, und veröffentlicht `manifest.json` zuletzt. Die Reihenfolge ist macOS ARM64, macOS x64, Windows x64, Linux x64, globales Manifest.
 
-Die Atomarität gilt pro Plattform. Scheitert beispielsweise Windows, können die beiden macOS-Metadateien bereits auf `0.1.7` zeigen, während Windows, Linux und das Manifest noch die vorherige Version zeigen. Ursache beheben und denselben Publish-Befehl wiederholen; er validiert und schreibt deterministisch erneut. Nicht versuchen, einzelne Live-Dateien manuell zu mischen.
+Die Atomarität gilt pro Plattform. Scheitert beispielsweise Windows, können die beiden macOS-Metadateien bereits auf `0.1.8` zeigen, während Windows, Linux und das Manifest noch die vorherige Version zeigen. Ursache beheben und denselben Publish-Befehl wiederholen; er validiert und schreibt deterministisch erneut. Nicht versuchen, einzelne Live-Dateien manuell zu mischen.
 
 ### 6. Öffentlichen Feed verifizieren
 

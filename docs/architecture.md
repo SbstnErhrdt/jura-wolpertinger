@@ -2,7 +2,7 @@
 
 Diese Dokumentation beschreibt die aktuelle Architektur von Jura Wolpertinger. Sie ist als Arbeitsgrundlage für Weiterentwicklung, Reviews und spätere Migrationen gedacht.
 
-Stand: App `0.1.7`, Datenbank-Schema `4`, `.jura` Format `1`.
+Stand: App `0.1.8`, Datenbank-Schema `4`, `.jura` Format `1`.
 
 ## Zielbild
 
@@ -74,19 +74,19 @@ desktop/stable/
 ├── mac/
 │   ├── arm64/
 │   │   ├── latest-mac.yml
-│   │   └── 0.1.7/{latest-mac.yml,DMG,ZIP,ZIP.blockmap}
+│   │   └── 0.1.8/{latest-mac.yml,DMG,ZIP,ZIP.blockmap}
 │   └── x64/
 │       ├── latest-mac.yml
-│       └── 0.1.7/{latest-mac.yml,DMG,ZIP,ZIP.blockmap}
+│       └── 0.1.8/{latest-mac.yml,DMG,ZIP,ZIP.blockmap}
 ├── windows/x64/
 │   ├── latest.yml
-│   └── 0.1.7/{latest.yml,EXE,EXE.blockmap}
+│   └── 0.1.8/{latest.yml,EXE,EXE.blockmap}
 └── linux/x64/
     ├── latest-linux.yml
-    └── 0.1.7/{latest-linux.yml,AppImage,AppImage.blockmap}
+    └── 0.1.8/{latest-linux.yml,AppImage,AppImage.blockmap}
 ```
 
-Alle Objekte im Versionsverzeichnis sind unveränderliche Kandidaten. Beim Staging werden die relativen Artefaktpfade in der ebenfalls versionierten YAML auf `0.1.7/<URL-kodierter-dateiname>` umgeschrieben. Die YAML im Plattformwurzelverzeichnis und das globale Manifest sind die einzigen veränderlichen Objekte. `manifest.json` enthält die vier öffentlichen Downloads mit Plattform, Architektur, Version, Dateiname, Byte-Größe, SHA-512 und HTTPS-URL; die Downloadseite verwendet ausschließlich dieses Manifest.
+Alle Objekte im Versionsverzeichnis sind unveränderliche Kandidaten. Beim Staging werden die relativen Artefaktpfade in der ebenfalls versionierten YAML auf `0.1.8/<URL-kodierter-dateiname>` umgeschrieben. Die YAML im Plattformwurzelverzeichnis und das globale Manifest sind die einzigen veränderlichen Objekte. `manifest.json` enthält die vier öffentlichen Downloads mit Plattform, Architektur, Version, Dateiname, Byte-Größe, SHA-512 und HTTPS-URL; die Downloadseite verwendet ausschließlich dieses Manifest.
 
 ### Veröffentlichungskonsistenz
 

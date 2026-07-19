@@ -1,6 +1,6 @@
 {
   "name": "jura-wolpertinger",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Lokale Electron-App zum Schreiben, Abgeben, Exportieren und Korrigieren juristischer Prüfungen.",
   "license": "PolyForm-Noncommercial-1.0.0",
   "type": "module",
