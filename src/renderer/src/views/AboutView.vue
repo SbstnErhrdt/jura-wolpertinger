@@ -44,8 +44,8 @@
         <h3>Was die App können soll</h3>
         <p>
           Karteikarten in Sammlungen organisieren, Schlagwörter vergeben, Wiederholungen bewerten,
-          Prüfungen verwalten, Kommentare und Bewertungen festhalten und Fortschritt sichtbar
-          machen. Alles klar, ruhig und ohne unnötigen Ballast.
+          Kartenqualität prüfen, Prüfungen verwalten, Kommentare und Bewertungen festhalten und
+          Fortschritt sichtbar machen. Alles klar, ruhig und ohne unnötigen Ballast.
         </p>
       </UCard>
 
@@ -63,7 +63,8 @@
         <p>
           Karteikarten ergänzen das Klausurtraining um kurze Einheiten: Sammlungen öffnen,
           Vorder- und Rückseite wiederholen, den eigenen Stand bewerten und schwierige Karten
-          gezielt früher wiedersehen.
+          gezielt früher wiedersehen. Wenn eine Karte unklar, zu lang oder fachlich fraglich ist,
+          kann sie zur Überarbeitung markiert werden und pausiert dann in der Wiederholung.
         </p>
       </UCard>
 

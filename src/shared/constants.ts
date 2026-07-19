@@ -1,5 +1,5 @@
 export const APP_VERSION = '0.1.8'
-export const DATABASE_SCHEMA_VERSION = 4
+export const DATABASE_SCHEMA_VERSION = 5
 export const JURA_FORMAT = 'jura-klausur'
 export const JURA_FORMAT_VERSION = 1
 export const DOCUMENT_SCHEMA_VERSION = 1

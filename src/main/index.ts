@@ -5,6 +5,7 @@ import {
   BrowserWindow,
   dialog,
   ipcMain,
+  Menu,
   nativeImage,
   shell,
   type MessageBoxOptions,
@@ -21,6 +22,7 @@ import type {
   GetReviewBatchInput,
   ListExamsInput,
   ListLearningCardsInput,
+  RateLearningCardQualityInput,
   RecordReviewInput,
   SaveRevisionInput,
   SaveAiSettingsInput,
@@ -41,6 +43,7 @@ import { seedDemoDataIfEnabled } from './services/demoData'
 import { exportExamPdf } from './services/pdf'
 import { resolveRuntimeDockIconPath } from './appIdentity'
 import { configureAutoUpdaterFeed, resolveUpdateFeedUrl } from './updateFeed'
+import { createAutoUpdateCoordinator, createUpdateMenuTemplate, type AutoUpdateCoordinator } from './autoUpdates'
 import { handleReleaseSmokeRendererReady } from './releaseSmoke'
 import {
   RELEASE_SMOKE_ENV,
@@ -52,6 +55,7 @@ let mainWindow: BrowserWindow | null = null
 let splashWindow: BrowserWindow | null = null
 let services: AppServices
 let splashStartedAt = 0
+let autoUpdateCoordinator: AutoUpdateCoordinator | null = null
 
 const SPLASH_MINIMUM_MS = 700
 const APP_NAME = 'Jura Wolpertinger'
@@ -126,11 +130,56 @@ function configureAutoUpdates(): void {
     }
   })
 
-  setTimeout(() => {
-    autoUpdater.checkForUpdates().catch((error: unknown) => {
-      console.warn('Update check failed:', error)
-    })
-  }, UPDATE_CHECK_DELAY_MS)
+  autoUpdateCoordinator = createAutoUpdateCoordinator({
+    checkForUpdates: () => autoUpdater.checkForUpdates(),
+    notify: async (notification) => {
+      const options: MessageBoxOptions = {
+        type: notification.type,
+        buttons: ['OK'],
+        defaultId: 0,
+        title: notification.title,
+        message: notification.title,
+        detail: notification.message
+      }
+      const window = mainWindow ?? BrowserWindow.getFocusedWindow()
+      if (window) {
+        await dialog.showMessageBox(window, options)
+      } else {
+        await dialog.showMessageBox(options)
+      }
+    },
+    setTimeout,
+    setInterval
+  })
+  autoUpdateCoordinator.scheduleBackgroundChecks(UPDATE_CHECK_DELAY_MS)
+}
+
+function configureApplicationMenu(): void {
+  const template = createUpdateMenuTemplate({
+    platform: process.platform,
+    appName: APP_NAME,
+    checkForUpdates: () => {
+      if (autoUpdateCoordinator) {
+        void autoUpdateCoordinator.checkNow()
+        return
+      }
+      const options: MessageBoxOptions = {
+        type: 'info',
+        buttons: ['OK'],
+        defaultId: 0,
+        title: 'Aktualisierung nicht verfügbar',
+        message: 'Aktualisierung nicht verfügbar',
+        detail: 'Die Suche nach Updates ist nur in der installierten Desktop-App verfügbar.'
+      }
+      const window = mainWindow ?? BrowserWindow.getFocusedWindow()
+      if (window) {
+        void dialog.showMessageBox(window, options)
+      } else {
+        void dialog.showMessageBox(options)
+      }
+    }
+  })
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }
 
 function createSplashWindow(): void {
@@ -312,6 +361,9 @@ function registerIpc(): void {
   ipcMain.handle('learning:recordReview', (_event, input: RecordReviewInput) =>
     services.recordReview(input)
   )
+  ipcMain.handle('learning:rateCardQuality', (_event, input: RateLearningCardQualityInput) =>
+    services.rateLearningCardQuality(input)
+  )
 
   ipcMain.handle('attachments:add', async (_event, examId: string, role: AttachmentRole = 'other') => {
     const window = BrowserWindow.getFocusedWindow() ?? mainWindow
@@ -386,6 +438,7 @@ app.whenReady().then(() => {
   registerIpc()
   createWindow()
   configureAutoUpdates()
+  configureApplicationMenu()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

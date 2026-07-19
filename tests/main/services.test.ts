@@ -410,6 +410,94 @@ describe('AppServices', () => {
     ])
   })
 
+  it('stores private flashcard quality ratings and keeps weak cards out of review batches', () => {
+    const collection = services.createLearningCollection({
+      name: 'Arbeitsrecht',
+      subject: 'Arbeitsrecht'
+    })
+    const goodCard = services.createLearningCard({
+      collectionId: collection.id,
+      title: 'Abmahnung',
+      frontMarkdown: 'Welche Funktion hat die Abmahnung?',
+      backMarkdown: 'Warn- und Hinweisfunktion.',
+      tags: ['arbeitsrecht']
+    })
+    const weakCard = services.createLearningCard({
+      collectionId: collection.id,
+      title: 'Kündigung',
+      frontMarkdown: 'Was gilt bei der Kündigung?',
+      backMarkdown: 'Zu ungenau.',
+      tags: ['arbeitsrecht']
+    })
+
+    const rated = services.rateLearningCardQuality({
+      cardId: weakCard.id,
+      status: 'needs_work',
+      reasons: ['unclear', 'too_short'],
+      note: 'Bitte präziser fassen.'
+    })
+
+    expect(rated).toEqual(
+      expect.objectContaining({
+        id: weakCard.id,
+        qualityStatus: 'needs_work',
+        qualityReasons: ['unclear', 'too_short'],
+        qualityNote: 'Bitte präziser fassen.',
+        qualityRatedAt: expect.any(String)
+      })
+    )
+    expect(services.listLearningCards(collection.id)).toEqual([
+      expect.objectContaining({ id: weakCard.id, qualityStatus: 'needs_work' }),
+      expect.objectContaining({ id: goodCard.id, qualityStatus: null })
+    ])
+    expect(services.getReviewBatch({ collectionId: collection.id, limit: 5 }).map((card) => card.id)).toEqual([
+      goodCard.id
+    ])
+  })
+
+  it('filters flashcards by card quality and last learning rating', () => {
+    const collection = services.createLearningCollection({
+      name: 'Zivilrecht AT',
+      subject: 'Zivilrecht'
+    })
+    const goodCard = services.createLearningCard({
+      collectionId: collection.id,
+      title: 'Anspruch',
+      frontMarkdown: 'Was ist ein Anspruch?',
+      backMarkdown: 'Recht auf Tun oder Unterlassen.',
+      tags: ['zivil']
+    })
+    const problemCard = services.createLearningCard({
+      collectionId: collection.id,
+      title: 'Abtretung',
+      frontMarkdown: 'Wie läuft Abtretung?',
+      backMarkdown: 'Unvollständig.',
+      tags: ['zivil']
+    })
+    services.recordReview({ cardId: goodCard.id, rating: 4, elapsedMs: 1000 })
+    services.recordReview({ cardId: problemCard.id, rating: 2, elapsedMs: 1000 })
+    services.rateLearningCardQuality({
+      cardId: goodCard.id,
+      status: 'good',
+      reasons: [],
+      note: ''
+    })
+    services.rateLearningCardQuality({
+      cardId: problemCard.id,
+      status: 'problematic',
+      reasons: ['check_law'],
+      note: 'Fachlich prüfen.'
+    })
+
+    expect(services.listLearningCardsPage({ collectionId: collection.id, quality: 'problematic' }).items).toEqual([
+      expect.objectContaining({ id: problemCard.id, qualityStatus: 'problematic' })
+    ])
+    expect(services.listLearningCardsPage({ collectionId: collection.id, quality: 'unrated' }).items).toEqual([])
+    expect(services.listLearningCardsPage({ collectionId: collection.id, lastRating: 4 }).items).toEqual([
+      expect.objectContaining({ id: goodCard.id, lastRating: 4 })
+    ])
+  })
+
   it('archives flashcards instead of leaving deleted cards in collection lists', () => {
     const collection = services.createLearningCollection({
       name: 'Zivilrecht',
@@ -1479,6 +1567,7 @@ function expectLearningTables(db: Database.Database): void {
   expect(tableExists(db, 'learning_card_tags')).toBe(true)
   expect(tableExists(db, 'learning_review_events')).toBe(true)
   expect(tableExists(db, 'learning_card_schedules')).toBe(true)
+  expect(tableExists(db, 'learning_card_quality_events')).toBe(true)
 }
 
 function seedLegacyDatabase(targetDataDir: string, version: 1 | 2): void {

@@ -551,6 +551,7 @@ function createLocalApiStub(): AppApi {
     deleteLearningCard: unimplemented,
     getReviewBatch: unimplemented,
     recordReview: unimplemented,
+    rateLearningCardQuality: unimplemented,
     addAttachment: unimplemented,
     openAttachment: unimplemented,
     exportExamPackage: unimplemented,

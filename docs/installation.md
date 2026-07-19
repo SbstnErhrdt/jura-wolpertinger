@@ -31,7 +31,7 @@ Linux AppImages sind derzeit nicht mit GPG signiert. Größe und SHA-512 stehen 
 
 ## Updateverhalten
 
-Gepackte Desktop-Apps prüfen nach dem Start den Stable-Feed für ihre Plattform und Architektur. `JURA_UPDATE_URL` überschreibt den Standardendpunkt nur für Tests. Ein Update wird automatisch heruntergeladen, aber nicht beim normalen Beenden installiert. Erst `Jetzt neu starten` installiert es; `Später` lässt die App weiterlaufen. Feed- und Netzwerkfehler blockieren den Start nicht.
+Gepackte Desktop-Apps prüfen nach dem Start und danach einmal pro Stunde den Stable-Feed für ihre Plattform und Architektur. Nutzer:innen können die Prüfung zusätzlich manuell starten: unter macOS über `Jura Wolpertinger > Nach Updates suchen...`, unter Windows und Linux über `Hilfe > Nach Updates suchen...`. `JURA_UPDATE_URL` überschreibt den Standardendpunkt nur für Tests. Ein Update wird automatisch heruntergeladen, aber nicht beim normalen Beenden installiert. Erst `Jetzt neu starten` installiert es; `Später` lässt die App weiterlaufen. Feed- und Netzwerkfehler blockieren den Start nicht.
 
 ## RustFS und DNS einrichten
 

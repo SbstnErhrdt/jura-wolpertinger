@@ -50,11 +50,24 @@ export type CloudLearningReviewEvent = {
   elapsedMs: number | null
 }
 
+export type CloudLearningCardQualityEvent = {
+  id: string
+  userId: string
+  cardId: string
+  status: 'good' | 'needs_work' | 'problematic'
+  reasons: string[]
+  note: string
+  ratedAt: string
+  createdAt: string
+  updatedAt: string
+}
+
 export type CloudLearningSyncState = {
   collections: CloudLearningCollection[]
   cards: CloudLearningCard[]
   schedules: CloudLearningSchedule[]
   reviewEvents: CloudLearningReviewEvent[]
+  qualityEvents: CloudLearningCardQualityEvent[]
 }
 
 export type LearningSyncMergeResult = {
@@ -62,6 +75,7 @@ export type LearningSyncMergeResult = {
   cardsImportedOrUpdated: number
   schedulesImportedOrUpdated: number
   reviewEventsImported: number
+  qualityEventsImported: number
 }
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -75,7 +89,8 @@ export function mergeCloudLearningStateIntoLocal(input: {
     collectionsImportedOrUpdated: 0,
     cardsImportedOrUpdated: 0,
     schedulesImportedOrUpdated: 0,
-    reviewEventsImported: 0
+    reviewEventsImported: 0,
+    qualityEventsImported: 0
   }
 
   input.db.transaction(() => {
@@ -198,6 +213,29 @@ export function mergeCloudLearningStateIntoLocal(input: {
         .run(event.id, input.localUserId, event.cardId, event.rating, event.reviewedAt, event.elapsedMs)
       result.reviewEventsImported += insert.changes
     }
+
+    for (const event of input.cloudState.qualityEvents) {
+      const insert = input.db
+        .prepare(
+          `
+          INSERT OR IGNORE INTO learning_card_quality_events
+            (id, user_id, card_id, status, reasons_json, note, rated_at, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `
+        )
+        .run(
+          event.id,
+          input.localUserId,
+          event.cardId,
+          event.status,
+          JSON.stringify(event.reasons),
+          event.note,
+          event.ratedAt,
+          event.createdAt,
+          event.updatedAt
+        )
+      result.qualityEventsImported += insert.changes
+    }
   })()
 
   return result
@@ -266,7 +304,21 @@ export function buildCloudLearningStateFromLocal(input: {
     elapsedMs: row.elapsed_ms === null || row.elapsed_ms === undefined ? null : Number(row.elapsed_ms)
   }))
 
-  return { collections, cards, schedules, reviewEvents }
+  const qualityEvents = (input.db
+    .prepare('SELECT * FROM learning_card_quality_events WHERE user_id = ?')
+    .all(input.localUserId) as Row[]).map((row): CloudLearningCardQualityEvent => ({
+    id: String(row.id),
+    userId: input.remoteUserId,
+    cardId: String(row.card_id),
+    status: String(row.status) as CloudLearningCardQualityEvent['status'],
+    reasons: JSON.parse(String(row.reasons_json ?? '[]')) as string[],
+    note: String(row.note ?? ''),
+    ratedAt: String(row.rated_at),
+    createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at)
+  }))
+
+  return { collections, cards, schedules, reviewEvents, qualityEvents }
 }
 
 function ensureCollectionExists(db: SqliteDatabase, localUserId: string, collectionId: string, createdAt: string): void {

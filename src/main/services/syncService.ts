@@ -42,10 +42,12 @@ const USER_SYNC_TABLES = [
   'learning_cards',
   'learning_card_tags',
   'learning_review_events',
-  'learning_card_schedules'
+  'learning_card_schedules',
+  'learning_card_quality_events'
 ] as const
 
 const RESTORE_DELETE_ORDER = [
+  'learning_card_quality_events',
   'learning_card_schedules',
   'learning_review_events',
   'learning_card_tags',
@@ -140,7 +142,7 @@ export function restoreWorkspaceSnapshot(input: {
     for (const table of USER_SYNC_TABLES) {
       const rows = input.snapshot.tables[table] ?? []
       for (const row of rows) {
-        insertOrReplaceRow(input.db, table, row)
+        insertOrReplaceRow(input.db, table, remapSnapshotRow(row, localUserId))
       }
     }
     input.db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run('current_user_id', localUserId)
@@ -179,6 +181,14 @@ function selectUserRows(db: SqliteDatabase, table: string, userId: string): Row[
     return db.prepare('SELECT * FROM users WHERE id = ?').all(userId) as Row[]
   }
   return db.prepare(`SELECT * FROM ${table} WHERE user_id = ?`).all(userId) as Row[]
+}
+
+function remapSnapshotRow(row: Row, targetUserId: string): Row {
+  if ('id' in row && !('user_id' in row)) {
+    return { ...row, id: targetUserId }
+  }
+  if (!('user_id' in row)) return row
+  return { ...row, user_id: targetUserId }
 }
 
 function insertOrReplaceRow(db: SqliteDatabase, table: string, row: Row): void {

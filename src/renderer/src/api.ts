@@ -16,6 +16,7 @@ import type {
   ListExamsInput,
   ListLearningCardsInput,
   PaginatedResult,
+  RateLearningCardQualityInput,
   RecordReviewInput,
   RecordReviewResult,
   SubmissionDetails,
@@ -32,6 +33,7 @@ import type {
   ExamRevision,
   InlineComment,
   LearningCard,
+  LearningCardQualityEvent,
   LearningCollection,
   LearningDashboard,
   LearningImportResult,
@@ -53,6 +55,8 @@ import {
   examTypeSchema,
   learningExportFileSchema,
   learningImportResultSchema,
+  learningCardQualityReasonSchema,
+  learningCardQualityStatusSchema,
   learningTaskStatusSchema,
   legalAreaSchema,
   reviewRatingSchema
@@ -81,6 +85,7 @@ type BrowserStore = {
   learningTasks: LearningTask[]
   learningCollections: LearningCollection[]
   learningCards: LearningCard[]
+  learningCardQualityEvents: LearningCardQualityEvent[]
   learningReviewEvents: LearningReviewEvent[]
   learningSchedules: Array<{
     userId: string
@@ -627,6 +632,8 @@ function createBrowserDevApi(): AppApi {
       const now = nowIso()
       const dueCount = store.learningCards.filter((card) => {
         if (card.userId !== user.id || card.isArchived) return false
+        const quality = browserCardQualityFor(store, user.id, card.id).qualityStatus
+        if (quality === 'needs_work' || quality === 'problematic') return false
         return browserScheduleFor(store, user.id, card.id).dueAt <= now
       }).length
       const activityDays = new Set(
@@ -753,7 +760,8 @@ function createBrowserDevApi(): AppApi {
           dueAt: schedule.dueAt,
           lastRating: schedule.lastRating,
           reps: schedule.reps,
-          lapses: schedule.lapses
+          lapses: schedule.lapses,
+          ...browserCardQualityFor(store, user.id, card.id)
         }
       })
     },
@@ -771,7 +779,8 @@ function createBrowserDevApi(): AppApi {
             dueAt: schedule.dueAt,
             lastRating: schedule.lastRating,
             reps: schedule.reps,
-            lapses: schedule.lapses
+            lapses: schedule.lapses,
+            ...browserCardQualityFor(store, user.id, card.id)
           }
         })
 
@@ -781,6 +790,18 @@ function createBrowserDevApi(): AppApi {
             .join(' ')
             .toLocaleLowerCase('de-DE')
             .includes(search)
+        )
+      }
+
+      if (input.quality && input.quality !== 'all') {
+        cards = cards.filter((card) =>
+          input.quality === 'unrated' ? !card.qualityStatus : card.qualityStatus === input.quality
+        )
+      }
+
+      if (input.lastRating && input.lastRating !== 'all') {
+        cards = cards.filter((card) =>
+          input.lastRating === 'unrated' ? card.lastRating === null : card.lastRating === input.lastRating
         )
       }
 
@@ -800,7 +821,10 @@ function createBrowserDevApi(): AppApi {
       store.learningCards.unshift(card)
       store.learningSchedules.push(createBrowserSchedule(user.id, card.id, card.createdAt))
       writeStore(store)
-      return card
+      return {
+        ...card,
+        ...browserCardQualityFor(store, user.id, card.id)
+      }
     },
     async updateLearningCard(input: CreateLearningCardInput & { id: string }) {
       const store = readStore()
@@ -814,7 +838,10 @@ function createBrowserDevApi(): AppApi {
       card.tags = normalizeTags(input.tags)
       card.updatedAt = nowIso()
       writeStore(store)
-      return card
+      return {
+        ...card,
+        ...browserCardQualityFor(store, user.id, card.id)
+      }
     },
     async deleteLearningCard(input: DeleteLearningCardInput) {
       const store = readStore()
@@ -843,9 +870,11 @@ function createBrowserDevApi(): AppApi {
             dueAt: schedule.dueAt,
             lastRating: schedule.lastRating,
             reps: schedule.reps,
-            lapses: schedule.lapses
+            lapses: schedule.lapses,
+            ...browserCardQualityFor(store, user.id, card.id)
           }
         })
+        .filter((card) => card.qualityStatus !== 'needs_work' && card.qualityStatus !== 'problematic')
         .sort((left, right) => compareSuggestedReviewOrder(left.dueAt, right.dueAt, now))
         .slice(0, limit)
     },
@@ -876,6 +905,31 @@ function createBrowserDevApi(): AppApi {
       schedule.lastReviewedAt = event.reviewedAt
       writeStore(store)
       return { event, nextDueAt, intervalLabel }
+    },
+    async rateLearningCardQuality(input: RateLearningCardQualityInput) {
+      const store = readStore()
+      const user = ensureBrowserUser(store)
+      const card = store.learningCards.find((candidate) => candidate.id === input.cardId && candidate.userId === user.id)
+      if (!card) throw new Error(`Learning card not found: ${input.cardId}`)
+      const now = nowIso()
+      const event: LearningCardQualityEvent = {
+        schemaVersion: 1,
+        id: newId(),
+        userId: user.id,
+        cardId: card.id,
+        status: learningCardQualityStatusSchema.parse(input.status),
+        reasons: input.reasons.map((reason) => learningCardQualityReasonSchema.parse(reason)),
+        note: input.note?.trim() ?? '',
+        ratedAt: now,
+        createdAt: now,
+        updatedAt: now
+      }
+      store.learningCardQualityEvents.push(event)
+      writeStore(store)
+      return {
+        ...card,
+        ...browserCardQualityFor(store, user.id, card.id)
+      }
     },
     async addAttachment() {
       console.warn('Attachments are only available in the Electron app window.')
@@ -1155,6 +1209,7 @@ function emptyStore(): BrowserStore {
     learningTasks: [],
     learningCollections: [],
     learningCards: [],
+    learningCardQualityEvents: [],
     learningReviewEvents: [],
     learningSchedules: [],
     userProfiles: []
@@ -1449,6 +1504,10 @@ function createBrowserCard(userId: string, input: CreateLearningCardInput): Lear
     lastRating: null,
     reps: 0,
     lapses: 0,
+    qualityStatus: null,
+    qualityReasons: [],
+    qualityNote: '',
+    qualityRatedAt: null,
     createdAt: now,
     updatedAt: now
   }
@@ -1486,6 +1545,22 @@ function browserScheduleFor(
   return schedule
 }
 
+function browserCardQualityFor(
+  store: BrowserStore,
+  userId: string,
+  cardId: string
+): Pick<LearningCard, 'qualityStatus' | 'qualityReasons' | 'qualityNote' | 'qualityRatedAt'> {
+  const event = [...store.learningCardQualityEvents]
+    .filter((candidate) => candidate.userId === userId && candidate.cardId === cardId)
+    .sort((left, right) => right.ratedAt.localeCompare(left.ratedAt) || right.createdAt.localeCompare(left.createdAt))[0]
+  return {
+    qualityStatus: event?.status ?? null,
+    qualityReasons: event?.reasons ?? [],
+    qualityNote: event?.note ?? '',
+    qualityRatedAt: event?.ratedAt ?? null
+  }
+}
+
 function browserCollectionsForCurrentUser(store: BrowserStore): LearningCollection[] {
   const user = ensureBrowserUser(store)
   const now = nowIso()
@@ -1495,7 +1570,10 @@ function browserCollectionsForCurrentUser(store: BrowserStore): LearningCollecti
       const cards = store.learningCards.filter(
         (card) => card.userId === user.id && card.collectionId === collection.id && !card.isArchived
       )
-      const dueCount = cards.filter((card) => browserScheduleFor(store, user.id, card.id).dueAt <= now).length
+      const dueCount = cards.filter((card) => {
+        const quality = browserCardQualityFor(store, user.id, card.id).qualityStatus
+        return quality !== 'needs_work' && quality !== 'problematic' && browserScheduleFor(store, user.id, card.id).dueAt <= now
+      }).length
       return {
         ...collection,
         cardCount: cards.length,

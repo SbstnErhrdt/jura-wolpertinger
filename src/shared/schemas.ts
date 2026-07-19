@@ -49,6 +49,15 @@ export const reviewRatingSchema = z.union([
   z.literal(3),
   z.literal(4)
 ])
+export const learningCardQualityStatusSchema = z.enum(['good', 'needs_work', 'problematic'])
+export const learningCardQualityReasonSchema = z.enum([
+  'unclear',
+  'too_long',
+  'too_short',
+  'check_law',
+  'duplicate',
+  'formatting'
+])
 
 const nullableDefaultSchema = <Schema extends z.ZodTypeAny>(schema: Schema) =>
   z.preprocess((value) => value ?? null, schema.nullable())
@@ -295,6 +304,10 @@ export const learningCardSchema = z.object({
   lastRating: reviewRatingSchema.nullable(),
   reps: z.number().int().nonnegative(),
   lapses: z.number().int().nonnegative(),
+  qualityStatus: nullableDefaultSchema(learningCardQualityStatusSchema),
+  qualityReasons: z.array(learningCardQualityReasonSchema).default([]),
+  qualityNote: z.string().default(''),
+  qualityRatedAt: nullableDefaultSchema(isoDateSchema),
   createdAt: isoDateSchema,
   updatedAt: isoDateSchema
 })
@@ -339,6 +352,19 @@ export const learningReviewEventSchema = z.object({
   rating: reviewRatingSchema,
   reviewedAt: isoDateSchema,
   elapsedMs: z.number().int().nonnegative().nullable()
+})
+
+export const learningCardQualityEventSchema = z.object({
+  schemaVersion: z.literal(1),
+  id: uuidSchema,
+  userId: uuidSchema,
+  cardId: uuidSchema,
+  status: learningCardQualityStatusSchema,
+  reasons: z.array(learningCardQualityReasonSchema),
+  note: z.string(),
+  ratedAt: isoDateSchema,
+  createdAt: isoDateSchema,
+  updatedAt: isoDateSchema
 })
 
 export const learningDashboardSchema = z.object({
@@ -402,6 +428,8 @@ export type ImprovementCategory = z.infer<typeof improvementCategorySchema>
 export type LearningTaskStatus = z.infer<typeof learningTaskStatusSchema>
 export type LearningTaskPriority = z.infer<typeof learningTaskPrioritySchema>
 export type ReviewRating = z.infer<typeof reviewRatingSchema>
+export type LearningCardQualityStatus = z.infer<typeof learningCardQualityStatusSchema>
+export type LearningCardQualityReason = z.infer<typeof learningCardQualityReasonSchema>
 export type User = z.infer<typeof userSchema>
 export type UserProfile = z.infer<typeof userProfileSchema>
 export type Folder = z.infer<typeof folderSchema>
@@ -422,6 +450,7 @@ export type ReviewCard = z.infer<typeof reviewCardSchema>
 export type LearningExportFile = z.infer<typeof learningExportFileSchema>
 export type LearningImportResult = z.infer<typeof learningImportResultSchema>
 export type LearningReviewEvent = z.infer<typeof learningReviewEventSchema>
+export type LearningCardQualityEvent = z.infer<typeof learningCardQualityEventSchema>
 export type LearningDashboard = z.infer<typeof learningDashboardSchema>
 export type SyncStatus = z.infer<typeof syncStatusSchema>
 export type SyncAuthInput = z.infer<typeof syncAuthInputSchema>

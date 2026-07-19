@@ -9,6 +9,7 @@ import type {
   GetReviewBatchInput,
   ListLearningCardsInput,
   PaginatedResult,
+  RateLearningCardQualityInput,
   RecordReviewInput,
   RecordReviewResult,
   TrashFolderInput,
@@ -24,6 +25,7 @@ import type {
   Folder,
   InlineComment,
   LearningCard,
+  LearningCardQualityEvent,
   LearningCollection,
   LearningDashboard,
   LearningImportResult,
@@ -35,6 +37,8 @@ import type {
   UserProfile
 } from '@shared/schemas'
 import {
+  learningCardQualityReasonSchema,
+  learningCardQualityStatusSchema,
   learningExportFileSchema,
   learningImportResultSchema,
   learningReviewEventSchema,
@@ -97,6 +101,18 @@ type CloudReviewBatchRow = {
   front_markdown: string
   back_markdown: string
   due_at: string | null
+}
+
+type CloudQualityEventRow = {
+  id: string
+  user_id: string
+  prompt_id: string
+  status: 'good' | 'needs_work' | 'problematic'
+  reasons: string[] | null
+  note: string | null
+  rated_at: string
+  created_at: string
+  updated_at: string
 }
 
 const CLOUD_QUERY_CHUNK_SIZE = 50
@@ -383,6 +399,7 @@ export function createCloudLearningApi(localApi: AppApi): AppApi {
       return cards
         .filter((card) => card.tags.includes(input.tag ?? ''))
         .filter((card) => !excluded.has(card.id))
+        .filter((card) => card.qualityStatus !== 'needs_work' && card.qualityStatus !== 'problematic')
         .sort((left, right) => compareSuggestedReviewOrder(left.dueAt, right.dueAt, now))
         .slice(0, limit)
     },
@@ -419,6 +436,9 @@ export function createCloudLearningApi(localApi: AppApi): AppApi {
         nextDueAt,
         intervalLabel: formatDueIntervalLabel(nextDueAt)
       }
+    },
+    async rateLearningCardQuality(input: RateLearningCardQualityInput) {
+      return rateCloudCardQuality(input)
     }
   }
 }
@@ -839,7 +859,8 @@ function buildCloudBrowserSnapshotTables(
     learning_cards: [],
     learning_card_tags: [],
     learning_review_events: [],
-    learning_card_schedules: []
+    learning_card_schedules: [],
+    learning_card_quality_events: []
   }
 }
 
@@ -972,15 +993,18 @@ async function listCloudCards(collectionId: string | null): Promise<LearningCard
     return data ?? []
   })
 
-  const tagRows = await selectInChunks(itemIds, async (chunk) => {
-    const { data, error } = await client
-      .from('learning_item_tags')
-      .select('item_id, learning_tags(name)')
-      .in('item_id', chunk)
-      .returns<CloudTagRow[]>()
-    if (error) throw error
-    return data ?? []
-  })
+  const [tagRows, qualityByPromptId] = await Promise.all([
+    selectInChunks(itemIds, async (chunk) => {
+      const { data, error } = await client
+        .from('learning_item_tags')
+        .select('item_id, learning_tags(name)')
+        .in('item_id', chunk)
+        .returns<CloudTagRow[]>()
+      if (error) throw error
+      return data ?? []
+    }),
+    listLatestCloudQualityByPromptId(client, user.id, promptIds)
+  ])
 
   const itemsById = new Map(items.map((item) => [item.id, item]))
   const schedulesByPromptId = new Map((schedules ?? []).map((schedule) => [schedule.prompt_id, schedule]))
@@ -991,6 +1015,7 @@ async function listCloudCards(collectionId: string | null): Promise<LearningCard
       const item = itemsById.get(prompt.item_id)
       if (!item) return null
       const schedule = schedulesByPromptId.get(prompt.id)
+      const quality = cloudQualityFor(qualityByPromptId.get(prompt.id))
       return {
         schemaVersion: 1,
         id: prompt.id,
@@ -1006,6 +1031,7 @@ async function listCloudCards(collectionId: string | null): Promise<LearningCard
         lastRating: schedule?.last_rating ?? null,
         reps: schedule?.reps ?? 0,
         lapses: schedule?.lapses ?? 0,
+        ...quality,
         createdAt: prompt.created_at,
         updatedAt: prompt.updated_at > item.updated_at ? prompt.updated_at : item.updated_at
       } satisfies LearningCard
@@ -1016,6 +1042,15 @@ async function listCloudCards(collectionId: string | null): Promise<LearningCard
 async function listCloudCardsPage(
   input: ListLearningCardsInput = {}
 ): Promise<PaginatedResult<LearningCard>> {
+  if (
+    (input.quality && input.quality !== 'all') ||
+    (input.lastRating && input.lastRating !== 'all') ||
+    input.search?.trim()
+  ) {
+    const cards = applyCloudCardFilters(await listCloudCards(input.collectionId ?? null), input)
+    return paginateCloudCards(sortCloudCardsPage(cards, input.sort), input)
+  }
+
   const { client, user } = await requireCloudContext()
   const requestedPageSize = normalizeCloudPagination(1, input.pageSize, 0).pageSize
   const requestedPage = Math.max(Number(input.page) || 1, 1)
@@ -1065,7 +1100,7 @@ async function listCloudCardsPage(
   })
 
   const promptIds = prompts.map((prompt) => prompt.id)
-  const [schedules, tagRows] = await Promise.all([
+  const [schedules, qualityByPromptId, tagRows] = await Promise.all([
     selectInChunks(promptIds, async (chunk) => {
       const { data, error } = await client
         .from('learning_prompt_schedules')
@@ -1076,6 +1111,7 @@ async function listCloudCardsPage(
       if (error) throw error
       return data ?? []
     }),
+    listLatestCloudQualityByPromptId(client, user.id, promptIds),
     selectInChunks(itemIds, async (chunk) => {
       const { data, error } = await client
         .from('learning_item_tags')
@@ -1095,6 +1131,7 @@ async function listCloudCardsPage(
       const item = itemsById.get(prompt.item_id)
       if (!item) return null
       const schedule = schedulesByPromptId.get(prompt.id)
+      const quality = cloudQualityFor(qualityByPromptId.get(prompt.id))
       return {
         schemaVersion: 1,
         id: prompt.id,
@@ -1110,6 +1147,7 @@ async function listCloudCardsPage(
         lastRating: schedule?.last_rating ?? null,
         reps: schedule?.reps ?? 0,
         lapses: schedule?.lapses ?? 0,
+        ...quality,
         createdAt: prompt.created_at,
         updatedAt: prompt.updated_at > item.updated_at ? prompt.updated_at : item.updated_at
       } satisfies LearningCard
@@ -1141,7 +1179,7 @@ async function listCloudReviewBatch(input: GetReviewBatchInput = {}): Promise<Re
 
   const itemIds = unique(rows.map((row) => row.item_id))
   const promptIds = unique(rows.map((row) => row.prompt_id))
-  const [items, schedules, tagRows] = await Promise.all([
+  const [items, schedules, qualityByPromptId, tagRows] = await Promise.all([
     selectInChunks(itemIds, async (chunk) => {
       const { data: itemRows, error: itemsError } = await client
         .from('learning_items')
@@ -1161,6 +1199,7 @@ async function listCloudReviewBatch(input: GetReviewBatchInput = {}): Promise<Re
       if (scheduleError) throw scheduleError
       return scheduleRows ?? []
     }),
+    listLatestCloudQualityByPromptId(client, user.id, promptIds),
     selectInChunks(itemIds, async (chunk) => {
       const { data: nextTagRows, error: tagsError } = await client
         .from('learning_item_tags')
@@ -1181,6 +1220,7 @@ async function listCloudReviewBatch(input: GetReviewBatchInput = {}): Promise<Re
       const item = itemsById.get(row.item_id)
       if (!item) return null
       const schedule = schedulesByPromptId.get(row.prompt_id)
+      const quality = cloudQualityFor(qualityByPromptId.get(row.prompt_id))
       return {
         schemaVersion: 1,
         id: row.prompt_id,
@@ -1196,11 +1236,13 @@ async function listCloudReviewBatch(input: GetReviewBatchInput = {}): Promise<Re
         lastRating: schedule?.last_rating ?? null,
         reps: schedule?.reps ?? 0,
         lapses: schedule?.lapses ?? 0,
+        ...quality,
         createdAt: item.created_at,
         updatedAt: item.updated_at
       } satisfies ReviewCard
     })
     .filter((card): card is ReviewCard => Boolean(card))
+    .filter((card) => card.qualityStatus !== 'needs_work' && card.qualityStatus !== 'problematic')
 }
 
 async function createCloudCard(
@@ -1333,7 +1375,7 @@ async function getCloudCard(promptId: string): Promise<LearningCard> {
     .single<CloudItemRow>()
   if (itemError) throw itemError
 
-  const [{ data: schedule, error: scheduleError }, tagRows] = await Promise.all([
+  const [{ data: schedule, error: scheduleError }, tagRows, qualityByPromptId] = await Promise.all([
     client
       .from('learning_prompt_schedules')
       .select('prompt_id, due_at, reps, lapses, last_rating')
@@ -1348,7 +1390,8 @@ async function getCloudCard(promptId: string): Promise<LearningCard> {
         .returns<CloudTagRow[]>()
       if (error) throw error
       return data ?? []
-    })
+    }),
+    listLatestCloudQualityByPromptId(client, user.id, [promptId])
   ])
   if (scheduleError) throw scheduleError
   const tagsByItemId = groupCloudTags(tagRows)
@@ -1367,11 +1410,31 @@ async function getCloudCard(promptId: string): Promise<LearningCard> {
     lastRating: schedule?.last_rating ?? null,
     reps: schedule?.reps ?? 0,
     lapses: schedule?.lapses ?? 0,
+    ...cloudQualityFor(qualityByPromptId.get(promptId)),
     createdAt: prompt.created_at,
     updatedAt: prompt.updated_at > item.updated_at ? prompt.updated_at : item.updated_at
   } satisfies LearningCard
   if (!card) throw new Error(`Karte nicht gefunden: ${promptId}`)
   return card
+}
+
+async function rateCloudCardQuality(input: RateLearningCardQualityInput): Promise<LearningCard> {
+  const { client, user } = await requireCloudContext()
+  const now = nowIso()
+  const status = learningCardQualityStatusSchema.parse(input.status)
+  const reasons = input.reasons.map((reason) => learningCardQualityReasonSchema.parse(reason))
+  const { error } = await client
+    .from('learning_card_quality_events')
+    .insert({
+      user_id: user.id,
+      prompt_id: input.cardId,
+      status,
+      reasons,
+      note: input.note?.trim() ?? '',
+      rated_at: now
+    })
+  if (error) throw error
+  return getCloudCard(input.cardId)
 }
 
 async function replaceCloudTags(
@@ -1423,6 +1486,73 @@ function groupCloudTags(rows: CloudTagRow[]): Map<string, string[]> {
     tagsByItemId.set(itemId, normalizeTags(tags))
   }
   return tagsByItemId
+}
+
+async function listLatestCloudQualityByPromptId(
+  client: SupabaseClient,
+  userId: string,
+  promptIds: string[]
+): Promise<Map<string, CloudQualityEventRow>> {
+  if (!promptIds.length) return new Map()
+  const rows = await selectInChunks(unique(promptIds), async (chunk) => {
+    const { data, error } = await client
+      .from('learning_card_quality_events')
+      .select('id, user_id, prompt_id, status, reasons, note, rated_at, created_at, updated_at')
+      .eq('user_id', userId)
+      .in('prompt_id', chunk)
+      .order('rated_at', { ascending: false })
+      .order('created_at', { ascending: false })
+      .returns<CloudQualityEventRow[]>()
+    if (error) throw error
+    return data ?? []
+  })
+  const latest = new Map<string, CloudQualityEventRow>()
+  for (const row of rows) {
+    if (!latest.has(row.prompt_id)) latest.set(row.prompt_id, row)
+  }
+  return latest
+}
+
+function cloudQualityFor(
+  event: CloudQualityEventRow | undefined
+): Pick<LearningCard, 'qualityStatus' | 'qualityReasons' | 'qualityNote' | 'qualityRatedAt'> {
+  return {
+    qualityStatus: event?.status ?? null,
+    qualityReasons: event?.reasons?.map((reason) => learningCardQualityReasonSchema.parse(reason)) ?? [],
+    qualityNote: event?.note ?? '',
+    qualityRatedAt: event?.rated_at ?? null
+  }
+}
+
+function applyCloudCardFilters(cards: LearningCard[], input: ListLearningCardsInput): LearningCard[] {
+  const search = input.search?.trim().toLocaleLowerCase('de-DE') ?? ''
+  return cards
+    .filter((card) => {
+      if (!search) return true
+      return [card.title, card.frontMarkdown, card.backMarkdown, ...card.tags]
+        .join(' ')
+        .toLocaleLowerCase('de-DE')
+        .includes(search)
+    })
+    .filter((card) => {
+      if (!input.quality || input.quality === 'all') return true
+      return input.quality === 'unrated' ? !card.qualityStatus : card.qualityStatus === input.quality
+    })
+    .filter((card) => {
+      if (!input.lastRating || input.lastRating === 'all') return true
+      return input.lastRating === 'unrated' ? card.lastRating === null : card.lastRating === input.lastRating
+    })
+}
+
+function paginateCloudCards(cards: LearningCard[], input: ListLearningCardsInput): PaginatedResult<LearningCard> {
+  const pagination = normalizeCloudPagination(input.page, input.pageSize, cards.length)
+  return {
+    items: cards.slice(pagination.offset, pagination.offset + pagination.pageSize),
+    total: cards.length,
+    page: pagination.page,
+    pageSize: pagination.pageSize,
+    pageCount: pagination.pageCount
+  }
 }
 
 function normalizeCloudPagination(

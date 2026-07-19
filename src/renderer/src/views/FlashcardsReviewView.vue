@@ -56,6 +56,9 @@
       </UButton>
       <div v-if="currentCard.tags.length" class="study-card-tags" aria-label="Tags">
         <UBadge v-for="tag in currentCard.tags" :key="tag" variant="soft">{{ tag }}</UBadge>
+        <UBadge :class="cardQualityTone(currentCard.qualityStatus)" variant="soft">
+          {{ cardQualityLabel(currentCard.qualityStatus) }}
+        </UBadge>
       </div>
       <p v-if="feedback" class="review-feedback">{{ feedback }}</p>
       <div class="review-navigation">
@@ -147,20 +150,110 @@
         />
       </aside>
     </Transition>
+
+    <UModal :open="showCardDialog" @update:open="showCardDialog = $event">
+      <template #content>
+        <div class="dialog-card dialog-card-wide">
+          <h2>Karteikarte bearbeiten</h2>
+          <p class="dialog-copy">Passe die Karteikarte an. Änderungen gelten direkt für diese Karte.</p>
+          <form class="dialog-form" @submit.prevent="saveCard">
+            <UFormField class="dialog-field" label="Titel"><UInput v-model="cardTitle" placeholder="Kurzer Titel" autofocus /></UFormField>
+            <UFormField class="dialog-field" label="Vorderseite"><UTextarea v-model="cardFront" :rows="4" placeholder="Vorderseite" /></UFormField>
+            <UFormField class="dialog-field" label="Rückseite"><UTextarea v-model="cardBack" :rows="5" placeholder="Rückseite" /></UFormField>
+            <div class="dialog-field">
+              <span>Schlagwörter</span>
+              <TagInput v-model="cardTags" :suggestions="tagSuggestions" placeholder="Schlagwörter hinzufügen" />
+            </div>
+            <UButton
+              v-if="editingCard && cardBlockedFromReview(editingCard)"
+              type="button"
+              color="neutral"
+              :variant="releaseAfterEdit ? 'solid' : 'outline'"
+              icon="i-lucide-check"
+              @click="releaseAfterEdit = !releaseAfterEdit"
+            >
+              Nach dem Speichern wieder zum Wiederholen freigeben
+            </UButton>
+            <div class="dialog-actions">
+              <UButton type="button" color="neutral" variant="outline" @click="cancelCardDialog">Abbrechen</UButton>
+              <UButton type="submit" :disabled="!canSaveCard" :loading="cardSaveBusy">
+                <Save :size="17" aria-hidden="true" />
+                Änderungen speichern
+              </UButton>
+            </div>
+          </form>
+        </div>
+      </template>
+    </UModal>
+
+    <UModal :open="Boolean(qualityCardTarget)" @update:open="!$event && cancelQualityDialog()">
+      <template #content>
+        <div class="dialog-card dialog-card-wide">
+          <h2>Kartenqualität bewerten</h2>
+          <p class="dialog-copy">Bewerte hier die Karte selbst, nicht ob du die Antwort konntest.</p>
+          <form class="dialog-form" @submit.prevent="saveQualityRating">
+            <div class="quality-choice-grid" role="radiogroup" aria-label="Kartenqualität">
+              <div
+                v-for="option in cardQualityOptions"
+                :key="option.value"
+                :class="['quality-choice', { 'quality-choice-active': qualityStatus === option.value }]"
+                role="button"
+                tabindex="0"
+                @click="qualityStatus = option.value"
+                @keydown.enter.prevent="qualityStatus = option.value"
+              >
+                <strong>{{ option.label }}</strong>
+                <span>{{ option.description }}</span>
+              </div>
+            </div>
+            <div class="dialog-field">
+              <span>Hinweise</span>
+              <div class="quality-reason-grid">
+                <UButton
+                  v-for="reason in cardQualityReasonOptions"
+                  :key="reason.value"
+                  type="button"
+                  color="neutral"
+                  :variant="qualityReasons.includes(reason.value) ? 'solid' : 'outline'"
+                  @click="toggleQualityReason(reason.value)"
+                >
+                  {{ reason.label }}
+                </UButton>
+              </div>
+            </div>
+            <UFormField class="dialog-field" label="Notiz"><UTextarea v-model="qualityNote" :rows="3" placeholder="Optionaler Hinweis zur Überarbeitung" /></UFormField>
+            <div class="dialog-actions">
+              <UButton type="button" color="neutral" variant="outline" @click="cancelQualityDialog">Abbrechen</UButton>
+              <UButton type="submit" :loading="qualityBusy">
+                <Save :size="17" aria-hidden="true" />
+                Bewertung speichern
+              </UButton>
+            </div>
+          </form>
+        </div>
+      </template>
+    </UModal>
   </section>
 </template>
 
 <script setup lang="ts">
 import { computed, defineComponent, h, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { CircleCheck, RotateCcw, Sparkles, TriangleAlert } from 'lucide-vue-next'
+import { CircleCheck, RotateCcw, Save, Sparkles, TriangleAlert } from 'lucide-vue-next'
 import type { FeatureFlags, VoiceSessionCompleteResult } from '@shared/ipc'
-import type { ReviewCard, ReviewRating } from '@shared/schemas'
+import type { LearningCard, LearningCardQualityReason, LearningCardQualityStatus, ReviewCard, ReviewRating } from '@shared/schemas'
 import { api } from '../api'
+import TagInput from '../components/TagInput.vue'
 import { hasFeatureFlag } from '../voice/featureFlags'
 import { startVoiceClient, type VoiceAssessment, type VoiceClient, type VoiceClientStatus, type VoiceCommand } from '../voice/voiceClient'
 import type { AppActionMenuItem } from '../ui/actionMenu'
 import { type AppBreadcrumbItem, withHomeIcon } from '../ui/breadcrumbs'
+import {
+  cardQualityLabel,
+  cardQualityOptions,
+  cardQualityReasonOptions,
+  cardQualityTone
+} from '../ui/flashcardQuality'
 
 const route = useRoute()
 const loading = ref(true)
@@ -192,6 +285,19 @@ const wolpiMilestone = ref<{
   copy: string
   imageUrl: string
 } | null>(null)
+const showCardDialog = ref(false)
+const editingCard = ref<ReviewCard | null>(null)
+const cardTitle = ref('')
+const cardFront = ref('')
+const cardBack = ref('')
+const cardTags = ref<string[]>([])
+const releaseAfterEdit = ref(true)
+const cardSaveBusy = ref(false)
+const qualityCardTarget = ref<ReviewCard | null>(null)
+const qualityStatus = ref<LearningCardQualityStatus>('good')
+const qualityReasons = ref<LearningCardQualityReason[]>([])
+const qualityNote = ref('')
+const qualityBusy = ref(false)
 let wolpiMilestoneTimer: number | null = null
 let voiceRequestGeneration = 0
 let voiceAbortController: AbortController | null = null
@@ -223,6 +329,10 @@ const voiceStatusLabel = computed(() => {
 })
 const canGoPrevious = computed(() => currentIndex.value > 0 && !sessionCompleted.value)
 const positionLabel = computed(() => `${Math.min(currentIndex.value + 1, cards.value.length)} / ${cards.value.length}`)
+const canSaveCard = computed(() => Boolean(cardFront.value.trim()) && Boolean(cardBack.value.trim()))
+const tagSuggestions = computed(() =>
+  [...new Set(cards.value.flatMap((card) => card.tags).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de-DE'))
+)
 const breadcrumbItems = computed<AppBreadcrumbItem[]>(() => {
   const items: AppBreadcrumbItem[] = [
     { label: 'Home', to: { name: 'home' } },
@@ -246,6 +356,16 @@ const emptyCopy = computed(() => {
   return 'Starte die Übungsrunde mit den vorhandenen Karten.'
 })
 const reviewActions = computed<AppActionMenuItem[]>(() => [
+  {
+    label: 'Karteikarte bearbeiten',
+    icon: 'i-lucide-pencil',
+    onSelect: () => currentCard.value && openEditCardDialog(currentCard.value)
+  },
+  {
+    label: 'Kartenqualität bewerten',
+    icon: 'i-lucide-shield-check',
+    onSelect: () => currentCard.value && openQualityDialog(currentCard.value)
+  },
   {
     label: 'Aus Session entfernen',
     icon: 'i-lucide-trash-2',
@@ -289,8 +409,9 @@ async function load(): Promise<void> {
   })
   if (!cards.value.length) {
     const collectionCards = await api.listLearningCards(collectionId.value)
+    const usableCards = collectionCards.filter((card) => !cardBlockedFromReview(card))
     hasPracticeCards.value = collectionCards.length > 0
-    cards.value = collectionCards.slice(0, 40)
+    cards.value = usableCards.slice(0, 40)
   } else {
     hasPracticeCards.value = cards.value.length > 0
   }
@@ -300,6 +421,90 @@ async function load(): Promise<void> {
   reviewedCardsInSession.value = 0
   dismissWolpiMilestone()
   loading.value = false
+}
+
+function openEditCardDialog(card: ReviewCard): void {
+  if (voiceInProgress.value) return
+  editingCard.value = card
+  cardTitle.value = card.title
+  cardFront.value = card.frontMarkdown
+  cardBack.value = card.backMarkdown
+  cardTags.value = [...card.tags]
+  releaseAfterEdit.value = cardBlockedFromReview(card)
+  showCardDialog.value = true
+}
+
+function cancelCardDialog(): void {
+  if (cardSaveBusy.value) return
+  showCardDialog.value = false
+  editingCard.value = null
+}
+
+async function saveCard(): Promise<void> {
+  const card = editingCard.value
+  if (!card || !canSaveCard.value) return
+  cardSaveBusy.value = true
+  try {
+    const updated = await api.updateLearningCard({
+      id: card.id,
+      collectionId: card.collectionId,
+      title: cardTitle.value,
+      frontMarkdown: cardFront.value,
+      backMarkdown: cardBack.value,
+      tags: [...cardTags.value]
+    })
+    if (releaseAfterEdit.value && cardBlockedFromReview(card)) {
+      await api.rateLearningCardQuality({ cardId: updated.id, status: 'good', reasons: [], note: '' })
+    }
+    replaceSessionCard(updated)
+    feedback.value = 'Karteikarte aktualisiert.'
+    cancelCardDialog()
+  } finally {
+    cardSaveBusy.value = false
+  }
+}
+
+function openQualityDialog(card: ReviewCard): void {
+  if (voiceInProgress.value) return
+  qualityCardTarget.value = card
+  qualityStatus.value = card.qualityStatus ?? 'good'
+  qualityReasons.value = [...card.qualityReasons]
+  qualityNote.value = card.qualityNote
+}
+
+function cancelQualityDialog(): void {
+  if (qualityBusy.value) return
+  qualityCardTarget.value = null
+}
+
+function toggleQualityReason(reason: LearningCardQualityReason): void {
+  qualityReasons.value = qualityReasons.value.includes(reason)
+    ? qualityReasons.value.filter((candidate) => candidate !== reason)
+    : [...qualityReasons.value, reason]
+}
+
+async function saveQualityRating(): Promise<void> {
+  const card = qualityCardTarget.value
+  if (!card) return
+  qualityBusy.value = true
+  try {
+    const updated = await api.rateLearningCardQuality({
+      cardId: card.id,
+      status: qualityStatus.value,
+      reasons: [...qualityReasons.value],
+      note: qualityNote.value
+    })
+    qualityCardTarget.value = null
+    if (cardBlockedFromReview(updated)) {
+      feedback.value = 'Karte pausiert, bis sie überarbeitet ist.'
+      removeCardById(updated.id)
+    } else {
+      replaceSessionCard(updated)
+      feedback.value = 'Kartenqualität gespeichert.'
+    }
+  } finally {
+    qualityBusy.value = false
+  }
 }
 
 async function startVoiceReview(): Promise<void> {
@@ -525,9 +730,35 @@ function removeFromSession(): void {
   if (voiceInProgress.value) return
   clearVoiceReview()
   cardMotion.value = 'next'
+  removeCardAtCurrentIndex()
+}
+
+function removeCardAtCurrentIndex(): void {
   cards.value.splice(currentIndex.value, 1)
   if (currentIndex.value >= cards.value.length && currentIndex.value > 0) currentIndex.value -= 1
   showBack.value = false
+}
+
+function removeCardById(cardId: string): void {
+  clearVoiceReview()
+  const index = cards.value.findIndex((card) => card.id === cardId)
+  if (index >= 0) {
+    cards.value.splice(index, 1)
+    if (currentIndex.value >= cards.value.length && currentIndex.value > 0) currentIndex.value -= 1
+  }
+  againQueue.value = againQueue.value.filter((card) => card.id !== cardId)
+  showBack.value = false
+  if (!cards.value.length && !againQueue.value.length) sessionCompleted.value = true
+}
+
+function replaceSessionCard(card: LearningCard): void {
+  const replace = (candidate: ReviewCard) => candidate.id === card.id ? { ...candidate, ...card } : candidate
+  cards.value = cards.value.map(replace)
+  againQueue.value = againQueue.value.map(replace)
+}
+
+function cardBlockedFromReview(card: Pick<LearningCard, 'qualityStatus'>): boolean {
+  return card.qualityStatus === 'needs_work' || card.qualityStatus === 'problematic'
 }
 
 function revealBack(): void {

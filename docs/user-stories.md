@@ -320,6 +320,8 @@ Als Desktop-Nutzer:in möchte ich über ein verfügbares stabiles Update informi
 Akzeptanz:
 
 - Die App prüft nur den plattform- und architekturgerechten Stable-Feed.
+- Die App bietet in der Desktop-Menüleiste eine Aktion `Nach Updates suchen...`.
+- Die App prüft im Hintergrund etwa einmal pro Stunde erneut.
 - Ein Feed- oder Netzwerkfehler verhindert den App-Start nicht.
 - Das Update darf im Hintergrund heruntergeladen werden.
 - Die Installation beginnt erst nach der ausdrücklichen Aktion `Jetzt neu starten`; `Später` beendet die laufende Sitzung nicht.

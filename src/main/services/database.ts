@@ -34,17 +34,25 @@ export function initializeDatabase(db: SqliteDatabase): void {
     migrateV1ToV2(db)
     migrateV2ToV3(db)
     if (DATABASE_SCHEMA_VERSION >= 4) migrateV3ToV4(db)
+    if (DATABASE_SCHEMA_VERSION >= 5) migrateV4ToV5(db)
     return
   }
 
   if (version === 2 && DATABASE_SCHEMA_VERSION >= 3) {
     migrateV2ToV3(db)
     if (DATABASE_SCHEMA_VERSION >= 4) migrateV3ToV4(db)
+    if (DATABASE_SCHEMA_VERSION >= 5) migrateV4ToV5(db)
     return
   }
 
   if (version === 3 && DATABASE_SCHEMA_VERSION >= 4) {
     migrateV3ToV4(db)
+    if (DATABASE_SCHEMA_VERSION >= 5) migrateV4ToV5(db)
+    return
+  }
+
+  if (version === 4 && DATABASE_SCHEMA_VERSION >= 5) {
+    migrateV4ToV5(db)
     return
   }
 
@@ -52,6 +60,7 @@ export function initializeDatabase(db: SqliteDatabase): void {
     repairMissingUserScope(db)
     repairMissingV3Schema(db)
     repairMissingV4Schema(db)
+    repairMissingV5Schema(db)
     updateAppVersion(db)
     return
   }
@@ -334,6 +343,16 @@ function migrateV3ToV4(db: SqliteDatabase): void {
   })()
 }
 
+function migrateV4ToV5(db: SqliteDatabase): void {
+  const migratedAt = nowIso()
+  db.transaction(() => {
+    createLearningSchema(db)
+    db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run('schema_version', '5')
+    db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run('last_migrated_at', migratedAt)
+    updateAppVersion(db)
+  })()
+}
+
 function createLearningSchema(db: SqliteDatabase): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS learning_collections (
@@ -390,10 +409,23 @@ function createLearningSchema(db: SqliteDatabase): void {
       PRIMARY KEY(user_id, card_id)
     );
 
+    CREATE TABLE IF NOT EXISTS learning_card_quality_events (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      card_id TEXT NOT NULL REFERENCES learning_cards(id) ON DELETE CASCADE,
+      status TEXT NOT NULL CHECK(status IN ('good', 'needs_work', 'problematic')),
+      reasons_json TEXT NOT NULL DEFAULT '[]',
+      note TEXT NOT NULL DEFAULT '',
+      rated_at TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_learning_cards_user_collection ON learning_cards(user_id, collection_id);
     CREATE INDEX IF NOT EXISTS idx_learning_card_tags_user_tag ON learning_card_tags(user_id, tag);
     CREATE INDEX IF NOT EXISTS idx_learning_review_events_user_reviewed ON learning_review_events(user_id, reviewed_at);
     CREATE INDEX IF NOT EXISTS idx_learning_card_schedules_due ON learning_card_schedules(user_id, due_at);
+    CREATE INDEX IF NOT EXISTS idx_learning_card_quality_events_latest ON learning_card_quality_events(user_id, card_id, rated_at DESC);
   `)
 }
 
@@ -433,6 +465,10 @@ function repairMissingV4Schema(db: SqliteDatabase): void {
 
   if (!hasV4Schema) migrateV3ToV4(db)
   addUserProfileColumns(db)
+}
+
+function repairMissingV5Schema(db: SqliteDatabase): void {
+  if (!tableExists(db, 'learning_card_quality_events')) migrateV4ToV5(db)
 }
 
 function addUserScopeToLegacySchema(db: SqliteDatabase, targetSchemaVersion: number): void {
@@ -494,6 +530,7 @@ const USER_SCOPED_TABLES = [
   'learning_card_tags',
   'learning_review_events',
   'learning_card_schedules',
+  'learning_card_quality_events',
   'ai_settings',
   'tags',
   'exam_tags'

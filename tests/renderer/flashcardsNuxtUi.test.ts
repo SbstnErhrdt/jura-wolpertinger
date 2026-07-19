@@ -34,4 +34,17 @@ describe('Nuxt UI flashcard workflows', () => {
     expect(combined).toContain('<UModal')
     expect(combined).toContain('<UFormField')
   })
+
+  it('surfaces card quality actions and filters in overview and review', async () => {
+    const detail = await readFile(resolve(viewsRoot, 'FlashcardsCollectionDetailView.vue'), 'utf8')
+    const review = await readFile(resolve(viewsRoot, 'FlashcardsReviewView.vue'), 'utf8')
+    const combined = `${detail}\n${review}`
+
+    expect(detail).toContain('Kartenqualität')
+    expect(detail).toContain('qualityFilter')
+    expect(detail).toContain('lastRatingFilter')
+    expect(combined).toContain('Kartenqualität bewerten')
+    expect(combined).toContain('rateLearningCardQuality')
+    expect(combined).toContain('cardBlockedFromReview')
+  })
 })

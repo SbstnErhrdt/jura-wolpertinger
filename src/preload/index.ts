@@ -9,6 +9,7 @@ import type {
   GetReviewBatchInput,
   ListExamsInput,
   ListLearningCardsInput,
+  RateLearningCardQualityInput,
   RecordReviewInput,
   SaveRevisionInput,
   SaveAiSettingsInput,
@@ -88,6 +89,8 @@ const api: AppApi = {
   deleteLearningCard: (input) => ipcRenderer.invoke('learning:deleteCard', input),
   getReviewBatch: (input?: GetReviewBatchInput) => ipcRenderer.invoke('learning:reviewBatch', input),
   recordReview: (input: RecordReviewInput) => ipcRenderer.invoke('learning:recordReview', input),
+  rateLearningCardQuality: (input: RateLearningCardQualityInput) =>
+    ipcRenderer.invoke('learning:rateCardQuality', input),
   addAttachment: (examId: string, role?: AttachmentRole) =>
     ipcRenderer.invoke('attachments:add', examId, role),
   openAttachment: (id: string) => ipcRenderer.invoke('attachments:open', id),

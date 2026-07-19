@@ -105,6 +105,19 @@ describe('learning table sync', () => {
           reviewedAt: '2026-02-01T00:00:00.000Z',
           elapsedMs: 900
         }
+      ],
+      qualityEvents: [
+        {
+          id: '40000000-0000-4000-8000-000000000001',
+          userId: '00000000-0000-4000-8000-0000000000a1',
+          cardId: localCard.id,
+          status: 'problematic',
+          reasons: ['check_law'],
+          note: 'Fachlich prüfen.',
+          ratedAt: '2026-02-01T00:00:00.000Z',
+          createdAt: '2026-02-01T00:00:00.000Z',
+          updatedAt: '2026-02-01T00:00:00.000Z'
+        }
       ]
     }
 
@@ -123,7 +136,10 @@ describe('learning table sync', () => {
         backMarkdown: 'Neu.',
         tags: ['cloud'],
         reps: 4,
-        lastRating: 2
+        lastRating: 2,
+        qualityStatus: 'problematic',
+        qualityReasons: ['check_law'],
+        qualityNote: 'Fachlich prüfen.'
       })
     )
     expect(services.listLearningCards(collection.id)).toEqual(
@@ -135,6 +151,14 @@ describe('learning table sync', () => {
       localUserId: user.id,
       remoteUserId: '00000000-0000-4000-8000-0000000000a1'
     })
+    expect(payload.qualityEvents).toEqual([
+      expect.objectContaining({
+        cardId: localCard.id,
+        status: 'problematic',
+        reasons: ['check_law'],
+        note: 'Fachlich prüfen.'
+      })
+    ])
     expect(payload.cards).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

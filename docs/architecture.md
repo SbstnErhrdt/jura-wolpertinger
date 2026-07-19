@@ -64,7 +64,7 @@ Desktop-Releases werden nicht aus GitHub Releases geladen. `electron-updater` nu
 | Windows x64 | `windows/x64/latest.yml` |
 | Linux x64 | `linux/x64/latest-linux.yml` |
 
-Nicht unterstützte Kombinationen erhalten keinen Update-Feed. Updatefehler werden protokolliert und blockieren den App-Start nicht. Die gepackte App lädt ein gefundenes Update automatisch herunter, installiert es aber erst nach der ausdrücklichen Neustartbestätigung. Im Entwicklungs- und E2E-Modus ist der Updater deaktiviert.
+Nicht unterstützte Kombinationen erhalten keinen Update-Feed. Updatefehler werden protokolliert und blockieren den App-Start nicht. Die gepackte App prüft nach dem Start, danach stündlich im Hintergrund und zusätzlich auf manuelle Anfrage über das native Systemmenü. Ein gefundenes Update wird automatisch heruntergeladen, installiert sich aber erst nach der ausdrücklichen Neustartbestätigung. Im Entwicklungs- und E2E-Modus ist der Updater deaktiviert.
 
 ### Feed-Struktur
 

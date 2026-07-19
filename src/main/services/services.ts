@@ -24,6 +24,8 @@ import {
   folderSchema,
   juraManifestSchema,
   learningCardSchema,
+  learningCardQualityReasonSchema,
+  learningCardQualityStatusSchema,
   learningCollectionSchema,
   learningDashboardSchema,
   learningExportFileSchema,
@@ -47,6 +49,7 @@ import {
   type ExamStatus,
   type InlineComment,
   type LearningCard,
+  type LearningCardQualityReason,
   type LearningCollection,
   type LearningDashboard,
   type LearningExportFile,
@@ -77,6 +80,7 @@ import type {
   PaginatedResult,
   RecordReviewInput,
   RecordReviewResult,
+  RateLearningCardQualityInput,
   SaveAiCorrectionDraftInput,
   SaveAiSettingsInput,
   SubmissionDetails,
@@ -117,7 +121,8 @@ import {
 import { SupabaseSyncClient } from './supabaseSyncClient'
 import {
   buildCloudLearningStateFromLocal,
-  mergeCloudLearningStateIntoLocal
+  mergeCloudLearningStateIntoLocal,
+  type CloudLearningSyncState
 } from './learningSyncService'
 
 type Row = Record<string, unknown>
@@ -132,6 +137,16 @@ type ImportedAttachment = {
   attachment: Attachment
   payload: Buffer
 }
+
+const LATEST_LEARNING_CARD_QUALITY_JOIN = `
+  LEFT JOIN learning_card_quality_events q ON q.id = (
+    SELECT event.id
+    FROM learning_card_quality_events event
+    WHERE event.user_id = c.user_id AND event.card_id = c.id
+    ORDER BY event.rated_at DESC, event.created_at DESC
+    LIMIT 1
+  )
+`
 
 let localEnvCache: Record<string, string> | null = null
 
@@ -217,12 +232,22 @@ export class AppServices {
     const localUserId = this.getCurrentUserId()
 
     if (input.action === 'download') {
-      const remoteSnapshot = await this.syncClient.downloadLatestSnapshot(localUserId)
-      if (!remoteSnapshot) throw new Error('Online wurden noch keine Daten für diesen Arbeitsbereich gefunden.')
+      const remoteSnapshot =
+        (await this.syncClient.downloadLatestSnapshot(localUserId)) ??
+        (await this.syncClient.downloadLatestSnapshot())
+      const cloudLearningState = await this.syncClient.downloadLearningState()
+      if (!remoteSnapshot && !hasCloudLearningState(cloudLearningState)) {
+        throw new Error('Online wurden noch keine Daten für diesen Arbeitsbereich gefunden.')
+      }
+      if (!remoteSnapshot) {
+        mergeCloudLearningStateIntoLocal({ db: this.db, localUserId, cloudState: cloudLearningState })
+        const result = createLearningDownloadOnlyResult(cloudLearningState)
+        this.rememberSyncResult(result)
+        return result
+      }
       const filePayloads = await this.downloadSnapshotFiles(remoteSnapshot)
       await writeSnapshotFiles({ filesDir: this.filesDir, snapshot: remoteSnapshot, filePayloads })
       const result = restoreWorkspaceSnapshot({ db: this.db, snapshot: remoteSnapshot, targetUserId: localUserId })
-      const cloudLearningState = await this.syncClient.downloadLearningState()
       mergeCloudLearningStateIntoLocal({ db: this.db, localUserId, cloudState: cloudLearningState })
       this.rememberSyncResult(result)
       return result
@@ -1218,7 +1243,11 @@ export class AppServices {
             SELECT COUNT(*) AS count
             FROM learning_cards c
             LEFT JOIN learning_card_schedules s ON s.card_id = c.id AND s.user_id = c.user_id
-            WHERE c.user_id = ? AND c.is_archived = 0 AND COALESCE(s.due_at, c.created_at) <= ?
+            ${LATEST_LEARNING_CARD_QUALITY_JOIN}
+            WHERE c.user_id = ?
+              AND c.is_archived = 0
+              AND COALESCE(q.status, 'good') NOT IN ('needs_work', 'problematic')
+              AND COALESCE(s.due_at, c.created_at) <= ?
           `
           )
           .get(userId, now) as { count: number }
@@ -1259,10 +1288,24 @@ export class AppServices {
         SELECT
           c.*,
           COUNT(DISTINCT card.id) AS card_count,
-          SUM(CASE WHEN card.id IS NOT NULL AND COALESCE(s.due_at, card.created_at) <= ? THEN 1 ELSE 0 END) AS due_count
+          SUM(
+            CASE
+              WHEN card.id IS NOT NULL
+                AND COALESCE(q.status, 'good') NOT IN ('needs_work', 'problematic')
+                AND COALESCE(s.due_at, card.created_at) <= ?
+              THEN 1 ELSE 0
+            END
+          ) AS due_count
         FROM learning_collections c
         LEFT JOIN learning_cards card ON card.collection_id = c.id AND card.is_archived = 0
         LEFT JOIN learning_card_schedules s ON s.card_id = card.id AND s.user_id = c.user_id
+        LEFT JOIN learning_card_quality_events q ON q.id = (
+          SELECT event.id
+          FROM learning_card_quality_events event
+          WHERE event.user_id = c.user_id AND event.card_id = card.id
+          ORDER BY event.rated_at DESC, event.created_at DESC
+          LIMIT 1
+        )
         WHERE c.user_id = ?
         GROUP BY c.id
         ORDER BY c.updated_at DESC, c.name ASC
@@ -1303,9 +1346,11 @@ export class AppServices {
       ? (this.db
           .prepare(
             `
-            SELECT c.*, COALESCE(s.due_at, c.created_at) AS due_at, s.last_rating, COALESCE(s.reps, 0) AS reps, COALESCE(s.lapses, 0) AS lapses
+            SELECT c.*, COALESCE(s.due_at, c.created_at) AS due_at, s.last_rating, COALESCE(s.reps, 0) AS reps, COALESCE(s.lapses, 0) AS lapses,
+              q.status AS quality_status, q.reasons_json AS quality_reasons_json, q.note AS quality_note, q.rated_at AS quality_rated_at
             FROM learning_cards c
             LEFT JOIN learning_card_schedules s ON s.card_id = c.id AND s.user_id = c.user_id
+            ${LATEST_LEARNING_CARD_QUALITY_JOIN}
             WHERE c.user_id = ? AND c.collection_id = ? AND c.is_archived = 0
             ORDER BY c.updated_at DESC
           `
@@ -1314,9 +1359,11 @@ export class AppServices {
       : (this.db
           .prepare(
             `
-            SELECT c.*, COALESCE(s.due_at, c.created_at) AS due_at, s.last_rating, COALESCE(s.reps, 0) AS reps, COALESCE(s.lapses, 0) AS lapses
+            SELECT c.*, COALESCE(s.due_at, c.created_at) AS due_at, s.last_rating, COALESCE(s.reps, 0) AS reps, COALESCE(s.lapses, 0) AS lapses,
+              q.status AS quality_status, q.reasons_json AS quality_reasons_json, q.note AS quality_note, q.rated_at AS quality_rated_at
             FROM learning_cards c
             LEFT JOIN learning_card_schedules s ON s.card_id = c.id AND s.user_id = c.user_id
+            ${LATEST_LEARNING_CARD_QUALITY_JOIN}
             WHERE c.user_id = ? AND c.is_archived = 0
             ORDER BY c.updated_at DESC
           `
@@ -1353,9 +1400,33 @@ export class AppServices {
       params.push(pattern, pattern, pattern, pattern)
     }
 
+    if (input.quality && input.quality !== 'all') {
+      if (input.quality === 'unrated') {
+        filters.push('q.status IS NULL')
+      } else {
+        filters.push('q.status = ?')
+        params.push(learningCardQualityStatusSchema.parse(input.quality))
+      }
+    }
+
+    if (input.lastRating && input.lastRating !== 'all') {
+      if (input.lastRating === 'unrated') {
+        filters.push('s.last_rating IS NULL')
+      } else {
+        filters.push('s.last_rating = ?')
+        params.push(reviewRatingSchema.parse(input.lastRating))
+      }
+    }
+
     const whereClause = `WHERE ${filters.join(' AND ')}`
     const total = Number(
-      (this.db.prepare(`SELECT COUNT(*) AS count FROM learning_cards c ${whereClause}`).get(...params) as { count: number }).count
+      (this.db.prepare(`
+        SELECT COUNT(*) AS count
+        FROM learning_cards c
+        LEFT JOIN learning_card_schedules s ON s.card_id = c.id AND s.user_id = c.user_id
+        ${LATEST_LEARNING_CARD_QUALITY_JOIN}
+        ${whereClause}
+      `).get(...params) as { count: number }).count
     )
     const pageMeta = normalizePagination(input.page, input.pageSize, total)
     const orderBy =
@@ -1369,9 +1440,11 @@ export class AppServices {
     const rows = this.db
       .prepare(
         `
-        SELECT c.*, COALESCE(s.due_at, c.created_at) AS due_at, s.last_rating, COALESCE(s.reps, 0) AS reps, COALESCE(s.lapses, 0) AS lapses
+        SELECT c.*, COALESCE(s.due_at, c.created_at) AS due_at, s.last_rating, COALESCE(s.reps, 0) AS reps, COALESCE(s.lapses, 0) AS lapses,
+          q.status AS quality_status, q.reasons_json AS quality_reasons_json, q.note AS quality_note, q.rated_at AS quality_rated_at
         FROM learning_cards c
         LEFT JOIN learning_card_schedules s ON s.card_id = c.id AND s.user_id = c.user_id
+        ${LATEST_LEARNING_CARD_QUALITY_JOIN}
         ${whereClause}
         ORDER BY ${orderBy}
         LIMIT ? OFFSET ?
@@ -1465,6 +1538,36 @@ export class AppServices {
         .run(now, input.id, this.getCurrentUserId())
       this.touchCollection(card.collectionId, now)
     })()
+  }
+
+  rateLearningCardQuality(input: RateLearningCardQualityInput): LearningCard {
+    const card = this.getLearningCard(input.cardId)
+    const status = learningCardQualityStatusSchema.parse(input.status)
+    const reasons = input.reasons.map((reason) => learningCardQualityReasonSchema.parse(reason))
+    const now = nowIso()
+    this.db.transaction(() => {
+      this.db
+        .prepare(
+          `
+          INSERT INTO learning_card_quality_events
+            (id, user_id, card_id, status, reasons_json, note, rated_at, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `
+        )
+        .run(
+          newId(),
+          this.getCurrentUserId(),
+          card.id,
+          status,
+          stringifyJson(reasons),
+          input.note?.trim() ?? '',
+          now,
+          now,
+          now
+        )
+      this.touchCollection(card.collectionId, now)
+    })()
+    return this.getLearningCard(card.id)
   }
 
   exportLearningDecks(): string {
@@ -1568,10 +1671,15 @@ export class AppServices {
       rows = this.db
         .prepare(
           `
-          SELECT c.*, COALESCE(s.due_at, c.created_at) AS due_at, s.last_rating, COALESCE(s.reps, 0) AS reps, COALESCE(s.lapses, 0) AS lapses
+          SELECT c.*, COALESCE(s.due_at, c.created_at) AS due_at, s.last_rating, COALESCE(s.reps, 0) AS reps, COALESCE(s.lapses, 0) AS lapses,
+            q.status AS quality_status, q.reasons_json AS quality_reasons_json, q.note AS quality_note, q.rated_at AS quality_rated_at
           FROM learning_cards c
           LEFT JOIN learning_card_schedules s ON s.card_id = c.id AND s.user_id = c.user_id
-          WHERE c.user_id = ? AND c.collection_id = ? AND c.is_archived = 0
+          ${LATEST_LEARNING_CARD_QUALITY_JOIN}
+          WHERE c.user_id = ?
+            AND c.collection_id = ?
+            AND c.is_archived = 0
+            AND COALESCE(q.status, 'good') NOT IN ('needs_work', 'problematic')
           ORDER BY
             CASE WHEN COALESCE(s.due_at, c.created_at) <= ? THEN 0 ELSE 1 END ASC,
             COALESCE(s.due_at, c.created_at) ASC,
@@ -1583,10 +1691,14 @@ export class AppServices {
       rows = this.db
         .prepare(
           `
-          SELECT c.*, COALESCE(s.due_at, c.created_at) AS due_at, s.last_rating, COALESCE(s.reps, 0) AS reps, COALESCE(s.lapses, 0) AS lapses
+          SELECT c.*, COALESCE(s.due_at, c.created_at) AS due_at, s.last_rating, COALESCE(s.reps, 0) AS reps, COALESCE(s.lapses, 0) AS lapses,
+            q.status AS quality_status, q.reasons_json AS quality_reasons_json, q.note AS quality_note, q.rated_at AS quality_rated_at
           FROM learning_cards c
           LEFT JOIN learning_card_schedules s ON s.card_id = c.id AND s.user_id = c.user_id
-          WHERE c.user_id = ? AND c.is_archived = 0
+          ${LATEST_LEARNING_CARD_QUALITY_JOIN}
+          WHERE c.user_id = ?
+            AND c.is_archived = 0
+            AND COALESCE(q.status, 'good') NOT IN ('needs_work', 'problematic')
           ORDER BY
             CASE WHEN COALESCE(s.due_at, c.created_at) <= ? THEN 0 ELSE 1 END ASC,
             COALESCE(s.due_at, c.created_at) ASC,
@@ -2178,9 +2290,11 @@ export class AppServices {
     const row = this.db
       .prepare(
         `
-        SELECT c.*, COALESCE(s.due_at, c.created_at) AS due_at, s.last_rating, COALESCE(s.reps, 0) AS reps, COALESCE(s.lapses, 0) AS lapses
+        SELECT c.*, COALESCE(s.due_at, c.created_at) AS due_at, s.last_rating, COALESCE(s.reps, 0) AS reps, COALESCE(s.lapses, 0) AS lapses,
+          q.status AS quality_status, q.reasons_json AS quality_reasons_json, q.note AS quality_note, q.rated_at AS quality_rated_at
         FROM learning_cards c
         LEFT JOIN learning_card_schedules s ON s.card_id = c.id AND s.user_id = c.user_id
+        ${LATEST_LEARNING_CARD_QUALITY_JOIN}
         WHERE c.id = ? AND c.user_id = ? AND c.is_archived = 0
       `
       )
@@ -2403,6 +2517,33 @@ function assertSnapshotsCanMerge(localSnapshot: WorkspaceSnapshot, remoteSnapsho
       if (hashJson(localRow) !== hashJson(remoteRow)) {
         throw new Error('Einige Daten wurden lokal und online unterschiedlich geändert. Bitte wähle eine Richtung für die Übertragung.')
       }
+    }
+  }
+}
+
+function hasCloudLearningState(state: CloudLearningSyncState): boolean {
+  return Boolean(
+    state.collections.length ||
+      state.cards.length ||
+      state.schedules.length ||
+      state.reviewEvents.length ||
+      state.qualityEvents.length
+  )
+}
+
+function createLearningDownloadOnlyResult(state: CloudLearningSyncState): SyncRunResult {
+  return {
+    action: 'download',
+    syncedAt: nowIso(),
+    summary: 'Online-Karteikarten wurden auf dieses Gerät geladen.',
+    uploadedFiles: 0,
+    downloadedFiles: 0,
+    tableCounts: {
+      learning_collections: state.collections.length,
+      learning_cards: state.cards.length,
+      learning_card_schedules: state.schedules.length,
+      learning_review_events: state.reviewEvents.length,
+      learning_card_quality_events: state.qualityEvents.length
     }
   }
 }
@@ -2705,6 +2846,7 @@ function learningCollectionFromRow(row: Row): LearningCollection {
 }
 
 function learningCardFromRow(row: Row, tags: string[]): LearningCard {
+  const qualityReasons = parseJson(String(row.quality_reasons_json ?? '[]'), [] as LearningCardQualityReason[])
   return learningCardSchema.parse({
     schemaVersion: 1,
     id: String(row.id),
@@ -2720,6 +2862,10 @@ function learningCardFromRow(row: Row, tags: string[]): LearningCard {
     lastRating: row.last_rating === null || row.last_rating === undefined ? null : Number(row.last_rating),
     reps: Number(row.reps ?? 0),
     lapses: Number(row.lapses ?? 0),
+    qualityStatus: row.quality_status ? String(row.quality_status) : null,
+    qualityReasons,
+    qualityNote: row.quality_note ? String(row.quality_note) : '',
+    qualityRatedAt: row.quality_rated_at ? String(row.quality_rated_at) : null,
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at)
   })

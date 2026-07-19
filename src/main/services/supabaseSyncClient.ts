@@ -12,6 +12,7 @@ import type {
 } from '@shared/ipc'
 import type {
   CloudLearningCard,
+  CloudLearningCardQualityEvent,
   CloudLearningCollection,
   CloudLearningReviewEvent,
   CloudLearningSchedule,
@@ -120,15 +121,18 @@ export class SupabaseSyncClient {
     if (error) throw new Error(`Online-Sicherung fehlgeschlagen: ${error.message}`)
   }
 
-  async downloadLatestSnapshot(localUserId: string): Promise<WorkspaceSnapshot | null> {
+  async downloadLatestSnapshot(localUserId?: string): Promise<WorkspaceSnapshot | null> {
     const account = this.requireAccount()
-    const { data, error } = await this.client
+    let query = this.client
       .from('user_sync_snapshots')
       .select('payload_json,file_manifest_json,local_user_id')
       .eq('user_id', account.remoteUserId)
-      .eq('local_user_id', localUserId)
       .order('updated_at', { ascending: false })
       .limit(1)
+
+    if (localUserId) query = query.eq('local_user_id', localUserId)
+
+    const { data, error } = await query
       .maybeSingle()
     if (error) throw new Error(`Online-Daten konnten nicht geladen werden: ${error.message}`)
     if (!data) return null
@@ -214,6 +218,16 @@ export class SupabaseSyncClient {
       .eq('user_id', account.remoteUserId)
     if (reviewError) throw new Error(`Karteikarten-Bewertungen konnten nicht geladen werden: ${reviewError.message}`)
 
+    const qualityRows = await selectInChunks(promptIds, async (chunk) => {
+      const { data, error } = await this.client
+        .from('learning_card_quality_events')
+        .select('id, user_id, prompt_id, status, reasons, note, rated_at, created_at, updated_at')
+        .eq('user_id', account.remoteUserId)
+        .in('prompt_id', chunk)
+      if (error) throw new Error(`Kartenqualitaet konnte nicht geladen werden: ${error.message}`)
+      return (data ?? []) as Array<Record<string, unknown>>
+    })
+
     const itemsById = new Map(items.map((item) => [String(item.id), item]))
     const tagsByItemId = groupTagsByItemId(tagRows)
     return {
@@ -265,6 +279,17 @@ export class SupabaseSyncClient {
         rating: Number(row.rating) as CloudLearningReviewEvent['rating'],
         reviewedAt: String(row.reviewed_at),
         elapsedMs: row.elapsed_ms === null || row.elapsed_ms === undefined ? null : Number(row.elapsed_ms)
+      })),
+      qualityEvents: qualityRows.map((row): CloudLearningCardQualityEvent => ({
+        id: String(row.id),
+        userId: String(row.user_id),
+        cardId: String(row.prompt_id),
+        status: String(row.status) as CloudLearningCardQualityEvent['status'],
+        reasons: Array.isArray(row.reasons) ? row.reasons.map(String) : [],
+        note: row.note ? String(row.note) : '',
+        ratedAt: String(row.rated_at),
+        createdAt: String(row.created_at),
+        updatedAt: String(row.updated_at)
       }))
     }
   }
@@ -361,6 +386,24 @@ export class SupabaseSyncClient {
         { onConflict: 'id' }
       )
       if (error) throw new Error(`Karteikarten-Bewertungen konnten nicht gesichert werden: ${error.message}`)
+    }
+
+    if (state.qualityEvents.length) {
+      const { error } = await this.client.from('learning_card_quality_events').upsert(
+        state.qualityEvents.map((event) => ({
+          id: event.id,
+          user_id: account.remoteUserId,
+          prompt_id: event.cardId,
+          status: event.status,
+          reasons: event.reasons,
+          note: event.note,
+          rated_at: event.ratedAt,
+          created_at: event.createdAt,
+          updated_at: event.updatedAt
+        })),
+        { onConflict: 'id' }
+      )
+      if (error) throw new Error(`Kartenqualitaet konnte nicht gesichert werden: ${error.message}`)
     }
   }
 

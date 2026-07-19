@@ -11,6 +11,8 @@ import type {
   Folder as SchemaFolder,
   InlineComment,
   LearningCard,
+  LearningCardQualityReason,
+  LearningCardQualityStatus,
   LearningCollection,
   LearningDashboard,
   LearningImportResult,
@@ -188,6 +190,8 @@ export type ListLearningCardsInput = {
   pageSize?: number
   search?: string
   sort?: 'updated' | 'title' | 'due' | 'rating'
+  quality?: LearningCardQualityStatus | 'unrated' | 'all'
+  lastRating?: ReviewRating | 'unrated' | 'all'
 }
 
 export type GetReviewBatchInput = {
@@ -201,6 +205,13 @@ export type RecordReviewInput = {
   cardId: string
   rating: ReviewRating
   elapsedMs?: number | null
+}
+
+export type RateLearningCardQualityInput = {
+  cardId: string
+  status: LearningCardQualityStatus
+  reasons: LearningCardQualityReason[]
+  note?: string
 }
 
 export type RecordReviewResult = {
@@ -325,6 +336,7 @@ export type AppApi = {
   deleteLearningCard(input: DeleteLearningCardInput): Promise<void>
   getReviewBatch(input?: GetReviewBatchInput): Promise<ReviewCard[]>
   recordReview(input: RecordReviewInput): Promise<RecordReviewResult>
+  rateLearningCardQuality(input: RateLearningCardQualityInput): Promise<LearningCard>
   addAttachment(examId: string, role?: AttachmentRole): Promise<Attachment | null>
   openAttachment(id: string): Promise<void>
   exportExamPackage(examId: string): Promise<string | null>

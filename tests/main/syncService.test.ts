@@ -195,7 +195,8 @@ describe('workspace sync snapshots', () => {
             }
           ],
           schedules: [],
-          reviewEvents: []
+          reviewEvents: [],
+          qualityEvents: []
         }
       },
       async uploadLearningState(state: CloudLearningSyncState) {
@@ -220,5 +221,137 @@ describe('workspace sync snapshots', () => {
       expect.arrayContaining([expect.objectContaining({ id: card.id, title: 'Online' })])
     )
     expect(user.id).toBe(services.getCurrentUser().id)
+  })
+
+  it('downloads cloud flashcards even when no workspace snapshot exists yet', async () => {
+    const user = services.getCurrentUser()
+    services.db
+      .prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)')
+      .run('sync_remote_user_id', '00000000-0000-4000-8000-0000000000a1')
+
+    const fakeClient = {
+      async downloadLatestSnapshot() {
+        return null
+      },
+      async downloadLearningState(): Promise<CloudLearningSyncState> {
+        return {
+          collections: [
+            {
+              id: '20000000-0000-4000-8000-000000000001',
+              ownerUserId: '00000000-0000-4000-8000-0000000000a1',
+              name: 'Definitionen Strafrecht',
+              description: '',
+              subject: 'Strafrecht',
+              source: 'Definitionen-Strafrecht.pdf',
+              isArchived: false,
+              createdAt: '2026-07-19T18:43:39.719Z',
+              updatedAt: '2026-07-19T18:43:39.719Z'
+            }
+          ],
+          cards: [
+            {
+              id: '30000000-0000-4000-8000-000000000001',
+              itemId: '40000000-0000-4000-8000-000000000001',
+              collectionId: '20000000-0000-4000-8000-000000000001',
+              ownerUserId: '00000000-0000-4000-8000-0000000000a1',
+              title: 'Kausalität',
+              externalId: 'definitionen-001',
+              frontMarkdown: 'Definition Kausalität',
+              backMarkdown: 'Conditio-sine-qua-non.',
+              tags: ['strafrecht', 'definition'],
+              isArchived: false,
+              createdAt: '2026-07-19T18:43:39.719Z',
+              updatedAt: '2026-07-19T18:43:39.719Z'
+            }
+          ],
+          schedules: [],
+          reviewEvents: [],
+          qualityEvents: []
+        }
+      },
+      async uploadLearningState() {},
+      async uploadSnapshot() {},
+      async uploadFile() {},
+      async downloadFile() {
+        throw new Error('No files expected')
+      }
+    }
+    ;(services as unknown as { syncClient: typeof fakeClient }).syncClient = fakeClient
+
+    const result = await services.runSync({ action: 'download' })
+
+    expect(result.summary).toContain('geladen')
+    expect(services.listLearningCollections()).toEqual([
+      expect.objectContaining({ name: 'Definitionen Strafrecht', cardCount: 1 })
+    ])
+    expect(services.listLearningCards()).toEqual([
+      expect.objectContaining({ title: 'Kausalität', tags: ['definition', 'strafrecht'] })
+    ])
+    expect(user.id).toBe(services.getCurrentUser().id)
+  })
+
+  it('downloads the latest online snapshot when it was created by another local workspace', async () => {
+    const targetUser = services.getCurrentUser()
+    const sourceDir = await mkdtemp(join(tmpdir(), 'jura-sync-source-'))
+    const sourceServices = new AppServices(sourceDir)
+    try {
+      const sourceUser = sourceServices.getCurrentUser()
+      const collection = sourceServices.createLearningCollection({ name: 'Online-Sammlung' })
+      sourceServices.createLearningCard({
+        collectionId: collection.id,
+        title: 'Online-Karte',
+        frontMarkdown: 'Frage?',
+        backMarkdown: 'Antwort.',
+        tags: ['online']
+      })
+      const snapshot = createWorkspaceSnapshot({
+        db: sourceServices.db,
+        filesDir: sourceServices.filesDir,
+        localUserId: sourceUser.id,
+        remoteUserId: '00000000-0000-4000-8000-0000000000a1'
+      })
+      services.db
+        .prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)')
+        .run('sync_remote_user_id', '00000000-0000-4000-8000-0000000000a1')
+
+      const requestedLocalUserIds: Array<string | undefined> = []
+      const fakeClient = {
+        async downloadLatestSnapshot(localUserId?: string) {
+          requestedLocalUserIds.push(localUserId)
+          return localUserId ? null : snapshot
+        },
+        async downloadLearningState(): Promise<CloudLearningSyncState> {
+          return {
+            collections: [],
+            cards: [],
+            schedules: [],
+            reviewEvents: [],
+            qualityEvents: []
+          }
+        },
+        async downloadFile() {
+          throw new Error('No files expected')
+        },
+        async uploadLearningState() {},
+        async uploadSnapshot() {},
+        async uploadFile() {}
+      }
+      ;(services as unknown as { syncClient: typeof fakeClient }).syncClient = fakeClient
+
+      const result = await services.runSync({ action: 'download' })
+
+      expect(requestedLocalUserIds).toEqual([targetUser.id, undefined])
+      expect(result.summary).toContain('geladen')
+      expect(services.listLearningCollections()).toEqual([
+        expect.objectContaining({ name: 'Online-Sammlung', cardCount: 1 })
+      ])
+      expect(services.listLearningCards()).toEqual([
+        expect.objectContaining({ title: 'Online-Karte', tags: ['online'] })
+      ])
+      expect(services.getCurrentUser().id).toBe(targetUser.id)
+    } finally {
+      sourceServices.close()
+      await rm(sourceDir, { recursive: true, force: true })
+    }
   })
 })

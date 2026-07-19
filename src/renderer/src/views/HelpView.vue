@@ -66,6 +66,16 @@ const faq = [
       'Nochmal, Schwer, Gut und Leicht zeigen deinen letzten Lernstand. Die App nutzt diese Rückmeldung, damit schwierige Karten früher wieder auftauchen.'
   },
   {
+    question: 'Was ist die Kartenqualität?',
+    answer:
+      'Die Kartenqualität bewertet die Karte selbst, nicht deine Antwort. Markiere unklare, zu lange, zu knappe oder fachlich fragliche Karten als Überarbeiten oder Problematisch. Solche Karten pausieren in der Wiederholung, bis du sie bearbeitest.'
+  },
+  {
+    question: 'Wie bearbeite oder bewerte ich eine Karte?',
+    answer:
+      'Öffne die Sammlung. Bei jeder Karte findest du Bearbeiten und Qualität. Im Wiederholen erreichst du dieselben Aktionen über das Menü mit den drei Punkten.'
+  },
+  {
     question: 'Wie lösche ich Karteikarten?',
     answer:
       'Öffne die Sammlung, gehe bei der Karte auf das Aktionsmenü mit den drei Punkten und wähle Karteikarte löschen. Vor dem Löschen fragt die App nochmal nach.'
