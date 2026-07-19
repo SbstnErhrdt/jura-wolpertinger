@@ -5,9 +5,9 @@ Jura Wolpertinger verteilt Desktop-Releases und Auto-Updates ausschließlich üb
 ## Kandidaten erstellen
 
 1. Version in `package.json` setzen und die vollständige Verifikationsmatrix ausführen.
-2. Den manuellen Workflow `.github/workflows/release.yml` mit derselben Version starten. Er bettet `JURA_SYNC_SUPABASE_ANON_KEY` ein, baut und staged Windows x64 sowie Linux x64, veröffentlicht aber keine Live-Metadaten.
-3. macOS ARM64 und x64 lokal mit vorhandenem öffentlichen Supabase-Key und `corepack pnpm run release:mac:local` Developer-ID-signieren, notarisieren und prüfen.
-4. Beide macOS-Kandidaten mit `release:stage` erneut vollständig prüfen und unveränderlich in RustFS ablegen. Der Befehl läuft für macOS nur auf macOS, validiert DMG- und ZIP-App einschließlich Signatur, Gatekeeper, Stapling und Architektur und führt den Renderer-Startup-Smoke für die nativ ausführbare Architektur aus. Nach einem vollständigen Storage-Preflight lädt er fehlende Versionsobjekte ausschließlich mit einer serverseitigen Nicht-Überschreiben-Bedingung hoch.
+2. Den manuellen Workflow `.github/workflows/release.yml` mit derselben Version starten. Er bettet `JURA_SYNC_SUPABASE_ANON_KEY` ein, baut und staged macOS ARM64, macOS x64, Windows x64 sowie Linux x64, veröffentlicht aber keine Live-Metadaten.
+3. Optional macOS ARM64 und x64 lokal mit vorhandenem öffentlichen Supabase-Key und `corepack pnpm run release:mac:local` Developer-ID-signieren, notarisieren und prüfen, wenn ein lokaler Kandidat zusätzlich validiert werden soll.
+4. `release:stage` prüft alle vorgesehenen Dateien erneut vollständig und legt sie unveränderlich in RustFS ab. Für macOS läuft der Befehl nur auf macOS, validiert DMG- und ZIP-App einschließlich Signatur, Gatekeeper, Stapling und Architektur und führt den Renderer-Startup-Smoke für die nativ ausführbare Architektur aus. Nach einem vollständigen Storage-Preflight lädt er fehlende Versionsobjekte ausschließlich mit einer serverseitigen Nicht-Überschreiben-Bedingung hoch.
 
 Normale lokale Pakete ohne Veröffentlichung entstehen mit:
 

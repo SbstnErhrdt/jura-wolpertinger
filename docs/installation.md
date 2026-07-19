@@ -81,18 +81,19 @@ UPDATE_PUBLIC_BASE_URL
 
 Der Branch enthält die freizugebende Version und `package.json` meldet exakt `0.1.7`. Vor dem Staging müssen die vorgesehenen Tests und Builds erfolgreich sein. Ein Stage-Befehl lädt nur unveränderliche Kandidaten hoch; ein normaler Build und `--dry-run` schreiben keine Live-Metadaten.
 
-### 2. Windows und Linux in CI stagen
+### 2. Alle Plattformen in CI stagen
 
 Den Workflow `.github/workflows/release.yml` manuell mit dem Input `version` = `0.1.7` starten. Die Matrix:
 
+- baut macOS ARM64 und macOS x64 mit Developer-ID-Signierung und Apple-Notarisierung;
 - baut Windows x64 mit `corepack pnpm run release:win --x64` und staged aus `release/0.1.7`;
 - baut Linux x64 mit `corepack pnpm run release:linux --x64` und staged aus `release/0.1.7`;
 - bricht ab, wenn der Workflow-Input nicht exakt `package.json.version` entspricht;
 - lädt nur `desktop/stable/<plattform>/<arch>/0.1.7/**` hoch und verändert weder `latest*.yml` noch `manifest.json`.
 
-Beide Matrix-Jobs müssen erfolgreich sein. Ein einzelner erfolgreicher Job ist nur ein unvollständiger, noch nicht live geschalteter Kandidat.
+Alle vier Matrix-Jobs müssen erfolgreich sein. Ein einzelner erfolgreicher Job ist nur ein unvollständiger, noch nicht live geschalteter Kandidat.
 
-### 3. macOS lokal bauen und prüfen
+### 3. macOS optional lokal bauen und prüfen
 
 Voraussetzungen sind macOS, installierte Projektabhängigkeiten, Xcode-Werkzeuge, ein öffentlicher Supabase-Key als `JURA_SYNC_SUPABASE_ANON_KEY` oder `ANON_KEY` in der lokalen Supabase-Env und eine `Developer ID Application`-Identität in der Keychain oder `CSC_LINK`. Zusätzlich verlangt das Skript exakt:
 
@@ -118,9 +119,9 @@ Der Befehl leert nur die beiden lokalen Ausgabeordner, baut gemeinsame App-Resso
 
 Für jede Architektur validiert er erforderliche DMG-, ZIP-, Blockmap- und YAML-Dateien. Er mountet die DMG, entpackt die ZIP und prüft beide App-Bundles mit `codesign --verify --deep --strict`, `spctl --assess`, `xcrun stapler validate` und `lipo -archs`. DMG- und ZIP-App der auf dem aktuellen Mac nativ ausführbaren Architektur werden zusätzlich mit `JURA_RELEASE_SMOKE=1` gestartet und müssen nach dem Laden des Haupt-Renderers `JURA_RELEASE_SMOKE_READY` ausgeben und erfolgreich enden. Die fremde Architektur bleibt bei der vollständigen statischen Prüfung. Der Befehl lädt nichts hoch.
 
-### 4. macOS unveränderlich stagen
+### 4. Lokale macOS-Kandidaten unveränderlich stagen
 
-Optional zuerst ohne Schreibzugriff die lokalen Dateien und Zielschlüssel prüfen:
+Wenn lokale macOS-Kandidaten statt der CI-Kandidaten verwendet werden, zuerst ohne Schreibzugriff die lokalen Dateien und Zielschlüssel prüfen:
 
 ```bash
 corepack pnpm run release:stage --platform mac-arm64 --input .release-stage/mac/arm64 --dry-run
@@ -173,8 +174,8 @@ Die Umstellung erfolgt erst nach einem vollständig verifizierten Stable-Release
 
 1. Bestätigen, dass App-Updater, Downloadseite und Dokumentation keine produktiven GitHub-Release-URLs mehr verwenden.
 2. DNS, TLS, RustFS Public-Read, MIME, Cache, CORS und Range Requests mit `release:verify` prüfen.
-3. Die fünf `UPDATE_*` Repository Secrets setzen und einen manuellen Windows-/Linux-Kandidatenlauf erfolgreich abschließen.
-4. Lokalen signierten/notarisierten macOS-Build, Staging, expliziten Publish und Feed-Verifikation erfolgreich abschließen.
+3. Die fünf `UPDATE_*`, `JURA_SYNC_SUPABASE_ANON_KEY` und macOS-Signing-Secrets setzen und einen manuellen Kandidatenlauf für alle vier Plattformen erfolgreich abschließen.
+4. Expliziten Publish und Feed-Verifikation erfolgreich abschließen.
 5. Sicherstellen, dass die öffentliche Projektseite aus einem privaten Repository weiter deployt werden darf; andernfalls ihr Hosting vor der Privacy-Änderung migrieren.
 6. Benötigte Maintainer- und Actions-Zugriffe, Branch-Regeln und Secrets prüfen, dann erst die Repository-Sichtbarkeit auf privat ändern.
 7. Nach der Umstellung normale CI, den manuellen Kandidaten-Workflow, die Projektseite, einen frischen Download und den Stable-Feed erneut prüfen.
