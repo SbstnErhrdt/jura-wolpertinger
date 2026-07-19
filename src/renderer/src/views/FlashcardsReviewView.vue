@@ -157,9 +157,9 @@
           <h2>Karteikarte bearbeiten</h2>
           <p class="dialog-copy">Passe die Karteikarte an. Änderungen gelten direkt für diese Karte.</p>
           <form class="dialog-form" @submit.prevent="saveCard">
-            <UFormField class="dialog-field" label="Titel"><UInput v-model="cardTitle" placeholder="Kurzer Titel" autofocus /></UFormField>
-            <UFormField class="dialog-field" label="Vorderseite"><UTextarea v-model="cardFront" :rows="4" placeholder="Vorderseite" /></UFormField>
-            <UFormField class="dialog-field" label="Rückseite"><UTextarea v-model="cardBack" :rows="5" placeholder="Rückseite" /></UFormField>
+            <UFormField class="dialog-field" label="Titel"><UInput v-model="cardTitle" class="dialog-control" placeholder="Kurzer Titel" autofocus /></UFormField>
+            <UFormField class="dialog-field" label="Vorderseite"><UTextarea v-model="cardFront" class="dialog-control" :rows="4" placeholder="Vorderseite" /></UFormField>
+            <UFormField class="dialog-field" label="Rückseite"><UTextarea v-model="cardBack" class="dialog-control" :rows="5" placeholder="Rückseite" /></UFormField>
             <div class="dialog-field">
               <span>Schlagwörter</span>
               <TagInput v-model="cardTags" :suggestions="tagSuggestions" placeholder="Schlagwörter hinzufügen" />
@@ -221,7 +221,7 @@
                 </UButton>
               </div>
             </div>
-            <UFormField class="dialog-field" label="Notiz"><UTextarea v-model="qualityNote" :rows="3" placeholder="Optionaler Hinweis zur Überarbeitung" /></UFormField>
+            <UFormField class="dialog-field" label="Notiz"><UTextarea v-model="qualityNote" class="dialog-control" :rows="3" placeholder="Optionaler Hinweis zur Überarbeitung" /></UFormField>
             <div class="dialog-actions">
               <UButton type="button" color="neutral" variant="outline" @click="cancelQualityDialog">Abbrechen</UButton>
               <UButton type="submit" :loading="qualityBusy">

@@ -320,6 +320,7 @@ body {
 }
 
 .tag-input-suggestions {
+  align-items: flex-start;
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
@@ -334,11 +335,12 @@ body {
   border-radius: 999px;
   color: var(--wolpi-nav-blue);
   display: inline-flex;
-  flex: 0 1 auto;
+  flex: 0 0 auto;
+  justify-content: center;
   min-height: 28px;
   max-width: 100%;
   padding: 0 10px;
-  width: auto;
+  width: auto !important;
 }
 
 .tag-input-suggestion:hover {
@@ -2882,6 +2884,11 @@ button:active .key-hint,
 }
 
 .dialog-field :is(input, textarea, select, .tag-input-control, .tag-input) {
+  max-width: none;
+  width: 100%;
+}
+
+.dialog-control {
   max-width: none;
   width: 100%;
 }
