@@ -22,7 +22,7 @@ from models import (
     SeriesPlan,
     SpeechSegment,
 )
-from openai_steps import OpenAIGateway, StructuredResponseError
+from openai_steps import MODERATOR_DELIVERY, OpenAIGateway, StructuredResponseError
 
 
 class ExampleResult(BaseModel):
@@ -184,7 +184,7 @@ class OpenAIGatewayTests(unittest.TestCase):
             gateway.synthesize(
                 text="Wann wird der Verwaltungsakt wirksam?",
                 voice="cedar",
-                instructions="German, curious adult male-read law student.",
+                instructions=MODERATOR_DELIVERY,
                 output_path=output,
             )
 
@@ -192,6 +192,8 @@ class OpenAIGatewayTests(unittest.TestCase):
             self.assertEqual(speech.calls[0]["model"], "gpt-4o-mini-tts")
             self.assertEqual(speech.calls[0]["voice"], "cedar")
             self.assertEqual(speech.calls[0]["response_format"], "wav")
+            self.assertIn("135", speech.calls[0]["instructions"])
+            self.assertIn("Paragraf", speech.calls[0]["instructions"])
 
     def test_structured_pdf_request_is_private_low_detail_and_schema_parsed(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

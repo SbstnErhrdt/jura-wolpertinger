@@ -12,13 +12,20 @@ from models import AudioCheck, EpisodeDraft
 
 ResultT = TypeVar("ResultT", bound=BaseModel)
 
+GERMAN_TTS_GUIDANCE = (
+    "Use measured German pacing near 135 spoken words per minute. Pronounce legal "
+    "citations conventionally: § as Paragraf, §§ as Paragrafen, Art. as Artikel, "
+    "Abs. as Absatz, S. as Satz, Nr. as Nummer, and i.V.m. as in Verbindung mit."
+)
 MODERATOR_DELIVERY = (
     "German, adult male-read law student; curious, natural, encouraging, concise; "
-    "ask genuine follow-up questions; never perform a caricature."
+    "ask genuine follow-up questions; never perform a caricature. "
+    + GERMAN_TTS_GUIDANCE
 )
 WOLPI_DELIVERY = (
     "German, warm bright cute legal expert; calm, precise, gently playful, "
-    "supportive; explain legal distinctions clearly without sounding childish."
+    "supportive; explain legal distinctions clearly without sounding childish. "
+    + GERMAN_TTS_GUIDANCE
 )
 
 

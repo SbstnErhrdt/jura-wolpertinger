@@ -1,85 +1,56 @@
 ---
 name: generate-learning-podcast
-description: [TODO: Complete and informative explanation of what the skill does and when to use it. Include WHEN to use this skill - specific scenarios, file types, or tasks that trigger it.]
+description: Turn exactly one local legal PDF script into a complete, supportive German MP3 learning-podcast series with a curious student moderator and Wolpi as the legal expert. Use when the user asks to make, generate, or test an automatic Lernpodcast, audio course, or podcast series from a PDF law script. The workflow is PDF-only, source-grounded, resumable, and includes transcripts plus source and audio checks.
 ---
 
-# Generate Learning Podcast
+# Lernpodcast erstellen
 
-## Overview
+Generate the whole podcast series automatically from one legal PDF. Do not pause for approval between analysis, planning, dialogue, speech, or MP3 assembly.
 
-[TODO: 1-2 sentences explaining what this skill enables]
+## Inputs and source boundary
 
-## Structuring This Skill
+Require exactly one existing local `.pdf` path. Ask for it only if no unambiguous path is available.
 
-[TODO: Choose the structure that best fits this skill's purpose. Common patterns:
+Treat the PDF as the sole legal source. Do not browse, look up statutes or cases, or enrich from model memory. The result explains the script; it is not a legal update check or official assessment. Read [legal-source-rules.md](references/legal-source-rules.md) when evaluating a grounding failure or changing source behavior.
 
-**1. Workflow-Based** (best for sequential processes)
-- Works well when there are clear step-by-step procedures
-- Example: DOCX skill with "Workflow Decision Tree" -> "Reading" -> "Creating" -> "Editing"
-- Structure: ## Overview -> ## Workflow Decision Tree -> ## Step 1 -> ## Step 2...
+## Preflight
 
-**2. Task-Based** (best for tool collections)
-- Works well when the skill offers different operations/capabilities
-- Example: PDF skill with "Quick Start" -> "Merge PDFs" -> "Split PDFs" -> "Extract Text"
-- Structure: ## Overview -> ## Quick Start -> ## Task Category 1 -> ## Task Category 2...
+Work from the repository root. Use an isolated runtime and never print, persist, or place the API key on the command line.
 
-**3. Reference/Guidelines** (best for standards or specifications)
-- Works well for brand guidelines, coding standards, or requirements
-- Example: Brand styling with "Brand Guidelines" -> "Colors" -> "Typography" -> "Features"
-- Structure: ## Overview -> ## Guidelines -> ## Specifications -> ## Usage...
+```bash
+python3 -m venv /tmp/jura-wolpi-learning-podcast-venv
+/tmp/jura-wolpi-learning-podcast-venv/bin/python -m pip install -r skills/generate-learning-podcast/scripts/requirements.txt
+test -n "${OPENAI_API_KEY:-}" || { echo "OPENAI_API_KEY is required" >&2; exit 2; }
+```
 
-**4. Capabilities-Based** (best for integrated systems)
-- Works well when the skill provides multiple interrelated features
-- Example: Product Management with "Core Capabilities" -> numbered capability list
-- Structure: ## Overview -> ## Core Capabilities -> ### 1. Feature -> ### 2. Feature...
+The defaults are `gpt-5.6`, `gpt-4o-mini-tts`, and `gpt-4o-mini-transcribe`; moderator voice `cedar`; Wolpi voice `marin`. Models and voices may be overridden with CLI flags. Read [voice-and-pronunciation.md](references/voice-and-pronunciation.md) before changing voice behavior or defaults.
 
-Patterns can be mixed and matched as needed. Most skills combine patterns (e.g., start with task-based, add workflow for complex operations).
+## Run once
 
-Delete this entire "Structuring This Skill" section when done - it's just guidance.]
+Activate the runtime and invoke only the tested entry point. Do not recreate pipeline stages manually.
 
-## [TODO: Replace with the first main section based on chosen structure]
+```bash
+. /tmp/jura-wolpi-learning-podcast-venv/bin/activate
+python3 skills/generate-learning-podcast/scripts/run_pipeline.py "/absolute/path/to/script.pdf"
+```
 
-[TODO: Add content here. See examples in existing skills:
-- Code samples for technical skills
-- Decision trees for complex workflows
-- Concrete examples with realistic user requests
-- References to scripts/templates/references as needed]
+Use `--output-base`, `--text-model`, `--tts-model`, `--transcribe-model`, `--moderator-voice`, `--wolpi-voice`, or `--ffmpeg` only when requested or required by the environment.
 
-## Resources (optional)
+The default job directory is `output/learning-podcasts/<pdf-slug>/`. Re-run the identical command after an interruption or corrected transient problem. The manifest reuses every completed stage whose inputs and outputs still match.
 
-Create only the resource directories this skill actually needs. Delete this section if no resources are required.
+## Success handoff
 
-### scripts/
-Executable code (Python/Bash/etc.) that can be run directly to perform specific operations.
+Confirm final validation passed, then return clickable paths to:
 
-**Examples from other skills:**
-- PDF skill: `fill_fillable_fields.py`, `extract_form_field_info.py` - utilities for PDF manipulation
-- DOCX skill: `document.py`, `utilities.py` - Python modules for document processing
+- `series-plan.json` and `series-plan.md`
+- every episode MP3 and `transcript.md`
+- every `source-check.json` and `audio-check.json`
+- `summary.json` and `manifest.json`
 
-**Appropriate for:** Python scripts, shell scripts, or any executable code that performs automation, data processing, or specific operations.
+Each MP3 and its opening dialogue must disclose AI generation and the PDF-only/no-update-check limitation. Each episode contains two or three retrieval questions followed by real five-second silence.
 
-**Note:** Scripts may be executed without loading into context, but can still be read by Codex for patching or environment adjustments.
+Read [artifact-schemas.md](references/artifact-schemas.md) only when inspecting resume state, validating delivery, or changing artifact contracts.
 
-### references/
-Documentation and reference material intended to be loaded into context to inform Codex's process and thinking.
+## Failure handoff
 
-**Examples from other skills:**
-- Product management: `communication.md`, `context_building.md` - detailed workflow guides
-- BigQuery: API reference documentation and query examples
-- Finance: Schema documentation, company policies
-
-**Appropriate for:** In-depth documentation, API references, database schemas, comprehensive guides, or any detailed information that Codex should reference while working.
-
-### assets/
-Files not intended to be loaded into context, but rather used within the output Codex produces.
-
-**Examples from other skills:**
-- Brand styling: PowerPoint template files (.pptx), logo files
-- Frontend builder: HTML/React boilerplate project directories
-- Typography: Font files (.ttf, .woff2)
-
-**Appropriate for:** Templates, boilerplate code, document templates, images, icons, fonts, or any files meant to be copied or used in the final output.
-
----
-
-**Not every skill requires all three types of resources.**
+Preserve the job directory. Report the concise error, the last completed manifest stage, and the exact resume command emitted by the CLI. Never expose request headers, client objects, or credential values.

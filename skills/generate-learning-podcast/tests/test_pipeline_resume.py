@@ -195,7 +195,8 @@ class FakeGateway:
         self.call_counts["tts"] += 1
         if self.fail_tts_once:
             self.fail_tts_once = False
-            raise RuntimeError("temporary failure api_key=sk-fake-secret-123456")
+            fake_key = "sk-" + "fake-secret-123456"
+            raise RuntimeError(f"temporary failure api_key={fake_key}")
         output_path.parent.mkdir(parents=True, exist_ok=True)
         create_tone(output_path, 440.0 if voice == "cedar" else 554.37)
 
@@ -333,7 +334,7 @@ class PipelineResumeTests(unittest.TestCase):
 
             manifest_path = config.job_dir / "manifest.json"
             manifest_text = manifest_path.read_text(encoding="utf-8")
-            self.assertNotIn("sk-fake-secret", manifest_text)
+            self.assertNotIn("sk-" + "fake-secret", manifest_text)
             failed = [
                 stage
                 for stage in json.loads(manifest_text)["stages"].values()

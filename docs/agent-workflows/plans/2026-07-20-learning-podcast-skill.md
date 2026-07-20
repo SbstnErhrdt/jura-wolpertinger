@@ -1626,7 +1626,7 @@ class Mp3Info:
     comment: str
 
 
-def split_tts_text(text: str, max_chars: int = 6000) -> list[str]:
+def split_tts_text(text: str, max_chars: int = 4000) -> list[str]:
     sentences = re.findall(r".*?(?:[.!?](?=\s|$)|$)", text.strip(), flags=re.DOTALL)
     parts = [sentence.strip() for sentence in sentences if sentence.strip()]
     chunks: list[str] = []
@@ -1836,7 +1836,7 @@ In `pipeline.py`, implement `run_pipeline` with these exact stage dependencies a
 
 For every stage, call `ManifestStore.begin(...)` before work, write outputs atomically, call `complete(...)` only after validation, and call `fail(...)` on exceptions before re-raising. Reuse a stage only when `should_run(...)` is false **and every recorded output still exists with the recorded hash**. Episode iteration starts immediately after the plan is written. For audio issues, regenerate only the named speech segments, rerender, and recheck, for at most two repair cycles; fail the episode after the second unsuccessful comparison.
 
-Use zero-padded directories `episodes/{number:02d}-{slug}`. Speech segments use the configured role voice and delivery prompt; pause segments use `create_silence_wav`. If a speech segment exceeds 6,000 characters, synthesize each `split_tts_text` chunk and concatenate those WAVs before episode assembly. Preserve every intermediate WAV under the episode's `work/` directory to make resume deterministic.
+Use zero-padded directories `episodes/{number:02d}-{slug}`. Speech segments use the configured role voice and delivery prompt; pause segments use `create_silence_wav`. If a speech segment exceeds 4,000 characters, synthesize each `split_tts_text` chunk and concatenate those WAVs before episode assembly. This stays safely below the API's 4,096-character input limit. Preserve every intermediate WAV under the episode's `work/` directory to make resume deterministic.
 
 - [ ] **Step 6: Implement final validation**
 

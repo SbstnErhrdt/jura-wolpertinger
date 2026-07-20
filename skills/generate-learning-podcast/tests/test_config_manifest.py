@@ -68,18 +68,19 @@ class ManifestTests(unittest.TestCase):
             manifest_path = Path(temp_dir) / "manifest.json"
             store = ManifestStore(manifest_path)
             input_hash = stable_hash("input")
+            fake_key = "sk-" + "testsecret123456"
             store.begin("tts/01/segment-001", input_hash)
             store.fail(
                 "tts/01/segment-001",
                 input_hash,
-                "temporary TTS error; api_key=sk-testsecret123456",
+                f"temporary TTS error; api_key={fake_key}",
             )
 
             data = json.loads(manifest_path.read_text(encoding="utf-8"))
             stage = data["stages"]["tts/01/segment-001"]
             self.assertEqual(stage["status"], "failed")
             self.assertEqual(stage["error"], "temporary TTS error; api_key=[redacted]")
-            self.assertNotIn("sk-testsecret", manifest_path.read_text(encoding="utf-8"))
+            self.assertNotIn(fake_key, manifest_path.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":
