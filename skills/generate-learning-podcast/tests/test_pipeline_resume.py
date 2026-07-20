@@ -272,6 +272,19 @@ class TrailingOmissionGateway(RepairGateway):
         return AudioCheck(passed=True, issues=[])
 
 
+class EmptySegmentTranscriptGateway(TrailingOmissionGateway):
+    def __init__(self) -> None:
+        super().__init__()
+        self.returned_empty_segment = False
+
+    def transcribe(self, audio_path: Path) -> str:
+        self.call_counts["transcribe"] += 1
+        if audio_path.suffix == ".wav" and not self.returned_empty_segment:
+            self.returned_empty_segment = True
+            raise ValueError("transcription returned no text")
+        return "Vollständiger verständlicher Dialog über Wirksamkeit und Bekanntgabe."
+
+
 class PipelineResumeTests(unittest.TestCase):
     def test_pronunciation_repair_marks_differing_legal_compounds(self) -> None:
         text = "Der Auffangtatbestand gilt auch beim Vollgeschoss."
@@ -380,6 +393,28 @@ class PipelineResumeTests(unittest.TestCase):
                 "Die Bekanntgabe ist maßgeblich.",
                 "Was folgt daraus?",
             ])
+
+    def test_empty_segment_transcript_is_treated_as_an_omission(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "skript.pdf"
+            create_pdf(source)
+            config = PipelineConfig(input_pdf=source, output_base=root / "out")
+            gateway = EmptySegmentTranscriptGateway()
+
+            run_pipeline(
+                config,
+                gateway,
+                resolve_ffmpeg(None),
+                minimum_duration_seconds=1.0,
+            )
+
+            transcript_path = next(
+                (root / "out").glob(
+                    "*/episodes/01-wirksamkeit/audio-adjudication-transcript.txt"
+                )
+            )
+            self.assertIn("Keine verständliche Sprache erkannt", transcript_path.read_text())
 
     def test_reuses_complete_run_and_invalidates_only_voice_dependents(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

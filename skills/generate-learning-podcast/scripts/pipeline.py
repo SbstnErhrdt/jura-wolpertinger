@@ -834,9 +834,19 @@ def _check_episode_audio(
                 segment_id in speech_by_id and segment_id in segment_outputs
                 for segment_id in affected
             ):
+                def transcribe_segment(path: Path) -> str:
+                    try:
+                        return gateway.transcribe(path)
+                    except ValueError as error:
+                        if str(error) != "transcription returned no text":
+                            raise
+                        return (
+                            f"[Keine verständliche Sprache erkannt: {path.name}]"
+                        )
+
                 segment_transcripts = {
                     segment_id: "\n".join(
-                        gateway.transcribe(path)
+                        transcribe_segment(path)
                         for path in segment_outputs[segment_id]
                     )
                     for segment_id in affected
