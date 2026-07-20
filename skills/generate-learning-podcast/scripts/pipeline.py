@@ -506,9 +506,12 @@ _LEGAL_COMPOUND_SUFFIXES = (
 )
 
 _VERIFIED_PRONUNCIATION_SPELLINGS = {
-    "abschliessen": "ab-schließen",
+    "abweichungen": "Ab-weichungen",
+    "abschliessen": "Ab-schließen",
+    "fehle": "Feh-le",
     "fehlt": "Fählt",
     "gestattungsverfahren": "Ge-Schtattungs-Verfahren",
+    "grenzen": "Gren-zen",
 }
 
 _LEGAL_COMPOUND_PREFIXES = ("bau",)

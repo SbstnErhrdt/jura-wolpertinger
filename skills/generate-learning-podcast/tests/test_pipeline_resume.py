@@ -393,6 +393,38 @@ class PipelineResumeTests(unittest.TestCase):
         self.assertIn("Fählt er", repaired_text)
         self.assertIn("ab-schließen", repaired_text)
 
+    def test_pronunciation_repair_uses_verified_syllable_boundaries(self) -> None:
+        text = (
+            "Dann fehle die Wirkung. Ergänze nur die Grenzen und prüfe "
+            "genehmigte Abweichungen."
+        )
+        issues = [
+            AudioIssue(
+                segment_id="segment-010",
+                expected="fehle die Wirkung",
+                observed="fehlt die Wirkung",
+                reason="Aussageform verändert",
+            ),
+            AudioIssue(
+                segment_id="segment-028",
+                expected="Ergänze nur die Grenzen",
+                observed="Ergänzen Modigressen",
+                reason="Wendung unverständlich",
+            ),
+            AudioIssue(
+                segment_id="segment-028",
+                expected="genehmigte Abweichungen",
+                observed="genehmigte Abrechnungen",
+                reason="Rechtsbegriff ersetzt",
+            ),
+        ]
+
+        repaired_text, _ = _pronunciation_repair(text, issues)
+
+        self.assertIn("feh-le", repaired_text)
+        self.assertIn("Gren-zen", repaired_text)
+        self.assertIn("Ab-weichungen", repaired_text)
+
     def test_segment_adjudication_avoids_false_positive_tts_repair(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
