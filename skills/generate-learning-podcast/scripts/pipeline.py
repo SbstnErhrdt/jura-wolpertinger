@@ -528,6 +528,7 @@ def _segment_audio(
     lineage_hash: str,
     segment: SpeechSegment | PauseSegment,
     force: bool = False,
+    repair_guidance: str | None = None,
 ) -> list[Path]:
     work_dir = episode_dir / "work"
     stage = f"episode/{episode_number:02d}/tts/{segment.id}"
@@ -572,14 +573,17 @@ def _segment_audio(
     role_delivery = (
         MODERATOR_DELIVERY if segment.speaker == "moderator" else WOLPI_DELIVERY
     )
-    instructions = f"{role_delivery} Segment delivery: {segment.delivery}."
+    base_instructions = f"{role_delivery} Segment delivery: {segment.delivery}."
+    instructions = base_instructions
+    if repair_guidance:
+        instructions += " Pronunciation correction for this retry: " + repair_guidance
     input_hash = stable_hash(
         {
             "text_chunks": chunks,
             "speaker": segment.speaker,
             "voice": voice,
             "tts_model": config.tts_model,
-            "instructions": instructions,
+            "instructions": base_instructions,
             "lineage_hash": lineage_hash,
         }
     )
@@ -883,6 +887,14 @@ def run_pipeline(
                 if isinstance(segment, SpeechSegment)
             }
             affected = sorted({issue.segment_id for issue in audio_check.issues})
+            issues_by_segment = {
+                segment_id: [
+                    issue
+                    for issue in audio_check.issues
+                    if issue.segment_id == segment_id
+                ]
+                for segment_id in affected
+            }
             unknown = [segment_id for segment_id in affected if segment_id not in speech_by_id]
             if unknown:
                 manifest.fail(
@@ -894,6 +906,14 @@ def run_pipeline(
                     f"audio check references unknown speech segments: {unknown}"
                 )
             for segment_id in affected:
+                repair_guidance = " ".join(
+                    (
+                        f"Say the intended wording exactly: {issue.expected[:500]} "
+                        f"The previous transcription heard: {issue.observed[:500]} "
+                        f"Correction reason: {issue.reason[:500]}"
+                    )
+                    for issue in issues_by_segment[segment_id]
+                )
                 segment_outputs[segment_id] = _segment_audio(
                     config=config,
                     gateway=gateway,
@@ -903,6 +923,7 @@ def run_pipeline(
                     lineage_hash=content_hash,
                     segment=speech_by_id[segment_id],
                     force=True,
+                    repair_guidance=repair_guidance,
                 )
             ordered_audio = [
                 path

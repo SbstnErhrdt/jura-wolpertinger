@@ -66,6 +66,7 @@ def create_tone(path: Path, frequency: float = 440.0) -> None:
 class FakeGateway:
     def __init__(self, *, fail_tts_once: bool = False) -> None:
         self.call_counts: Counter[str] = Counter()
+        self.tts_instructions: list[str] = []
         self.fail_tts_once = fail_tts_once
         anchor = SourceAnchor(
             page=1,
@@ -193,6 +194,7 @@ class FakeGateway:
 
     def synthesize(self, *, output_path: Path, voice: str, **kwargs) -> None:
         self.call_counts["tts"] += 1
+        self.tts_instructions.append(str(kwargs["instructions"]))
         if self.fail_tts_once:
             self.fail_tts_once = False
             fake_key = "sk-" + "fake-secret-123456"
@@ -250,6 +252,7 @@ class PipelineResumeTests(unittest.TestCase):
             )
             self.assertEqual(gateway.call_counts["tts"], speech_chunk_count + 1)
             self.assertEqual(gateway.call_counts["audio_check"], 2)
+            self.assertIn("Die Bekanntgabe", gateway.tts_instructions[-1])
 
     def test_reuses_complete_run_and_invalidates_only_voice_dependents(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
