@@ -369,6 +369,30 @@ class PipelineResumeTests(unittest.TestCase):
 
         self.assertIn("bau-aufsichtliches", repaired_text)
 
+    def test_pronunciation_repair_uses_verified_spellings_for_minimal_pairs(
+        self,
+    ) -> None:
+        text = "Fehlt er, lässt sich die Prüfung nicht abschließen."
+        issues = [
+            AudioIssue(
+                segment_id="segment-007",
+                expected="Fehlt er",
+                observed="Führt er",
+                reason="Bedeutung verändert",
+            ),
+            AudioIssue(
+                segment_id="segment-019",
+                expected="nicht abschließen",
+                observed="nicht abschießen",
+                reason="Bedeutung verändert",
+            ),
+        ]
+
+        repaired_text, _ = _pronunciation_repair(text, issues)
+
+        self.assertIn("Fählt er", repaired_text)
+        self.assertIn("ab-schließen", repaired_text)
+
     def test_segment_adjudication_avoids_false_positive_tts_repair(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

@@ -506,6 +506,8 @@ _LEGAL_COMPOUND_SUFFIXES = (
 )
 
 _VERIFIED_PRONUNCIATION_SPELLINGS = {
+    "abschliessen": "ab-schließen",
+    "fehlt": "Fählt",
     "gestattungsverfahren": "Ge-Schtattungs-Verfahren",
 }
 
