@@ -505,6 +505,10 @@ _LEGAL_COMPOUND_SUFFIXES = (
     "recht",
 )
 
+_VERIFIED_PRONUNCIATION_SPELLINGS = {
+    "gestattungsverfahren": "Ge-Schtattungs-Verfahren",
+}
+
 
 def _pronunciation_repair(
     text: str,
@@ -529,6 +533,17 @@ def _pronunciation_repair(
 
     for word in dict.fromkeys(target_words):
         lowered = word.casefold()
+        verified_spelling = _VERIFIED_PRONUNCIATION_SPELLINGS.get(lowered)
+        if verified_spelling is not None:
+            if not word[0].isupper():
+                verified_spelling = verified_spelling[:1].lower() + verified_spelling[1:]
+            repaired_text = re.sub(
+                rf"(?<!\w){re.escape(word)}(?!\w)",
+                verified_spelling,
+                repaired_text,
+                flags=re.IGNORECASE,
+            )
+            continue
         for suffix in _LEGAL_COMPOUND_SUFFIXES:
             if lowered.endswith(suffix) and len(lowered) > len(suffix) + 1:
                 prefix_length = len(word) - len(suffix)
@@ -654,7 +669,10 @@ def _segment_audio(
         return [output] if ran else _stage_outputs(manifest, stage)
 
     base_chunks = split_tts_text(segment.text)
-    chunks = split_tts_text(repair_text or segment.text)
+    chunks = split_tts_text(
+        repair_text or segment.text,
+        pack_sentences=repair_text is None,
+    )
     if len(chunks) == 1:
         outputs = [work_dir / f"{segment.id}.wav"]
     else:

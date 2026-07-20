@@ -56,6 +56,16 @@ class RenderAudioTests(unittest.TestCase):
         self.assertEqual(" ".join(chunks), text)
         self.assertTrue(all(len(chunk) <= 1000 for chunk in chunks))
 
+    def test_repair_mode_keeps_each_sentence_in_its_own_chunk(self) -> None:
+        text = "Zum Schluss steigen wir ein. Womit beginne ich?"
+
+        chunks = split_tts_text(text, pack_sentences=False)
+
+        self.assertEqual(
+            chunks,
+            ["Zum Schluss steigen wir ein.", "Womit beginne ich?"],
+        )
+
     def test_silence_has_requested_duration(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "pause.wav"

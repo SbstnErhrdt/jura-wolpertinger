@@ -44,6 +44,8 @@ def _split_oversized_part(part: str, max_chars: int) -> list[str]:
 def split_tts_text(
     text: str,
     max_chars: int = TTS_MAX_INPUT_CHARS,
+    *,
+    pack_sentences: bool = True,
 ) -> list[str]:
     normalized = " ".join(text.split())
     if not normalized:
@@ -58,6 +60,8 @@ def split_tts_text(
             else _split_oversized_part(sentence, max_chars)
         )
     ]
+    if not pack_sentences:
+        return parts
     chunks: list[str] = []
     current = ""
     for part in parts:

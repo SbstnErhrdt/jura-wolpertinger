@@ -67,6 +67,7 @@ class FakeGateway:
     def __init__(self, *, fail_tts_once: bool = False) -> None:
         self.call_counts: Counter[str] = Counter()
         self.tts_instructions: list[str] = []
+        self.tts_texts: list[str] = []
         self.fail_tts_once = fail_tts_once
         anchor = SourceAnchor(
             page=1,
@@ -195,6 +196,7 @@ class FakeGateway:
     def synthesize(self, *, output_path: Path, voice: str, **kwargs) -> None:
         self.call_counts["tts"] += 1
         self.tts_instructions.append(str(kwargs["instructions"]))
+        self.tts_texts.append(str(kwargs["text"]))
         if self.fail_tts_once:
             self.fail_tts_once = False
             fake_key = "sk-" + "fake-secret-123456"
@@ -247,6 +249,29 @@ class FalsePositiveGateway(RepairGateway):
         return AudioCheck(passed=True, issues=[])
 
 
+class TrailingOmissionGateway(RepairGateway):
+    def _draft(self) -> EpisodeDraft:
+        draft = super()._draft()
+        draft.segments[4].text = "Die Bekanntgabe ist maßgeblich. Was folgt daraus?"
+        return draft
+
+    def compare_audio(self, draft: EpisodeDraft, transcript: str) -> AudioCheck:
+        self.call_counts["audio_check"] += 1
+        if self.call_counts["audio_check"] <= 2:
+            return AudioCheck(
+                passed=False,
+                issues=[
+                    AudioIssue(
+                        segment_id="segment-005",
+                        expected="Was folgt daraus?",
+                        observed="Ausgelassen.",
+                        reason="Die abschließende Frage fehlt.",
+                    )
+                ],
+            )
+        return AudioCheck(passed=True, issues=[])
+
+
 class PipelineResumeTests(unittest.TestCase):
     def test_pronunciation_repair_marks_differing_legal_compounds(self) -> None:
         text = "Der Auffangtatbestand gilt auch beim Vollgeschoss."
@@ -271,6 +296,23 @@ class PipelineResumeTests(unittest.TestCase):
         self.assertIn("Voll-Geschoss", repaired_text)
         self.assertIn("Aufwandtatbestand", guidance)
         self.assertIn("Folgegeschoss", guidance)
+
+    def test_pronunciation_repair_uses_verified_gestattungsverfahren_spelling(
+        self,
+    ) -> None:
+        text = "Es geht um die Konkurrenz verschiedener Gestattungsverfahren."
+        issues = [
+            AudioIssue(
+                segment_id="segment-002",
+                expected="Gestattungsverfahren",
+                observed="Gestaltungsverfahren",
+                reason="Fachbegriff ersetzt",
+            )
+        ]
+
+        repaired_text, _ = _pronunciation_repair(text, issues)
+
+        self.assertIn("Ge-Schtattungs-Verfahren", repaired_text)
 
     def test_segment_adjudication_avoids_false_positive_tts_repair(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -318,6 +360,26 @@ class PipelineResumeTests(unittest.TestCase):
             self.assertEqual(gateway.call_counts["tts"], speech_chunk_count + 1)
             self.assertEqual(gateway.call_counts["audio_check"], 3)
             self.assertIn("Die Bekanntgabe", gateway.tts_instructions[-1])
+
+    def test_audio_repair_synthesizes_trailing_question_separately(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "skript.pdf"
+            create_pdf(source)
+            config = PipelineConfig(input_pdf=source, output_base=root / "out")
+            gateway = TrailingOmissionGateway()
+
+            run_pipeline(
+                config,
+                gateway,
+                resolve_ffmpeg(None),
+                minimum_duration_seconds=1.0,
+            )
+
+            self.assertEqual(gateway.tts_texts[-2:], [
+                "Die Bekanntgabe ist maßgeblich.",
+                "Was folgt daraus?",
+            ])
 
     def test_reuses_complete_run_and_invalidates_only_voice_dependents(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
