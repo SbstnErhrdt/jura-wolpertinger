@@ -214,7 +214,7 @@ class FakeGateway:
 class RepairGateway(FakeGateway):
     def compare_audio(self, draft: EpisodeDraft, transcript: str) -> AudioCheck:
         self.call_counts["audio_check"] += 1
-        if self.call_counts["audio_check"] == 1:
+        if self.call_counts["audio_check"] <= 2:
             return AudioCheck(
                 passed=False,
                 issues=[
@@ -229,7 +229,48 @@ class RepairGateway(FakeGateway):
         return AudioCheck(passed=True, issues=[])
 
 
+class FalsePositiveGateway(RepairGateway):
+    def compare_audio(self, draft: EpisodeDraft, transcript: str) -> AudioCheck:
+        self.call_counts["audio_check"] += 1
+        if self.call_counts["audio_check"] == 1:
+            return AudioCheck(
+                passed=False,
+                issues=[
+                    AudioIssue(
+                        segment_id="segment-005",
+                        expected="Die Bekanntgabe.",
+                        observed="Ausgelassen.",
+                        reason="Im Gesamttranskript fehlt der Satz.",
+                    )
+                ],
+            )
+        return AudioCheck(passed=True, issues=[])
+
+
 class PipelineResumeTests(unittest.TestCase):
+    def test_segment_adjudication_avoids_false_positive_tts_repair(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "skript.pdf"
+            create_pdf(source)
+            config = PipelineConfig(input_pdf=source, output_base=root / "out")
+            gateway = FalsePositiveGateway()
+            speech_chunk_count = sum(
+                len(split_tts_text(segment.text))
+                for segment in gateway._draft().segments
+                if isinstance(segment, SpeechSegment)
+            )
+
+            run_pipeline(
+                config,
+                gateway,
+                resolve_ffmpeg(None),
+                minimum_duration_seconds=1.0,
+            )
+
+            self.assertEqual(gateway.call_counts["tts"], speech_chunk_count)
+            self.assertEqual(gateway.call_counts["audio_check"], 2)
+
     def test_audio_check_repairs_only_the_reported_speech_segment(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -251,7 +292,7 @@ class PipelineResumeTests(unittest.TestCase):
                 if isinstance(segment, SpeechSegment)
             )
             self.assertEqual(gateway.call_counts["tts"], speech_chunk_count + 1)
-            self.assertEqual(gateway.call_counts["audio_check"], 2)
+            self.assertEqual(gateway.call_counts["audio_check"], 3)
             self.assertIn("Die Bekanntgabe", gateway.tts_instructions[-1])
 
     def test_reuses_complete_run_and_invalidates_only_voice_dependents(self) -> None:

@@ -22,6 +22,7 @@
     ├── transcript.md
     ├── audio-transcript.txt
     ├── audio-check.json
+    ├── audio-adjudication*.{json,txt}  # when full-episode QA reports issues
     └── work/*.wav
 ```
 
@@ -53,3 +54,5 @@ A stage is reusable only when its status is `completed`, its input fingerprint m
 ## Completion rules
 
 Final validation requires one exact episode directory and MP3 per plan entry; valid draft, grounding, and audio-check schemas; approved source checks; passed audio checks; mono approximately 128 kbit/s MP3s with AI metadata; at least eight minutes per episode; and non-empty written and audio transcripts. Ten to fifteen minutes is the target. Longer complete learning units are reported, not rejected.
+
+When the full-episode transcript reports an issue, audio QA transcribes only the named WAV segments again and records the result in the optional adjudication artifacts. TTS repair runs only if that segment-level check confirms the issue.

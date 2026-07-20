@@ -670,13 +670,22 @@ def _check_episode_audio(
     draft: EpisodeDraft,
     mp3_path: Path,
     lineage_hash: str,
+    segment_outputs: dict[str, list[Path]],
     force: bool = False,
 ) -> tuple[AudioCheck, str]:
     transcript_path = episode_dir / "audio-transcript.txt"
     check_path = episode_dir / "audio-check.json"
+    adjudication_path = episode_dir / "audio-adjudication.json"
+    adjudication_transcript_path = (
+        episode_dir / "audio-adjudication-transcript.txt"
+    )
     input_hash = stable_hash(
         {
             "mp3_sha256": file_sha256(mp3_path),
+            "segment_wav_sha256": {
+                segment_id: [file_sha256(path) for path in paths]
+                for segment_id, paths in segment_outputs.items()
+            },
             "draft_sha256": stable_hash(draft.model_dump(mode="json")),
             "lineage_hash": lineage_hash,
             "transcribe_model": config.transcribe_model,
@@ -687,16 +696,67 @@ def _check_episode_audio(
                 "moderator": config.moderator_voice,
                 "wolpi": config.wolpi_voice,
             },
-            "comparison_prompt": "audio-comparison-v1",
+            "comparison_prompt": "audio-comparison-with-segment-adjudication-v2",
         }
     )
 
     def create_check() -> list[Path]:
         transcript = gateway.transcribe(mp3_path)
         write_text(transcript_path, transcript.rstrip() + "\n")
-        check = gateway.compare_audio(draft, transcript)
-        write_model(check_path, check)
-        return [transcript_path, check_path]
+        full_check = gateway.compare_audio(draft, transcript)
+        final_check = full_check
+        outputs = [transcript_path, check_path]
+        if not full_check.passed:
+            speech_by_id = {
+                segment.id: segment
+                for segment in draft.segments
+                if isinstance(segment, SpeechSegment)
+            }
+            affected = sorted(
+                {issue.segment_id for issue in full_check.issues}
+            )
+            if affected and all(
+                segment_id in speech_by_id and segment_id in segment_outputs
+                for segment_id in affected
+            ):
+                segment_transcripts = {
+                    segment_id: "\n".join(
+                        gateway.transcribe(path)
+                        for path in segment_outputs[segment_id]
+                    )
+                    for segment_id in affected
+                }
+                labelled_transcript = "\n\n".join(
+                    f"[{segment_id}]\n{segment_transcripts[segment_id]}"
+                    for segment_id in affected
+                )
+                adjudication_draft = EpisodeDraft(
+                    number=draft.number,
+                    slug=draft.slug,
+                    title=draft.title,
+                    segments=[speech_by_id[segment_id] for segment_id in affected],
+                )
+                segment_check = gateway.compare_audio(
+                    adjudication_draft, labelled_transcript
+                )
+                final_check = segment_check
+                write_text(
+                    adjudication_transcript_path,
+                    labelled_transcript.rstrip() + "\n",
+                )
+                atomic_write_json(
+                    adjudication_path,
+                    {
+                        "full_episode_check": full_check.model_dump(mode="json"),
+                        "segment_check": segment_check.model_dump(mode="json"),
+                        "affected_segment_ids": affected,
+                    },
+                )
+                outputs.extend(
+                    [adjudication_transcript_path, adjudication_path]
+                )
+        write_model(check_path, final_check)
+        return outputs
 
     _execute_stage(
         manifest,
@@ -876,6 +936,7 @@ def run_pipeline(
             draft=draft,
             mp3_path=mp3_path,
             lineage_hash=content_hash,
+            segment_outputs=segment_outputs,
         )
 
         for _ in range(config.max_audio_repairs):
@@ -951,6 +1012,7 @@ def run_pipeline(
                 draft=draft,
                 mp3_path=mp3_path,
                 lineage_hash=content_hash,
+                segment_outputs=segment_outputs,
                 force=True,
             )
         if not audio_check.passed:
