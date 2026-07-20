@@ -55,7 +55,7 @@ DRAFT_INSTRUCTIONS = SOURCE_ONLY + """ Write supportive German dialogue between 
 
 GROUNDING_INSTRUCTIONS = SOURCE_ONLY + """ Audit every legal speech segment against the source anchors. Mark the episode approved only when all legal claims are entailed by the supplied source map and excerpts. Style preferences are not grounding issues."""
 
-REPAIR_INSTRUCTIONS = SOURCE_ONLY + """ Rewrite only the reported segments. Keep segment IDs, roles, retrieval pauses, order, word-count range, and all already grounded material unchanged. Remove unsupported claims rather than enriching them."""
+REPAIR_INSTRUCTIONS = SOURCE_ONLY + """ Return the complete episode, but modify only the reported segments. Keep all other segments, IDs, roles, retrieval pauses, order, word-count range, and already grounded material unchanged. Remove unsupported claims rather than enriching them."""
 
 STRUCTURE_REPAIR_INSTRUCTIONS = SOURCE_ONLY + """ Return the complete corrected episode after applying the validation error. Preserve the plan, roles, meaning, order, and grounded material. Keep exactly one opening disclosure, one application, sequential segment IDs, the planned retrieval question/pause/feedback triples, 1,350-2,025 spoken words, and at least one valid source anchor on every non-disclosure speech segment."""
 
@@ -335,7 +335,7 @@ def draft_and_ground(
     if report.approved:
         return draft, report
     for repair_attempt in range(1, max_rewrites + 1):
-        draft = gateway.generate_structured(
+        repaired = gateway.generate_structured(
             result_type=EpisodeDraft,
             instructions=REPAIR_INSTRUCTIONS,
             input_text=(
@@ -346,6 +346,30 @@ def draft_and_ground(
                 + report.model_dump_json(indent=2)
             ),
         )
+        original_ids = [segment.id for segment in draft.segments]
+        repaired_ids = [segment.id for segment in repaired.segments]
+        issue_ids = {issue.segment_id for issue in report.issues}
+        if repaired_ids != original_ids:
+            if (
+                not repaired_ids
+                or len(repaired_ids) != len(set(repaired_ids))
+                or set(repaired_ids) != issue_ids
+                or not set(repaired_ids) <= set(original_ids)
+            ):
+                raise ValueError(
+                    "partial grounding repair must contain every reported segment exactly once"
+                )
+            replacements = {segment.id: segment for segment in repaired.segments}
+            draft = draft.model_copy(
+                update={
+                    "segments": [
+                        replacements.get(segment.id, segment)
+                        for segment in draft.segments
+                    ]
+                }
+            )
+        else:
+            draft = repaired
         try:
             validate_episode(plan, draft)
         except ValueError as error:

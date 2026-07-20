@@ -210,6 +210,50 @@ class SourceAnalysisTests(unittest.TestCase):
 
 
 class ContentPipelineTests(unittest.TestCase):
+    def test_partial_grounding_repair_is_merged_into_complete_episode(self) -> None:
+        initial = valid_draft("Ungedeckte Behauptung")
+        replacement = initial.segments[1].model_copy(
+            update={
+                "text": initial.segments[1].text.replace(
+                    "Ungedeckte Behauptung",
+                    "Reparierte Aussage",
+                )
+            }
+        )
+        partial = EpisodeDraft(
+            number=initial.number,
+            slug=initial.slug,
+            title=initial.title,
+            segments=[replacement],
+        )
+        gateway = RoutingGateway(
+            [
+                initial,
+                GroundingReport(
+                    approved=False,
+                    issues=[
+                        GroundingIssue(
+                            segment_id="segment-002",
+                            reason="Nicht im Skript belegt",
+                        )
+                    ],
+                ),
+                partial,
+                GroundingReport(approved=True, issues=[]),
+            ]
+        )
+
+        result, report = draft_and_ground(
+            gateway,
+            PLAN,
+            SOURCE_MAP.model_dump_json(indent=2),
+            max_rewrites=2,
+        )
+
+        self.assertEqual(len(result.segments), len(initial.segments))
+        self.assertEqual(result.segments[1].text, replacement.text)
+        self.assertTrue(report.approved)
+
     def test_invalid_draft_is_repaired_before_grounding(self) -> None:
         invalid = valid_draft().model_copy(deep=True)
         invalid.segments[1].anchors = []
