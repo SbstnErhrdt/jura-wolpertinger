@@ -509,6 +509,8 @@ _VERIFIED_PRONUNCIATION_SPELLINGS = {
     "gestattungsverfahren": "Ge-Schtattungs-Verfahren",
 }
 
+_LEGAL_COMPOUND_PREFIXES = ("bau",)
+
 
 def _pronunciation_repair(
     text: str,
@@ -540,6 +542,24 @@ def _pronunciation_repair(
             repaired_text = re.sub(
                 rf"(?<!\w){re.escape(word)}(?!\w)",
                 verified_spelling,
+                repaired_text,
+                flags=re.IGNORECASE,
+            )
+            continue
+        compound_prefix = next(
+            (
+                prefix
+                for prefix in _LEGAL_COMPOUND_PREFIXES
+                if lowered.startswith(prefix) and len(lowered) > len(prefix) + 1
+            ),
+            None,
+        )
+        if compound_prefix is not None:
+            split_at = len(compound_prefix)
+            marked = word[:split_at] + "-" + word[split_at:]
+            repaired_text = re.sub(
+                rf"(?<!\w){re.escape(word)}(?!\w)",
+                marked,
                 repaired_text,
                 flags=re.IGNORECASE,
             )

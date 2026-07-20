@@ -327,6 +327,21 @@ class PipelineResumeTests(unittest.TestCase):
 
         self.assertIn("Ge-Schtattungs-Verfahren", repaired_text)
 
+    def test_pronunciation_repair_splits_bau_compounds(self) -> None:
+        text = "Verlangt wird bauaufsichtliches Tätigwerden."
+        issues = [
+            AudioIssue(
+                segment_id="segment-010",
+                expected="bauaufsichtliches Tätigwerden",
+                observed="bauwaufsichtliches Tätigwerden",
+                reason="Fachbegriff unverständlich",
+            )
+        ]
+
+        repaired_text, _ = _pronunciation_repair(text, issues)
+
+        self.assertIn("bau-aufsichtliches", repaired_text)
+
     def test_segment_adjudication_avoids_false_positive_tts_repair(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
