@@ -10,6 +10,15 @@ from pydantic import BaseModel, ValidationError
 
 ResultT = TypeVar("ResultT", bound=BaseModel)
 
+MODERATOR_DELIVERY = (
+    "German, adult male-read law student; curious, natural, encouraging, concise; "
+    "ask genuine follow-up questions; never perform a caricature."
+)
+WOLPI_DELIVERY = (
+    "German, warm bright cute legal expert; calm, precise, gently playful, "
+    "supportive; explain legal distinctions clearly without sounding childish."
+)
+
 
 class StructuredResponseError(ValueError):
     pass
@@ -37,12 +46,14 @@ class OpenAIGateway:
         client,
         text_model: str,
         *,
+        tts_model: str = "gpt-4o-mini-tts",
         max_structured_attempts: int = 3,
         max_transient_attempts: int = 5,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         self.client = client
         self.text_model = text_model
+        self.tts_model = tts_model
         self.max_structured_attempts = max_structured_attempts
         self.max_transient_attempts = max_transient_attempts
         self.sleep = sleep
@@ -106,3 +117,37 @@ class OpenAIGateway:
         if last_error is not None:
             raise last_error
         raise StructuredResponseError("structured output failed without an error")
+
+    def synthesize(
+        self,
+        *,
+        text: str,
+        voice: str,
+        instructions: str,
+        output_path: Path,
+    ) -> None:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        def request() -> None:
+            with self.client.audio.speech.with_streaming_response.create(
+                model=self.tts_model,
+                voice=voice,
+                input=text,
+                instructions=instructions,
+                response_format="wav",
+            ) as response:
+                response.stream_to_file(output_path)
+
+        last_error: Exception | None = None
+        for _ in range(self.max_structured_attempts):
+            try:
+                self._with_transient_retry(request)
+                if not output_path.is_file() or output_path.stat().st_size <= 44:
+                    raise ValueError("TTS returned an empty WAV")
+                return
+            except (OSError, ValueError) as error:
+                last_error = error
+                output_path.unlink(missing_ok=True)
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("TTS failed without an error")

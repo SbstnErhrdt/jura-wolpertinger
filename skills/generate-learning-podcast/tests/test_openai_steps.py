@@ -4,6 +4,7 @@ import base64
 import sys
 import tempfile
 import unittest
+import wave
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -38,6 +39,31 @@ class FakeResponses:
         if isinstance(outcome, Exception):
             raise outcome
         return outcome
+
+
+class FakeSpeechResponse:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        return None
+
+    def stream_to_file(self, path: Path) -> None:
+        with wave.open(str(path), "wb") as audio:
+            audio.setnchannels(1)
+            audio.setsampwidth(2)
+            audio.setframerate(24000)
+            audio.writeframes(b"\x00\x00" * 2400)
+
+
+class FakeSpeechEndpoint:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, object]] = []
+        self.with_streaming_response = self
+
+    def create(self, **kwargs):
+        self.calls.append(kwargs)
+        return FakeSpeechResponse()
 
 
 class ArtifactModelTests(unittest.TestCase):
@@ -86,6 +112,33 @@ class ArtifactModelTests(unittest.TestCase):
 
 
 class OpenAIGatewayTests(unittest.TestCase):
+    def test_tts_streams_a_non_empty_wav_with_role_instructions(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            speech = FakeSpeechEndpoint()
+            client = SimpleNamespace(
+                responses=FakeResponses([]),
+                audio=SimpleNamespace(speech=speech),
+            )
+            gateway = OpenAIGateway(
+                client=client,
+                text_model="gpt-5.6",
+                tts_model="gpt-4o-mini-tts",
+                sleep=lambda _: None,
+            )
+            output = Path(temp_dir) / "turn.wav"
+
+            gateway.synthesize(
+                text="Wann wird der Verwaltungsakt wirksam?",
+                voice="cedar",
+                instructions="German, curious adult male-read law student.",
+                output_path=output,
+            )
+
+            self.assertGreater(output.stat().st_size, 44)
+            self.assertEqual(speech.calls[0]["model"], "gpt-4o-mini-tts")
+            self.assertEqual(speech.calls[0]["voice"], "cedar")
+            self.assertEqual(speech.calls[0]["response_format"], "wav")
+
     def test_structured_pdf_request_is_private_low_detail_and_schema_parsed(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             pdf_path = Path(temp_dir) / "source.pdf"
