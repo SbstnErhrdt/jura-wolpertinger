@@ -23,7 +23,7 @@ python3 -m venv /tmp/jura-wolpi-learning-podcast-venv
 test -n "${OPENAI_API_KEY:-}" || { echo "OPENAI_API_KEY is required" >&2; exit 2; }
 ```
 
-The defaults are `gpt-5.6`, `gpt-4o-mini-tts`, and `gpt-4o-mini-transcribe`; moderator voice `cedar`; Wolpi voice `marin`. Models and voices may be overridden with CLI flags. Read [voice-and-pronunciation.md](references/voice-and-pronunciation.md) before changing voice behavior or defaults.
+The defaults are `gpt-5.6`, `gpt-4o-mini-tts`, and `gpt-4o-transcribe`; moderator voice `cedar`; Wolpi voice `marin`. Models and voices may be overridden with CLI flags. Read [voice-and-pronunciation.md](references/voice-and-pronunciation.md) before changing voice behavior or defaults.
 
 ## Run once
 

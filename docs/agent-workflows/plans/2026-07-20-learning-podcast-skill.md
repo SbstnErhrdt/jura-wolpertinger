@@ -19,7 +19,7 @@
 - Include two or three direct retrieval questions with five-second silent pauses in every episode.
 - Moderator role: male-read, adult, curious law student; default voice `cedar`.
 - Wolpi role: warm, bright, calm, lightly playful legal expert; default voice `marin`.
-- Default models: `gpt-5.6`, `gpt-4o-mini-tts`, and `gpt-4o-mini-transcribe`.
+- Default models: `gpt-5.6`, `gpt-4o-mini-tts`, and `gpt-4o-transcribe`.
 - Source-grounding repair limit: two rewrite cycles per episode.
 - Structured-output/TTS retry limit: three attempts; transient API retry limit: five attempts with 1–30 second exponential backoff.
 - Final audio: mono MP3, 128 kbit/s, -19 LUFS, maximum -1.5 dB True Peak.
@@ -230,7 +230,7 @@ class PipelineConfig:
     output_base: Path
     text_model: str = "gpt-5.6"
     tts_model: str = "gpt-4o-mini-tts"
-    transcribe_model: str = "gpt-4o-mini-transcribe"
+    transcribe_model: str = "gpt-4o-transcribe"
     moderator_voice: str = "cedar"
     wolpi_voice: str = "marin"
     target_minutes_min: int = 10
@@ -1864,7 +1864,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-base", type=Path, default=Path("output/learning-podcasts"))
     parser.add_argument("--text-model", default="gpt-5.6")
     parser.add_argument("--tts-model", default="gpt-4o-mini-tts")
-    parser.add_argument("--transcribe-model", default="gpt-4o-mini-transcribe")
+    parser.add_argument("--transcribe-model", default="gpt-4o-transcribe")
     parser.add_argument("--moderator-voice", default="cedar")
     parser.add_argument("--wolpi-voice", default="marin")
     parser.add_argument("--ffmpeg", type=Path)

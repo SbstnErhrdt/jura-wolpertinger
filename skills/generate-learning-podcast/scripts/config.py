@@ -22,7 +22,7 @@ class PipelineConfig:
     output_base: Path
     text_model: str = "gpt-5.6"
     tts_model: str = "gpt-4o-mini-tts"
-    transcribe_model: str = "gpt-4o-mini-transcribe"
+    transcribe_model: str = "gpt-4o-transcribe"
     moderator_voice: str = "cedar"
     wolpi_voice: str = "marin"
     target_minutes_min: int = 10

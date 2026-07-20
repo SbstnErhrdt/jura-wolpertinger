@@ -56,7 +56,7 @@ class OpenAIGateway:
         text_model: str,
         *,
         tts_model: str = "gpt-4o-mini-tts",
-        transcribe_model: str = "gpt-4o-mini-transcribe",
+        transcribe_model: str = "gpt-4o-transcribe",
         max_structured_attempts: int = 3,
         max_transient_attempts: int = 5,
         sleep: Callable[[float], None] = time.sleep,

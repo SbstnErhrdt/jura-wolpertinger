@@ -267,7 +267,11 @@ Standardmodelle sind:
 
 - Textanalyse, Planung, Sprechertext und Quellenpruefung: `gpt-5.6`
 - Sprachsynthese: `gpt-4o-mini-tts`
-- Audio-Ruecktranskription: `gpt-4o-mini-transcribe`
+- Audio-Ruecktranskription: `gpt-4o-transcribe`
+
+Der staerkere Transkriptions-Default wurde im BayBO-Live-Test gewaehlt, nachdem das Mini-Modell
+den korrekt gesprochenen juristischen Begriff „ueberdeckt“ wiederholt als „ueberdacht“
+transkribiert und dadurch falsche Audio-Reparaturen ausgeloest hatte.
 
 Alle Modell- und Voice-IDs koennen ueber dokumentierte Laufparameter ueberschrieben werden. Das
 Manifest speichert die tatsaechlich verwendeten IDs. Der API-Key wird ausschliesslich aus

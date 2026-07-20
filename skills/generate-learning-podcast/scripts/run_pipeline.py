@@ -30,7 +30,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--text-model", default="gpt-5.6")
     parser.add_argument("--tts-model", default="gpt-4o-mini-tts")
     parser.add_argument(
-        "--transcribe-model", default="gpt-4o-mini-transcribe"
+        "--transcribe-model", default="gpt-4o-transcribe"
     )
     parser.add_argument("--moderator-voice", default="cedar")
     parser.add_argument("--wolpi-voice", default="marin")

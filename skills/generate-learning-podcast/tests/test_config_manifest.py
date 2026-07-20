@@ -28,6 +28,7 @@ class ConfigTests(unittest.TestCase):
                 (root / "out").resolve() / "oeffentliches-recht-pruefung",
             )
             self.assertEqual(config.text_model, "gpt-5.6")
+            self.assertEqual(config.transcribe_model, "gpt-4o-transcribe")
             self.assertEqual(config.moderator_voice, "cedar")
             self.assertEqual(config.wolpi_voice, "marin")
 
