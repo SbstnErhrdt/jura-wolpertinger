@@ -425,6 +425,30 @@ class PipelineResumeTests(unittest.TestCase):
         self.assertIn("Gren-zen", repaired_text)
         self.assertIn("Ab-weichungen", repaired_text)
 
+    def test_pronunciation_repair_expands_legal_citation_abbreviations(self) -> None:
+        text = (
+            "Art. 53 Abs. 1 Satz 2, Art. 3 Abs. 1 Nr. 1 und "
+            "Art. 76 Satz 1 sind zu prüfen."
+        )
+        issues = [
+            AudioIssue(
+                segment_id="segment-005",
+                expected="Art. 53 Abs. 1 Satz 2",
+                observed="Artikel 53 Absatz 2",
+                reason="Normzitat verkürzt",
+            )
+        ]
+
+        repaired_text, _ = _pronunciation_repair(text, issues)
+
+        self.assertEqual(
+            repaired_text,
+            (
+                "Artikel 53 Absatz 1 Satz 2, Artikel 3 Absatz 1 Nummer 1 und "
+                "Artikel 76 Satz 1 sind zu prüfen."
+            ),
+        )
+
     def test_segment_adjudication_avoids_false_positive_tts_repair(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

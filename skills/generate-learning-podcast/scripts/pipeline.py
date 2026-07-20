@@ -584,6 +584,19 @@ def _pronunciation_repair(
                 )
                 break
 
+    citation_expansions = {
+        "Art": "Artikel",
+        "Abs": "Absatz",
+        "Nr": "Nummer",
+    }
+    for abbreviation, spoken_form in citation_expansions.items():
+        repaired_text = re.sub(
+            rf"(?<!\w){abbreviation}\.(?=\s*\d)",
+            spoken_form,
+            repaired_text,
+            flags=re.IGNORECASE,
+        )
+
     contrasts = " ".join(
         (
             f"Say the intended wording exactly: {issue.expected[:500]} "
