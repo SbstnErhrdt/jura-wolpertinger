@@ -15,6 +15,7 @@ SCRIPT_ROOT = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPT_ROOT))
 
 from models import (
+    AudioCheck,
     EpisodeDraft,
     GroundingReport,
     PauseSegment,
@@ -66,6 +67,16 @@ class FakeSpeechEndpoint:
         return FakeSpeechResponse()
 
 
+class FakeTranscriptions:
+    def __init__(self, response: object) -> None:
+        self.response = response
+        self.calls: list[dict[str, object]] = []
+
+    def create(self, **kwargs):
+        self.calls.append(kwargs)
+        return self.response
+
+
 class ArtifactModelTests(unittest.TestCase):
     def test_series_episode_numbers_must_be_contiguous(self) -> None:
         with self.assertRaisesRegex(ValidationError, "contiguous"):
@@ -112,6 +123,49 @@ class ArtifactModelTests(unittest.TestCase):
 
 
 class OpenAIGatewayTests(unittest.TestCase):
+    def test_transcribes_audio_and_compares_it_with_the_expected_draft(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            audio_path = Path(temp_dir) / "episode.mp3"
+            audio_path.write_bytes(b"ID3-test-audio")
+            transcriptions = FakeTranscriptions("Transkribierter Dialog")
+            check = AudioCheck(passed=True, issues=[])
+            responses = FakeResponses(
+                [SimpleNamespace(output_parsed=check, output=[])]
+            )
+            client = SimpleNamespace(
+                responses=responses,
+                audio=SimpleNamespace(transcriptions=transcriptions),
+            )
+            gateway = OpenAIGateway(
+                client=client,
+                text_model="gpt-5.6",
+                transcribe_model="gpt-4o-mini-transcribe",
+                sleep=lambda _: None,
+            )
+            draft = EpisodeDraft(
+                number=1,
+                slug="test",
+                title="Test",
+                segments=[
+                    SpeechSegment(
+                        id="segment-001",
+                        speaker="moderator",
+                        text="Hallo Wolpi.",
+                    )
+                ],
+            )
+
+            transcript = gateway.transcribe(audio_path)
+            result = gateway.compare_audio(draft, transcript)
+
+            self.assertEqual(transcript, "Transkribierter Dialog")
+            self.assertTrue(result.passed)
+            self.assertEqual(
+                transcriptions.calls[0]["model"], "gpt-4o-mini-transcribe"
+            )
+            self.assertEqual(transcriptions.calls[0]["response_format"], "text")
+            self.assertIn("TRANSCRIPTION", responses.calls[0]["input"][0]["content"][0]["text"])
+
     def test_tts_streams_a_non_empty_wav_with_role_instructions(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             speech = FakeSpeechEndpoint()

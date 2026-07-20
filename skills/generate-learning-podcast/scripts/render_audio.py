@@ -11,6 +11,8 @@ from pathlib import Path
 import imageio_ffmpeg
 from mutagen.mp3 import MP3
 
+TTS_MAX_INPUT_CHARS = 4000
+
 
 @dataclass(frozen=True)
 class Mp3Info:
@@ -39,7 +41,10 @@ def _split_oversized_part(part: str, max_chars: int) -> list[str]:
     return chunks
 
 
-def split_tts_text(text: str, max_chars: int = 6000) -> list[str]:
+def split_tts_text(
+    text: str,
+    max_chars: int = TTS_MAX_INPUT_CHARS,
+) -> list[str]:
     normalized = " ".join(text.split())
     if not normalized:
         raise ValueError("TTS text must not be empty")

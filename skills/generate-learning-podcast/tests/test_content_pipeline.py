@@ -210,6 +210,17 @@ class SourceAnalysisTests(unittest.TestCase):
 
 
 class ContentPipelineTests(unittest.TestCase):
+    def test_validate_episode_requires_one_opening_disclosure_and_exact_recall_pairs(self) -> None:
+        broken_disclosure = valid_draft().model_copy(deep=True)
+        broken_disclosure.segments[0].purpose = "summary"
+        with self.assertRaisesRegex(ValueError, "opening disclosure"):
+            validate_episode(PLAN, broken_disclosure)
+
+        extra_question = valid_draft().model_copy(deep=True)
+        extra_question.segments[1].purpose = "retrieval-question"
+        with self.assertRaisesRegex(ValueError, "retrieval questions"):
+            validate_episode(PLAN, extra_question)
+
     def test_validate_episode_requires_roles_retrieval_pauses_and_disclosure(self) -> None:
         validate_episode(PLAN, valid_draft())
         broken = valid_draft().model_copy(

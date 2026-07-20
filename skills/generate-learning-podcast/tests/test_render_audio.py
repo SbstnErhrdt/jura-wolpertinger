@@ -39,6 +39,14 @@ def create_tone_wav(path: Path, duration_ms: int, frequency: float) -> None:
 
 
 class RenderAudioTests(unittest.TestCase):
+    def test_default_chunk_size_stays_below_openai_tts_limit(self) -> None:
+        text = ("Ein juristischer Lernpunkt mit Erklärung. " * 200).strip()
+
+        chunks = split_tts_text(text)
+
+        self.assertGreater(len(chunks), 1)
+        self.assertTrue(all(len(chunk) <= 4000 for chunk in chunks))
+
     def test_long_text_splits_at_sentence_boundaries(self) -> None:
         text = ("Das ist ein vollständiger Satz. " * 400).strip()
 

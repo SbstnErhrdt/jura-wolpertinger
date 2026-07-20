@@ -7,6 +7,8 @@ from typing import Callable, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
+from models import AudioCheck, EpisodeDraft
+
 
 ResultT = TypeVar("ResultT", bound=BaseModel)
 
@@ -47,6 +49,7 @@ class OpenAIGateway:
         text_model: str,
         *,
         tts_model: str = "gpt-4o-mini-tts",
+        transcribe_model: str = "gpt-4o-mini-transcribe",
         max_structured_attempts: int = 3,
         max_transient_attempts: int = 5,
         sleep: Callable[[float], None] = time.sleep,
@@ -54,6 +57,7 @@ class OpenAIGateway:
         self.client = client
         self.text_model = text_model
         self.tts_model = tts_model
+        self.transcribe_model = transcribe_model
         self.max_structured_attempts = max_structured_attempts
         self.max_transient_attempts = max_transient_attempts
         self.sleep = sleep
@@ -151,3 +155,35 @@ class OpenAIGateway:
         if last_error is not None:
             raise last_error
         raise RuntimeError("TTS failed without an error")
+
+    def transcribe(self, audio_path: Path) -> str:
+        def request():
+            with audio_path.open("rb") as audio:
+                return self.client.audio.transcriptions.create(
+                    model=self.transcribe_model,
+                    file=audio,
+                    response_format="text",
+                )
+
+        response = self._with_transient_retry(request)
+        transcript = response if isinstance(response, str) else response.text
+        transcript = str(transcript).strip()
+        if not transcript:
+            raise ValueError("transcription returned no text")
+        return transcript
+
+    def compare_audio(self, draft: EpisodeDraft, transcript: str) -> AudioCheck:
+        return self.generate_structured(
+            result_type=AudioCheck,
+            instructions=(
+                "Compare expected dialogue with the transcription. Report only omissions, "
+                "substitutions that change legal meaning, speaker-text loss, or "
+                "unintelligible legal terms. Ignore punctuation and harmless wording "
+                "normalization."
+            ),
+            input_text=(
+                draft.model_dump_json(indent=2)
+                + "\nTRANSCRIPTION\n"
+                + transcript
+            ),
+        )
