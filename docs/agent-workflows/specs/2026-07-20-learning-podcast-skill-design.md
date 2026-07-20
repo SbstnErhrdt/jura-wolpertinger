@@ -108,8 +108,9 @@ Kenntnisse des Modells duerfen weder Luecken fuellen noch das Skript aktualisier
 
 Ein separater Quellenpruefschritt vergleicht alle fachlichen Sprecher-Turns mit den referenzierten
 PDF-Ausschnitten. Nicht belegte oder widerspruechliche Aussagen werden automatisch ueberarbeitet
-und erneut geprueft. Pro Turn sind zwei Ueberarbeitungszyklen erlaubt. Bleibt eine Aussage danach
-unsicher, wird sie aus dem Audio entfernt und im Qualitaetsbericht dokumentiert.
+und erneut geprueft. Pro Folge sind zwei Ueberarbeitungszyklen erlaubt. Bleibt eine Aussage danach
+unsicher, wird die Folge nicht als erfolgreich ausgeliefert; Zwischenartefakte und
+Qualitaetsbericht bleiben fuer die automatische Wiederaufnahme erhalten.
 
 Seitenangaben werden nicht routinemaessig gesprochen. Sie erscheinen im begleitenden Markdown-
 Transkript direkt an den jeweiligen Abschnitten. Jede Folge enthaelt einen knappen Hinweis, dass
@@ -195,23 +196,24 @@ output/learning-podcasts/<pdf-slug>/
 ├── series-plan.json
 ├── series-plan.md
 ├── source/
-│   └── source.pdf
+│   ├── source.pdf
+│   ├── inspection.json
+│   └── chunks/*.pdf
 ├── episodes/
-│   ├── 01-<thema>.mp3
-│   └── ...
-├── transcripts/
-│   ├── 01-<thema>.md
+│   ├── 01-<thema>/
+│   │   ├── 01-<thema>.mp3
+│   │   ├── transcript.md
+│   │   ├── draft.json
+│   │   ├── source-check.json
+│   │   ├── audio-transcript.txt
+│   │   ├── audio-check.json
+│   │   └── work/*.wav
 │   └── ...
 ├── analysis/
 │   ├── source-map.json
 │   ├── concepts.json
 │   └── pronunciation.json
-├── production/
-│   ├── episodes/*.json
-│   └── turns/*
-└── quality/
-    ├── source-check.json
-    └── audio-check.json
+└── summary.json
 ```
 
 MP3 ist das auszuliefernde Audioformat. Verlustarme Turn-Dateien duerfen fuer Wiederaufnahme im
@@ -254,9 +256,12 @@ Modellnamen, Prompt-Versionen und technische IDs, keine Zugangsdaten.
 
 ## Laufzeit und Modellkonfiguration
 
-Die Pipeline setzt Python 3.12 oder neuer, FFmpeg einschliesslich `ffprobe` sowie die in einem
-Skill-eigenen Requirements-File festgehaltenen Python-Bibliotheken voraus. PDF- und Audio-
-Abhaengigkeiten werden beim Start geprueft, bevor kostenpflichtige API-Aufrufe beginnen.
+Die Pipeline setzt Python 3.12 oder neuer sowie die in einem Skill-eigenen Requirements-File
+festgehaltenen Python-Bibliotheken voraus. Fuer Audio verwendet sie zuerst den explizit
+konfigurierten FFmpeg-Pfad, danach ein Binary aus `PATH` und zuletzt das durch
+`imageio-ffmpeg` bereitgestellte Binary. MP3-Dauer und ID3-Metadaten werden mit `mutagen`
+validiert; ein separates `ffprobe` ist deshalb nicht erforderlich. PDF- und Audio-Abhaengigkeiten
+werden beim Start geprueft, bevor kostenpflichtige API-Aufrufe beginnen.
 
 Standardmodelle sind:
 
@@ -279,8 +284,12 @@ skills/generate-learning-podcast/
 │   └── openai.yaml
 ├── scripts/
 │   ├── run_pipeline.py
+│   ├── config.py
+│   ├── manifest.py
+│   ├── models.py
 │   ├── inspect_pdf.py
 │   ├── openai_steps.py
+│   ├── pipeline.py
 │   ├── render_audio.py
 │   ├── validate_output.py
 │   └── requirements.txt
@@ -323,8 +332,8 @@ PDF-Erzeugung mit temporaeren Beispieldaten.
 - Strukturierte Modellantworten gegen die Artefakt-Schemata validieren.
 - Audio-Schnitt mit synthetischen Test-Turns ohne API pruefen.
 - Einen kleinen PDF-Smoke-Test mit OpenAI API ausfuehren, wenn ein API-Key verfuegbar ist.
-- MP3 mit `ffprobe` pruefen und das Ergebnis vollstaendig probehoeren oder stichprobenartig visuell
-  und akustisch kontrollieren.
+- MP3-Dauer, MPEG-Eigenschaften und ID3-Metadaten mit `mutagen` pruefen und das Ergebnis
+  vollstaendig probehoeren oder stichprobenartig visuell und akustisch kontrollieren.
 
 ### Karteikarten-Skill
 
