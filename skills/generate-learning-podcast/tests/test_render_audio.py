@@ -82,6 +82,28 @@ class RenderAudioTests(unittest.TestCase):
             ],
         )
 
+    def test_repair_mode_splits_long_sentence_at_clause_boundary(self) -> None:
+        text = (
+            "Wenn du den Ausgangszeitpunkt, die Berücksichtigung günstiger "
+            "Änderungen und beide Voraussetzungen der Bindungswirkung genannt hast, "
+            "sitzt die zeitliche Struktur."
+        )
+
+        chunks = split_tts_text(text, pack_sentences=False)
+
+        self.assertEqual(
+            chunks,
+            [
+                (
+                    "Wenn du den Ausgangszeitpunkt, die Berücksichtigung günstiger "
+                    "Änderungen und beide Voraussetzungen der Bindungswirkung "
+                    "genannt hast,"
+                ),
+                "sitzt die zeitliche Struktur.",
+            ],
+        )
+        self.assertEqual(" ".join(chunks), text)
+
     def test_silence_has_requested_duration(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "pause.wav"

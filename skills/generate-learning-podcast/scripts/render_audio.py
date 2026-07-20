@@ -12,6 +12,7 @@ import imageio_ffmpeg
 from mutagen.mp3 import MP3
 
 TTS_MAX_INPUT_CHARS = 4000
+REPAIR_CLAUSE_SPLIT_MIN_CHARS = 150
 
 
 @dataclass(frozen=True)
@@ -41,6 +42,19 @@ def _split_oversized_part(part: str, max_chars: int) -> list[str]:
     return chunks
 
 
+def _split_long_repair_clause(part: str) -> list[str]:
+    if len(part) < REPAIR_CLAUSE_SPLIT_MIN_CHARS:
+        return [part]
+    boundary = part.rfind(", ")
+    if boundary < 0:
+        return [part]
+    before = part[: boundary + 1]
+    after = part[boundary + 2 :]
+    if len(before.split()) < 3 or len(after.split()) < 3:
+        return [part]
+    return [before, after]
+
+
 def split_tts_text(
     text: str,
     max_chars: int = TTS_MAX_INPUT_CHARS,
@@ -61,7 +75,11 @@ def split_tts_text(
         )
     ]
     if not pack_sentences:
-        return parts
+        return [
+            clause
+            for part in parts
+            for clause in _split_long_repair_clause(part)
+        ]
     chunks: list[str] = []
     current = ""
     for part in parts:
