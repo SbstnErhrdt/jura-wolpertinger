@@ -179,7 +179,9 @@ class OpenAIGatewayTests(unittest.TestCase):
             self.assertEqual(
                 transcriptions.calls[0]["model"], "gpt-4o-mini-transcribe"
             )
-            self.assertEqual(transcriptions.calls[0]["response_format"], "text")
+            self.assertEqual(transcriptions.calls[0]["response_format"], "json")
+            self.assertEqual(transcriptions.calls[0]["chunking_strategy"], "auto")
+            self.assertEqual(transcriptions.calls[0]["language"], "de")
             self.assertIn("TRANSCRIPTION", responses.calls[0]["input"][0]["content"][0]["text"])
 
     def test_tts_streams_a_non_empty_wav_with_role_instructions(self) -> None:

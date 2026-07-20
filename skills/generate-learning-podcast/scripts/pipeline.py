@@ -676,6 +676,7 @@ def _check_episode_audio(
             "draft_sha256": stable_hash(draft.model_dump(mode="json")),
             "lineage_hash": lineage_hash,
             "transcribe_model": config.transcribe_model,
+            "transcription_strategy": "server-vad-auto-de-v1",
             "text_model": config.text_model,
             "tts_model": config.tts_model,
             "voices": {

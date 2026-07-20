@@ -169,7 +169,9 @@ class OpenAIGateway:
                 return self.client.audio.transcriptions.create(
                     model=self.transcribe_model,
                     file=audio,
-                    response_format="text",
+                    response_format="json",
+                    chunking_strategy="auto",
+                    language="de",
                 )
 
         response = self._with_transient_retry(request)
