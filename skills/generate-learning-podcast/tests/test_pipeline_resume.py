@@ -33,7 +33,7 @@ from models import (
     SourceSection,
     SpeechSegment,
 )
-from pipeline import run_pipeline
+from pipeline import _pronunciation_repair, run_pipeline
 from render_audio import resolve_ffmpeg, split_tts_text
 
 
@@ -248,6 +248,30 @@ class FalsePositiveGateway(RepairGateway):
 
 
 class PipelineResumeTests(unittest.TestCase):
+    def test_pronunciation_repair_marks_differing_legal_compounds(self) -> None:
+        text = "Der Auffangtatbestand gilt auch beim Vollgeschoss."
+        issues = [
+            AudioIssue(
+                segment_id="segment-002",
+                expected="Auffangtatbestand",
+                observed="Aufwandtatbestand",
+                reason="Fachbegriff ersetzt",
+            ),
+            AudioIssue(
+                segment_id="segment-002",
+                expected="beim Vollgeschoss",
+                observed="beim Folgegeschoss",
+                reason="Fachbegriff ersetzt",
+            ),
+        ]
+
+        repaired_text, guidance = _pronunciation_repair(text, issues)
+
+        self.assertIn("Auffang-Tatbestand", repaired_text)
+        self.assertIn("Voll-Geschoss", repaired_text)
+        self.assertIn("Aufwandtatbestand", guidance)
+        self.assertIn("Folgegeschoss", guidance)
+
     def test_segment_adjudication_avoids_false_positive_tts_repair(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import difflib
 import json
 import os
 import re
@@ -488,6 +489,73 @@ def _write_wav_atomically(path: Path, writer: Callable[[Path], None]) -> None:
         partial.unlink(missing_ok=True)
 
 
+_LEGAL_COMPOUND_SUFFIXES = (
+    "tatbestand",
+    "genehmigung",
+    "geschoss",
+    "verfahren",
+    "verfügung",
+    "pflicht",
+    "schutz",
+    "fläche",
+    "abstand",
+    "recht",
+)
+
+
+def _pronunciation_repair(
+    text: str,
+    issues: list,
+) -> tuple[str, str]:
+    repaired_text = text
+    target_words: list[str] = []
+    for issue in issues:
+        expected_words = re.findall(r"[\wÄÖÜäöüß]+", issue.expected)
+        observed_words = re.findall(r"[\wÄÖÜäöüß]+", issue.observed)
+        matcher = difflib.SequenceMatcher(
+            None,
+            [word.casefold() for word in expected_words],
+            [word.casefold() for word in observed_words],
+        )
+        for tag, expected_start, expected_end, _, _ in matcher.get_opcodes():
+            if tag not in {"replace", "delete"}:
+                continue
+            for word in expected_words[expected_start:expected_end]:
+                if re.search(rf"(?<!\w){re.escape(word)}(?!\w)", text, re.IGNORECASE):
+                    target_words.append(word)
+
+    for word in dict.fromkeys(target_words):
+        lowered = word.casefold()
+        for suffix in _LEGAL_COMPOUND_SUFFIXES:
+            if lowered.endswith(suffix) and len(lowered) > len(suffix) + 1:
+                prefix_length = len(word) - len(suffix)
+                suffix_text = word[prefix_length:]
+                if word[0].isupper():
+                    suffix_text = suffix_text[:1].upper() + suffix_text[1:]
+                marked = word[:prefix_length] + "-" + suffix_text
+                repaired_text = re.sub(
+                    rf"(?<!\w){re.escape(word)}(?!\w)",
+                    marked,
+                    repaired_text,
+                    flags=re.IGNORECASE,
+                )
+                break
+
+    contrasts = " ".join(
+        (
+            f"Say the intended wording exactly: {issue.expected[:500]} "
+            f"The previous transcription heard: {issue.observed[:500]} "
+            f"Correction reason: {issue.reason[:500]}"
+        )
+        for issue in issues
+    )
+    if target_words:
+        contrasts += " Critical exact target words: " + ", ".join(
+            dict.fromkeys(target_words)
+        )
+    return repaired_text, contrasts
+
+
 def _source_stage(
     config: PipelineConfig,
     manifest: ManifestStore,
@@ -553,6 +621,7 @@ def _segment_audio(
     segment: SpeechSegment | PauseSegment,
     force: bool = False,
     repair_guidance: str | None = None,
+    repair_text: str | None = None,
 ) -> list[Path]:
     work_dir = episode_dir / "work"
     stage = f"episode/{episode_number:02d}/tts/{segment.id}"
@@ -581,7 +650,8 @@ def _segment_audio(
         )
         return [output] if ran else _stage_outputs(manifest, stage)
 
-    chunks = split_tts_text(segment.text)
+    base_chunks = split_tts_text(segment.text)
+    chunks = split_tts_text(repair_text or segment.text)
     if len(chunks) == 1:
         outputs = [work_dir / f"{segment.id}.wav"]
     else:
@@ -603,7 +673,7 @@ def _segment_audio(
         instructions += " Pronunciation correction for this retry: " + repair_guidance
     input_hash = stable_hash(
         {
-            "text_chunks": chunks,
+            "text_chunks": base_chunks,
             "speaker": segment.speaker,
             "voice": voice,
             "tts_model": config.tts_model,
@@ -991,13 +1061,9 @@ def run_pipeline(
                     f"audio check references unknown speech segments: {unknown}"
                 )
             for segment_id in affected:
-                repair_guidance = " ".join(
-                    (
-                        f"Say the intended wording exactly: {issue.expected[:500]} "
-                        f"The previous transcription heard: {issue.observed[:500]} "
-                        f"Correction reason: {issue.reason[:500]}"
-                    )
-                    for issue in issues_by_segment[segment_id]
+                repair_text, repair_guidance = _pronunciation_repair(
+                    speech_by_id[segment_id].text,
+                    issues_by_segment[segment_id],
                 )
                 segment_outputs[segment_id] = _segment_audio(
                     config=config,
@@ -1009,6 +1075,7 @@ def run_pipeline(
                     segment=speech_by_id[segment_id],
                     force=True,
                     repair_guidance=repair_guidance,
+                    repair_text=repair_text,
                 )
             ordered_audio = [
                 path
