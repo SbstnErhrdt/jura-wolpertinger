@@ -221,18 +221,24 @@ class ContentPipelineTests(unittest.TestCase):
                 GroundingReport(approved=True, issues=[]),
             ]
         )
+        observed: list[tuple[str, int, str | None]] = []
 
         result, report = draft_and_ground(
             gateway,
             PLAN,
             SOURCE_MAP.model_dump_json(indent=2),
             max_rewrites=2,
+            draft_observer=lambda phase, attempt, draft, error: observed.append(
+                (phase, attempt, error)
+            ),
         )
 
         self.assertTrue(result.segments[1].anchors)
         self.assertTrue(report.approved)
         self.assertEqual(len(gateway.calls), 3)
         self.assertIn("VALIDATION ERROR", gateway.calls[1]["input_text"])
+        self.assertIn("source anchor", observed[0][2])
+        self.assertEqual(observed[-1], ("structure-repair", 1, None))
 
     def test_validate_episode_requires_one_opening_disclosure_and_exact_recall_pairs(self) -> None:
         broken_disclosure = valid_draft().model_copy(deep=True)

@@ -290,6 +290,10 @@ def draft_and_ground(
     plan: EpisodePlan,
     source_map_text: str,
     max_rewrites: int,
+    draft_observer: Callable[
+        [str, int, EpisodeDraft, str | None], None
+    ]
+    | None = None,
 ) -> tuple[EpisodeDraft, GroundingReport]:
     draft = gateway.generate_structured(
         result_type=EpisodeDraft,
@@ -299,10 +303,15 @@ def draft_and_ground(
         ),
     )
     for repair_attempt in range(max_rewrites + 1):
+        phase = "initial" if repair_attempt == 0 else "structure-repair"
         try:
             validate_episode(plan, draft)
+            if draft_observer is not None:
+                draft_observer(phase, repair_attempt, draft, None)
             break
         except ValueError as error:
+            if draft_observer is not None:
+                draft_observer(phase, repair_attempt, draft, str(error))
             if repair_attempt == max_rewrites:
                 raise
             draft = gateway.generate_structured(
@@ -325,7 +334,7 @@ def draft_and_ground(
     )
     if report.approved:
         return draft, report
-    for _ in range(max_rewrites):
+    for repair_attempt in range(1, max_rewrites + 1):
         draft = gateway.generate_structured(
             result_type=EpisodeDraft,
             instructions=REPAIR_INSTRUCTIONS,
@@ -337,7 +346,16 @@ def draft_and_ground(
                 + report.model_dump_json(indent=2)
             ),
         )
-        validate_episode(plan, draft)
+        try:
+            validate_episode(plan, draft)
+        except ValueError as error:
+            if draft_observer is not None:
+                draft_observer(
+                    "grounding-repair", repair_attempt, draft, str(error)
+                )
+            raise
+        if draft_observer is not None:
+            draft_observer("grounding-repair", repair_attempt, draft, None)
         report = gateway.generate_structured(
             result_type=GroundingReport,
             instructions=GROUNDING_INSTRUCTIONS,
@@ -783,11 +801,25 @@ def run_pipeline(
             episode: EpisodePlan = episode,
             episode_source: SourceMap = episode_source,
         ) -> list[Path]:
+            attempt_dir = episode_dir / "work/content-attempts"
+
+            def observe_draft(
+                phase: str,
+                attempt: int,
+                observed_draft: EpisodeDraft,
+                error: str | None,
+            ) -> None:
+                stem = f"{content_hash[:12]}-{phase}-{attempt:02d}"
+                write_model(attempt_dir / f"{stem}.json", observed_draft)
+                if error is not None:
+                    write_text(attempt_dir / f"{stem}.error.txt", error + "\n")
+
             draft, report = draft_and_ground(
                 gateway,
                 episode,
                 episode_source.model_dump_json(indent=2),
                 config.max_grounding_rewrites,
+                draft_observer=observe_draft,
             )
             write_model(draft_path, draft)
             write_model(source_check_path, report)
