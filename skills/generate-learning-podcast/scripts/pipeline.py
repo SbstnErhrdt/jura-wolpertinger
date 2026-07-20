@@ -594,6 +594,26 @@ def _pronunciation_repair(
     return repaired_text, contrasts
 
 
+def _transcription_equivalence_key(text: str) -> str:
+    normalized = text.casefold().replace("dt", "t")
+    normalized = re.sub(
+        r"([bcdfghjklmnpqrstvwxyz])\1+",
+        r"\1",
+        normalized,
+    )
+    return re.sub(r"\W+", " ", normalized).strip()
+
+
+def _filter_transcription_equivalents(check: AudioCheck) -> AudioCheck:
+    issues = [
+        issue
+        for issue in check.issues
+        if _transcription_equivalence_key(issue.expected)
+        != _transcription_equivalence_key(issue.observed)
+    ]
+    return AudioCheck(passed=not issues, issues=issues)
+
+
 def _source_stage(
     config: PipelineConfig,
     manifest: ManifestStore,
@@ -838,7 +858,9 @@ def _check_episode_audio(
     def create_check() -> list[Path]:
         transcript = gateway.transcribe(mp3_path)
         write_text(transcript_path, transcript.rstrip() + "\n")
-        full_check = gateway.compare_audio(draft, transcript)
+        full_check = _filter_transcription_equivalents(
+            gateway.compare_audio(draft, transcript)
+        )
         final_check = full_check
         outputs = [transcript_path, check_path]
         if not full_check.passed:
@@ -881,8 +903,10 @@ def _check_episode_audio(
                     title=draft.title,
                     segments=[speech_by_id[segment_id] for segment_id in affected],
                 )
-                segment_check = gateway.compare_audio(
-                    adjudication_draft, labelled_transcript
+                segment_check = _filter_transcription_equivalents(
+                    gateway.compare_audio(
+                        adjudication_draft, labelled_transcript
+                    )
                 )
                 final_check = segment_check
                 write_text(

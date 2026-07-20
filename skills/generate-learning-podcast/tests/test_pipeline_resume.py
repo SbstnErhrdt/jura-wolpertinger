@@ -33,7 +33,7 @@ from models import (
     SourceSection,
     SpeechSegment,
 )
-from pipeline import _pronunciation_repair, run_pipeline
+from pipeline import _filter_transcription_equivalents, _pronunciation_repair, run_pipeline
 from render_audio import resolve_ffmpeg, split_tts_text
 
 
@@ -286,6 +286,33 @@ class EmptySegmentTranscriptGateway(TrailingOmissionGateway):
 
 
 class PipelineResumeTests(unittest.TestCase):
+    def test_audio_filter_ignores_homophonic_transcription_spelling_only(self) -> None:
+        check = AudioCheck(
+            passed=False,
+            issues=[
+                AudioIssue(
+                    segment_id="segment-010",
+                    expected="Statthaft ist die einstweilige Anordnung",
+                    observed="Stadthaft ist die einstweilige Anordnung",
+                    reason="Fachbegriff falsch transkribiert",
+                ),
+                AudioIssue(
+                    segment_id="segment-015",
+                    expected="ein ordnungsgemäßer Bauantrag",
+                    observed="eine ordnungsgemäße Baugenehmigung",
+                    reason="Bedeutung verändert",
+                ),
+            ],
+        )
+
+        filtered = _filter_transcription_equivalents(check)
+
+        self.assertFalse(filtered.passed)
+        self.assertEqual(
+            [issue.segment_id for issue in filtered.issues],
+            ["segment-015"],
+        )
+
     def test_pronunciation_repair_marks_differing_legal_compounds(self) -> None:
         text = "Der Auffangtatbestand gilt auch beim Vollgeschoss."
         issues = [
