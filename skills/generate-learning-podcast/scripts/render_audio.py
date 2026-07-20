@@ -50,7 +50,7 @@ def split_tts_text(
     normalized = " ".join(text.split())
     if not normalized:
         raise ValueError("TTS text must not be empty")
-    sentences = re.split(r"(?<=[.!?])\s+", normalized)
+    sentences = re.split(r"(?<=[.!?])\s+(?=[A-ZÄÖÜ])", normalized)
     parts = [
         smaller
         for sentence in sentences

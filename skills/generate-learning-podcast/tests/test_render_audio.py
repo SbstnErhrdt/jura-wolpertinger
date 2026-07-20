@@ -66,6 +66,22 @@ class RenderAudioTests(unittest.TestCase):
             ["Zum Schluss steigen wir ein.", "Womit beginne ich?"],
         )
 
+    def test_repair_mode_does_not_split_legal_abbreviations_from_numbers(self) -> None:
+        text = (
+            "Das folgt aus Art. 57, nicht aus Art. 58. "
+            "Womit beginne ich?"
+        )
+
+        chunks = split_tts_text(text, pack_sentences=False)
+
+        self.assertEqual(
+            chunks,
+            [
+                "Das folgt aus Art. 57, nicht aus Art. 58.",
+                "Womit beginne ich?",
+            ],
+        )
+
     def test_silence_has_requested_duration(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "pause.wav"
