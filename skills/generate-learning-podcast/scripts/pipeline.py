@@ -182,8 +182,9 @@ def spoken_word_count(draft: EpisodeDraft) -> int:
 
 
 def validate_episode(plan: EpisodePlan, draft: EpisodeDraft) -> None:
+    errors: list[str] = []
     if draft.number != plan.number or draft.slug != plan.slug:
-        raise ValueError("draft identity does not match episode plan")
+        errors.append("draft identity does not match episode plan")
     disclosures = [
         segment
         for segment in draft.segments
@@ -194,14 +195,14 @@ def validate_episode(plan: EpisodePlan, draft: EpisodeDraft) -> None:
         or not isinstance(draft.segments[0], SpeechSegment)
         or draft.segments[0].purpose != "disclosure"
     ):
-        raise ValueError("episode must begin with exactly one opening disclosure")
+        errors.append("episode must begin with exactly one opening disclosure")
     speakers = {
         segment.speaker
         for segment in draft.segments
         if isinstance(segment, SpeechSegment)
     }
     if speakers != {"moderator", "wolpi"}:
-        raise ValueError("episode must contain both moderator and wolpi")
+        errors.append("episode must contain both moderator and wolpi")
     retrieval_pauses = [
         segment
         for segment in draft.segments
@@ -210,7 +211,7 @@ def validate_episode(plan: EpisodePlan, draft: EpisodeDraft) -> None:
     if len(retrieval_pauses) != len(plan.recall_prompts) or any(
         pause.duration_ms != 5000 for pause in retrieval_pauses
     ):
-        raise ValueError(
+        errors.append(
             "episode retrieval pauses must match the plan and last 5000 ms"
         )
     retrieval_questions = [
@@ -229,15 +230,15 @@ def validate_episode(plan: EpisodePlan, draft: EpisodeDraft) -> None:
         == len(feedback_segments)
         == len(plan.recall_prompts)
     ):
-        raise ValueError(
+        errors.append(
             "episode retrieval questions and feedback must match the plan exactly"
         )
+    invalid_retrieval_order = False
     for index, segment in enumerate(draft.segments):
         if isinstance(segment, PauseSegment) and segment.purpose == "retrieval":
             if index == 0 or index + 1 == len(draft.segments):
-                raise ValueError(
-                    "retrieval pause must follow a question and precede feedback"
-                )
+                invalid_retrieval_order = True
+                continue
             before, after = draft.segments[index - 1], draft.segments[index + 1]
             if not (
                 isinstance(before, SpeechSegment)
@@ -245,9 +246,9 @@ def validate_episode(plan: EpisodePlan, draft: EpisodeDraft) -> None:
                 and isinstance(after, SpeechSegment)
                 and after.purpose == "feedback"
             ):
-                raise ValueError(
-                    "retrieval pause must follow a question and precede feedback"
-                )
+                invalid_retrieval_order = True
+    if invalid_retrieval_order:
+        errors.append("retrieval pause must follow a question and precede feedback")
     if (
         sum(
             isinstance(segment, SpeechSegment) and segment.purpose == "application"
@@ -255,11 +256,11 @@ def validate_episode(plan: EpisodePlan, draft: EpisodeDraft) -> None:
         )
         != 1
     ):
-        raise ValueError("episode must contain exactly one planned application")
+        errors.append("episode must contain exactly one planned application")
     ids = [segment.id for segment in draft.segments]
     expected_ids = [f"segment-{index:03d}" for index in range(1, len(ids) + 1)]
     if ids != expected_ids:
-        raise ValueError("segment IDs must be unique and sequential")
+        errors.append("segment IDs must be unique and sequential")
     spoken = " ".join(
         segment.text
         for segment in draft.segments
@@ -267,23 +268,25 @@ def validate_episode(plan: EpisodePlan, draft: EpisodeDraft) -> None:
     ).lower()
     disclosure_terms = ("ki", "skript", "aktual", "prüfung")
     if not all(term in spoken for term in disclosure_terms):
-        raise ValueError("episode must disclose AI generation and source limitations")
+        errors.append("episode must disclose AI generation and source limitations")
     if not 1350 <= spoken_word_count(draft) <= 2025:
-        raise ValueError("episode must contain 1350 to 2025 spoken words")
+        errors.append("episode must contain 1350 to 2025 spoken words")
     legal_segments = [
         segment
         for segment in draft.segments
         if isinstance(segment, SpeechSegment) and segment.purpose != "disclosure"
     ]
     if any(not segment.anchors for segment in legal_segments):
-        raise ValueError("every substantive speech segment needs a source anchor")
+        errors.append("every substantive speech segment needs a source anchor")
     planned_pages = set(plan.source_pages)
     if any(
         anchor.page not in planned_pages
         for segment in legal_segments
         for anchor in segment.anchors
     ):
-        raise ValueError("episode anchor falls outside planned source pages")
+        errors.append("episode anchor falls outside planned source pages")
+    if errors:
+        raise ValueError("episode validation failed: " + "; ".join(errors))
 
 
 def draft_and_ground(

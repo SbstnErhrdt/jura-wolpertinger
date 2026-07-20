@@ -210,6 +210,20 @@ class SourceAnalysisTests(unittest.TestCase):
 
 
 class ContentPipelineTests(unittest.TestCase):
+    def test_validation_reports_all_independent_structure_errors_together(self) -> None:
+        broken = valid_draft().model_copy(deep=True)
+        broken.segments[1].purpose = "retrieval-question"
+        broken.segments[1].text = "Zu kurz."
+        broken.segments[1].anchors = []
+
+        with self.assertRaises(ValueError) as raised:
+            validate_episode(PLAN, broken)
+
+        message = str(raised.exception)
+        self.assertIn("retrieval questions", message)
+        self.assertIn("1350 to 2025", message)
+        self.assertIn("source anchor", message)
+
     def test_partial_grounding_repair_is_merged_into_complete_episode(self) -> None:
         initial = valid_draft("Ungedeckte Behauptung")
         replacement = initial.segments[1].model_copy(
