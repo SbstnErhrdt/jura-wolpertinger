@@ -210,6 +210,30 @@ class SourceAnalysisTests(unittest.TestCase):
 
 
 class ContentPipelineTests(unittest.TestCase):
+    def test_invalid_draft_is_repaired_before_grounding(self) -> None:
+        invalid = valid_draft().model_copy(deep=True)
+        invalid.segments[1].anchors = []
+        repaired = valid_draft("Mit ergänztem Quellenanker")
+        gateway = RoutingGateway(
+            [
+                invalid,
+                repaired,
+                GroundingReport(approved=True, issues=[]),
+            ]
+        )
+
+        result, report = draft_and_ground(
+            gateway,
+            PLAN,
+            SOURCE_MAP.model_dump_json(indent=2),
+            max_rewrites=2,
+        )
+
+        self.assertTrue(result.segments[1].anchors)
+        self.assertTrue(report.approved)
+        self.assertEqual(len(gateway.calls), 3)
+        self.assertIn("VALIDATION ERROR", gateway.calls[1]["input_text"])
+
     def test_validate_episode_requires_one_opening_disclosure_and_exact_recall_pairs(self) -> None:
         broken_disclosure = valid_draft().model_copy(deep=True)
         broken_disclosure.segments[0].purpose = "summary"

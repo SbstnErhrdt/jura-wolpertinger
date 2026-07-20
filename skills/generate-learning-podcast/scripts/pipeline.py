@@ -57,6 +57,8 @@ GROUNDING_INSTRUCTIONS = SOURCE_ONLY + """ Audit every legal speech segment agai
 
 REPAIR_INSTRUCTIONS = SOURCE_ONLY + """ Rewrite only the reported segments. Keep segment IDs, roles, retrieval pauses, order, word-count range, and all already grounded material unchanged. Remove unsupported claims rather than enriching them."""
 
+STRUCTURE_REPAIR_INSTRUCTIONS = SOURCE_ONLY + """ Return the complete corrected episode after applying the validation error. Preserve the plan, roles, meaning, order, and grounded material. Keep exactly one opening disclosure, one application, sequential segment IDs, the planned retrieval question/pause/feedback triples, 1,350-2,025 spoken words, and at least one valid source anchor on every non-disclosure speech segment."""
+
 
 def analyse_source(gateway, chunks: list[PdfChunk]) -> SourceMap:
     analyses: list[SourceChunkAnalysis] = []
@@ -296,7 +298,24 @@ def draft_and_ground(
             plan.model_dump_json(indent=2) + "\nSOURCE MAP\n" + source_map_text
         ),
     )
-    validate_episode(plan, draft)
+    for repair_attempt in range(max_rewrites + 1):
+        try:
+            validate_episode(plan, draft)
+            break
+        except ValueError as error:
+            if repair_attempt == max_rewrites:
+                raise
+            draft = gateway.generate_structured(
+                result_type=EpisodeDraft,
+                instructions=STRUCTURE_REPAIR_INSTRUCTIONS,
+                input_text=(
+                    source_map_text
+                    + "\nEPISODE\n"
+                    + draft.model_dump_json(indent=2)
+                    + "\nVALIDATION ERROR\n"
+                    + str(error)
+                ),
+            )
     report = gateway.generate_structured(
         result_type=GroundingReport,
         instructions=GROUNDING_INSTRUCTIONS,
