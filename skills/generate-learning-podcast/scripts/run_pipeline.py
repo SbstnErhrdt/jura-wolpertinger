@@ -46,11 +46,11 @@ def _last_completed_stage(manifest_path: Path) -> str:
     except (OSError, json.JSONDecodeError):
         return "none"
     completed = [
-        name
+        (name, stage.get("completed_at", ""))
         for name, stage in data.get("stages", {}).items()
         if stage.get("status") == "completed"
     ]
-    return completed[-1] if completed else "none"
+    return max(completed, key=lambda item: item[1])[0] if completed else "none"
 
 
 def main(argv: list[str] | None = None) -> int:

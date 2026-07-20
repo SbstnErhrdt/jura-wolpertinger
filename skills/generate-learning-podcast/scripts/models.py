@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -100,7 +100,7 @@ class PauseSegment(BaseModel):
     purpose: Literal["retrieval", "beat"]
 
 
-EpisodeSegment = Annotated[SpeechSegment | PauseSegment, Field(discriminator="kind")]
+EpisodeSegment = SpeechSegment | PauseSegment
 
 
 class EpisodeDraft(BaseModel):

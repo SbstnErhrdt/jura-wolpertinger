@@ -78,6 +78,22 @@ class FakeTranscriptions:
 
 
 class ArtifactModelTests(unittest.TestCase):
+    def test_episode_schema_uses_openai_supported_union_keyword(self) -> None:
+        schema = EpisodeDraft.model_json_schema()
+
+        def keys(value):
+            if isinstance(value, dict):
+                for key, child in value.items():
+                    yield key
+                    yield from keys(child)
+            elif isinstance(value, list):
+                for child in value:
+                    yield from keys(child)
+
+        schema_keys = list(keys(schema))
+        self.assertNotIn("oneOf", schema_keys)
+        self.assertIn("anyOf", schema_keys)
+
     def test_series_episode_numbers_must_be_contiguous(self) -> None:
         with self.assertRaisesRegex(ValidationError, "contiguous"):
             SeriesPlan.model_validate(
@@ -106,7 +122,7 @@ class ArtifactModelTests(unittest.TestCase):
         with self.assertRaisesRegex(ValidationError, "issues is empty"):
             GroundingReport(approved=True, issues=[{"segment_id": "segment-002", "reason": "unsupported"}])
 
-    def test_episode_segments_use_discriminated_union(self) -> None:
+    def test_episode_segments_route_by_literal_kind(self) -> None:
         draft = EpisodeDraft.model_validate(
             {
                 "number": 1,

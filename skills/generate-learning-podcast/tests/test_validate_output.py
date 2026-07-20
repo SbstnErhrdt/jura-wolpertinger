@@ -19,6 +19,7 @@ sys.path.insert(0, str(SCRIPT_ROOT))
 from config import PipelineConfig
 from pipeline import run_pipeline
 from render_audio import resolve_ffmpeg
+from run_pipeline import _last_completed_stage
 from test_pipeline_resume import FakeGateway, create_pdf
 from validate_output import OutputValidationError, validate_job
 
@@ -108,6 +109,30 @@ class OutputValidationTests(unittest.TestCase):
 
 
 class CliPreflightTests(unittest.TestCase):
+    def test_last_completed_stage_uses_timestamps_not_json_key_order(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            manifest_path = Path(temp_dir) / "manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "stages": {
+                            "plan": {
+                                "status": "completed",
+                                "completed_at": "2026-07-20T14:28:42+00:00",
+                            },
+                            "source": {
+                                "status": "completed",
+                                "completed_at": "2026-07-20T14:17:11+00:00",
+                            },
+                        }
+                    },
+                    sort_keys=True,
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(_last_completed_stage(manifest_path), "plan")
+
     def test_missing_api_key_does_not_create_job_directory(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
