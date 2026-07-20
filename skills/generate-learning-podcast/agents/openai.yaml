@@ -1,0 +1,4 @@
+interface:
+  display_name: "Lernpodcast erstellen"
+  short_description: "Juristische PDFs als MP3-Lernserie erklären"
+  default_prompt: "Use $generate-learning-podcast to turn my legal PDF into a source-grounded German MP3 learning series."
