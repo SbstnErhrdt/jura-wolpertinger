@@ -22,6 +22,7 @@ Vor größeren Änderungen zuerst lesen:
 - [deployment.md](deployment.md)
 - [docs/architecture.md](docs/architecture.md)
 - [docs/ci-guidelines.md](docs/ci-guidelines.md)
+- [docs/flashcard-deck-import.md](docs/flashcard-deck-import.md) bei manuellen Karteikarten-Imports oder wenn Decks für weitere Nutzer zugänglich gemacht werden
 - [docs/user-stories.md](docs/user-stories.md)
 
 ## Technische Grenzen
@@ -63,6 +64,7 @@ Vor größeren Änderungen zuerst lesen:
 - Tags sind aktuell in JSON-Feldern aktiv; die normalisierten Tabellen sind vorbereitet.
 - Cloud-Listen, Review-Batches und Sync-Flows dürfen nicht clientseitig "alles laden und filtern". Große Datenmengen müssen serverseitig begrenzt, paginiert oder per RPC geladen werden.
 - Supabase-REST-Abfragen mit `.in(...)` brauchen bewusst kleine Chunks und Regressionstests, sobald die ID-Liste aus Nutzerdaten wachsen kann.
+- Manuelle Karteikarten-Imports und Nutzer-Kopien müssen nach [docs/flashcard-deck-import.md](docs/flashcard-deck-import.md) erfolgen: stabile IDs, idempotente Upserts, Schedules anlegen und Counts in Produktion verifizieren.
 
 ## Arbeitsweise
 
