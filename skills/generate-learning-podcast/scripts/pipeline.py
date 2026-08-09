@@ -557,6 +557,7 @@ _LEGAL_COMPOUND_SUFFIXES = (
     "geschoss",
     "verfahren",
     "verfügung",
+    "befugnis",
     "pflicht",
     "schutz",
     "fläche",
@@ -581,6 +582,10 @@ _VERIFIED_PRONUNCIATION_SPELLINGS = {
     "zielrichtung": "Ziel – Richtung",
 }
 
+_VERIFIED_REPAIR_REPHRASINGS = {
+    "schliesslich daten": "schließlich kommen die Daten",
+}
+
 _LEGAL_COMPOUND_PREFIXES = ("bau",)
 
 
@@ -591,6 +596,15 @@ def _pronunciation_repair(
     repaired_text = text
     target_words: list[str] = []
     for issue in issues:
+        expected_phrase = " ".join(issue.expected.casefold().split())
+        verified_rephrasing = _VERIFIED_REPAIR_REPHRASINGS.get(expected_phrase)
+        if verified_rephrasing is not None:
+            repaired_text = re.sub(
+                re.escape(issue.expected),
+                verified_rephrasing,
+                repaired_text,
+                flags=re.IGNORECASE,
+            )
         expected_words = re.findall(r"[\wÄÖÜäöüß]+", issue.expected)
         observed_words = re.findall(r"[\wÄÖÜäöüß]+", issue.observed)
         matcher = difflib.SequenceMatcher(

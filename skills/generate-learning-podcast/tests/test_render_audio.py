@@ -125,6 +125,28 @@ class RenderAudioTests(unittest.TestCase):
         )
         self.assertEqual(" ".join(chunks), text)
 
+    def test_repair_mode_splits_long_semicolon_list_after_colon(self) -> None:
+        text = (
+            "Ergänze die fünf Themenfelder für die Wiederholung: "
+            "Informationserhebung; besondere Anordnungen; Gewahrsam; "
+            "Durchsuchung und weitere Maßnahmen; schließlich kommen die Daten."
+        )
+
+        chunks = split_tts_text(text, pack_sentences=False)
+
+        self.assertEqual(
+            chunks,
+            [
+                "Ergänze die fünf Themenfelder für die Wiederholung:",
+                "Informationserhebung;",
+                "besondere Anordnungen;",
+                "Gewahrsam;",
+                "Durchsuchung und weitere Maßnahmen;",
+                "schließlich kommen die Daten.",
+            ],
+        )
+        self.assertEqual(" ".join(chunks), text)
+
     def test_silence_has_requested_duration(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "pause.wav"

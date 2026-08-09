@@ -492,6 +492,32 @@ class PipelineResumeTests(unittest.TestCase):
         self.assertIn("Polizei-Begriff", repaired_text)
         self.assertIn("re-pressive Verfolgung", repaired_text)
 
+    def test_pronunciation_repair_preserves_omitted_final_list_item(self) -> None:
+        text = (
+            "Informationserhebung; besondere Anordnungen; Gewahrsam; "
+            "Durchsuchung; schließlich Daten. Danach suche ich die "
+            "Standardbefugnis."
+        )
+        issues = [
+            AudioIssue(
+                segment_id="segment-016",
+                expected="schließlich Daten",
+                observed="omitted",
+                reason="Der letzte Listenpunkt fehlt.",
+            ),
+            AudioIssue(
+                segment_id="segment-016",
+                expected="Standardbefugnis",
+                observed="Standardgefugnis",
+                reason="Der Rechtsbegriff ist unverständlich.",
+            ),
+        ]
+
+        repaired_text, _ = _pronunciation_repair(text, issues)
+
+        self.assertIn("schließlich kommen die Daten", repaired_text)
+        self.assertIn("Standard-Befugnis", repaired_text)
+
     def test_segment_adjudication_avoids_false_positive_tts_repair(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
