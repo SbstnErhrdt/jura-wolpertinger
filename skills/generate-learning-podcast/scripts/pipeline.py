@@ -574,6 +574,7 @@ _VERIFIED_PRONUNCIATION_SPELLINGS = {
     "fehlt": "Fählt",
     "gestattungsverfahren": "Ge-Schtattungs-Verfahren",
     "grenzen": "Gren-zen",
+    "leitfragen": "Leit-Fragen",
     "owig": "O-Wi-G",
     "pag": "Peh-Ah-Geh",
     "pog": "Peh-Oh-Geh",
@@ -588,6 +589,15 @@ _VERIFIED_PRONUNCIATION_SPELLINGS = {
 _VERIFIED_REPAIR_REPHRASINGS = {
     "gibt mir das skript eine feste zahl": "Nennt das Skript eine feste Zahl",
     "schliesslich daten": "schließlich kommen die Daten",
+    "zwei schritte, ein sicherstellungsvorgang.": (
+        "Merke dir: Zwei Schritte bilden zusammen einen Sicherstellungsvorgang."
+    ),
+    (
+        "während das skript den heimlichen zugriff art. 45 zuordnet"
+    ): (
+        "während der bereitgestellte Text den heimlichen Zugriff "
+        "Artikel 45 zuordnet"
+    ),
     (
         "schmidbauer und steiner gehen von höchstens drei stunden aus, "
         "möstl und schwabenbauer nur von einer stunde."

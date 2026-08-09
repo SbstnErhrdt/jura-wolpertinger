@@ -625,6 +625,49 @@ class PipelineResumeTests(unittest.TestCase):
             "In dieser Lage gilt ausschließlich das Bayerische Versammlungsgesetz.",
         )
 
+    def test_pronunciation_repair_preserves_sicherstellung_recap(self) -> None:
+        text = (
+            "Zwei Schritte, ein Sicherstellungsvorgang. Nimm vier Leitfragen mit. "
+            "Die offene Herausgabe ist zu trennen, während das Skript den "
+            "heimlichen Zugriff Art. 45 zuordnet."
+        )
+        issues = [
+            AudioIssue(
+                segment_id="segment-003",
+                expected="Zwei Schritte, ein Sicherstellungsvorgang.",
+                observed="Passage fehlt.",
+                reason="Der Merksatz fehlt.",
+            ),
+            AudioIssue(
+                segment_id="segment-026",
+                expected="Leitfragen",
+                observed="Neitragen",
+                reason="Der Lernbegriff ist unverständlich.",
+            ),
+            AudioIssue(
+                segment_id="segment-026",
+                expected=(
+                    "während das Skript den heimlichen Zugriff Art. 45 zuordnet"
+                ),
+                observed=(
+                    "während das Krypt den heimlichen Zugriff Artikel 45 zuordnet"
+                ),
+                reason="Der Quellenbezug ist unverständlich.",
+            ),
+        ]
+
+        repaired_text, _ = _pronunciation_repair(text, issues)
+
+        self.assertIn(
+            "Merke dir: Zwei Schritte bilden zusammen einen Sicherstellungsvorgang.",
+            repaired_text,
+        )
+        self.assertIn("Leit-Fragen", repaired_text)
+        self.assertIn(
+            "während der bereitgestellte Text den heimlichen Zugriff Artikel 45 zuordnet",
+            repaired_text,
+        )
+
     def test_pronunciation_repair_separates_competing_author_attributions(self) -> None:
         text = (
             "Schmidbauer und Steiner gehen von höchstens drei Stunden aus, "
