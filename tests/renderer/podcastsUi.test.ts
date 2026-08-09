@@ -26,4 +26,19 @@ describe('podcast UI', () => {
     expect(series).toContain('playEpisode')
     expect(series).toContain("{ label: 'Podcasts', to: { name: 'podcasts' } }")
   })
+
+  it('centers transport and play icons independently from Nuxt UI defaults', async () => {
+    const player = await readFile(resolve(rendererRoot, 'components/PodcastPlayer.vue'), 'utf8')
+    const series = await readFile(resolve(rendererRoot, 'views/PodcastSeriesView.vue'), 'utf8')
+    const styles = await readFile(resolve(rendererRoot, 'styles/main.css'), 'utf8')
+
+    expect(player.match(/podcast-icon-control/g)).toHaveLength(6)
+    expect(series).toContain('podcast-icon-control podcast-episode-play')
+    expect(styles).toMatch(/\.podcast-icon-control\s*\{[^}]*align-items:\s*center/)
+    expect(styles).toMatch(/\.podcast-icon-control\s*>\s*svg\s*\{[^}]*display:\s*block/)
+    expect(styles).toMatch(/\.podcast-wide-control span\s*\{[^}]*inset:\s*0/)
+    expect(styles).toMatch(
+      /\.podcast-icon-control\s*>\s*\.lucide-play-icon\s*\{[^}]*translateX\(1px\)/
+    )
+  })
 })

@@ -36,7 +36,7 @@
         :class="{ 'is-active': player.currentEpisode.value?.id === episode.id }"
       >
         <UButton
-          class="podcast-episode-play"
+          class="podcast-icon-control podcast-episode-play"
           :aria-label="`${episode.title} abspielen`"
           :title="`${episode.title} abspielen`"
           @click="playEpisode(episode)"

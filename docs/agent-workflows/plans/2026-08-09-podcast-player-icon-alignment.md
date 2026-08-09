@@ -41,7 +41,7 @@ it('centers transport and play icons independently from Nuxt UI defaults', async
   expect(styles).toMatch(/\.podcast-icon-control\s*\{[^}]*align-items:\s*center/)
   expect(styles).toMatch(/\.podcast-icon-control\s*>\s*svg\s*\{[^}]*display:\s*block/)
   expect(styles).toMatch(/\.podcast-wide-control span\s*\{[^}]*inset:\s*0/)
-  expect(styles).toMatch(/\.podcast-icon-control\s*>\s*\.lucide-play\s*\{[^}]*translateX\(1px\)/)
+  expect(styles).toMatch(/\.podcast-icon-control\s*>\s*\.lucide-play-icon\s*\{[^}]*translateX\(1px\)/)
 })
 ```
 
@@ -101,7 +101,7 @@ Add these rules beside the existing podcast control styles in `main.css`:
   flex: 0 0 auto;
 }
 
-.podcast-icon-control > .lucide-play {
+.podcast-icon-control > .lucide-play-icon {
   transform: translateX(1px);
 }
 ```

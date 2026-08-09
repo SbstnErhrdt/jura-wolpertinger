@@ -407,6 +407,24 @@
   background: var(--wolpi-blue-tint);
 }
 
+.podcast-icon-control {
+  align-items: center;
+  box-sizing: border-box;
+  display: inline-flex;
+  justify-content: center;
+  line-height: 0;
+  position: relative;
+}
+
+.podcast-icon-control > svg {
+  display: block;
+  flex: 0 0 auto;
+}
+
+.podcast-icon-control > .lucide-play-icon {
+  transform: translateX(1px);
+}
+
 .podcast-episode-play {
   height: 38px;
   min-height: 38px;
@@ -545,8 +563,13 @@
 }
 
 .podcast-wide-control span {
+  display: grid;
   font-size: 9px;
   font-weight: 800;
+  inset: 0;
+  line-height: 1;
+  place-items: center;
+  pointer-events: none;
   position: absolute;
 }
 

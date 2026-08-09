@@ -32,7 +32,7 @@
 
         <div class="podcast-player-transport">
           <UButton
-            class="podcast-secondary-control"
+            class="podcast-icon-control podcast-secondary-control"
             color="neutral"
             variant="ghost"
             :disabled="!player.canGoPrevious.value"
@@ -43,7 +43,7 @@
             <SkipBack :size="18" />
           </UButton>
           <UButton
-            class="podcast-secondary-control podcast-wide-control"
+            class="podcast-icon-control podcast-secondary-control podcast-wide-control"
             color="neutral"
             variant="ghost"
             title="15 Sekunden zurück"
@@ -54,7 +54,7 @@
             <span>15</span>
           </UButton>
           <UButton
-            class="podcast-primary-control"
+            class="podcast-icon-control podcast-primary-control"
             :title="player.playing.value ? 'Pause' : 'Abspielen'"
             :aria-label="player.playing.value ? 'Pause' : 'Abspielen'"
             @click="player.togglePlayback"
@@ -63,7 +63,7 @@
             <Play v-else :size="22" fill="currentColor" />
           </UButton>
           <UButton
-            class="podcast-secondary-control podcast-wide-control"
+            class="podcast-icon-control podcast-secondary-control podcast-wide-control"
             color="neutral"
             variant="ghost"
             title="30 Sekunden vor"
@@ -74,7 +74,7 @@
             <span>30</span>
           </UButton>
           <UButton
-            class="podcast-secondary-control"
+            class="podcast-icon-control podcast-secondary-control"
             color="neutral"
             variant="ghost"
             :disabled="!player.canGoNext.value"
@@ -87,7 +87,7 @@
         </div>
 
         <UButton
-          class="podcast-expand-control"
+          class="podcast-icon-control podcast-expand-control"
           color="neutral"
           variant="ghost"
           :title="player.expanded.value ? 'Player schließen' : 'Player öffnen'"
