@@ -580,6 +580,7 @@ _VERIFIED_PRONUNCIATION_SPELLINGS = {
     "repressive": "Re-pressive",
     "stpo": "S-T-P-O",
     "trennsystem": "Tränn-System",
+    "vorranglösung": "Vor-Rang-Lösung",
     "zielrichtung": "Ziel – Richtung",
 }
 
@@ -735,6 +736,11 @@ def _pronunciation_repair(
 
 def _transcription_equivalence_key(text: str) -> str:
     normalized = text.casefold().replace("dt", "t")
+    normalized = re.sub(
+        r"\bschmi(?:d|t|dt|tt)bauer\b",
+        "schmidbauer",
+        normalized,
+    )
     normalized = re.sub(
         r"([bcdfghjklmnpqrstvwxyz])\1+",
         r"\1",

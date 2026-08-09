@@ -66,6 +66,27 @@ def _split_long_repair_clause(part: str) -> list[str]:
     return [part]
 
 
+def _merge_tiny_repair_chunks(chunks: list[str]) -> list[str]:
+    pending = list(chunks)
+    merged: list[str] = []
+    index = 0
+    while index < len(pending):
+        chunk = pending[index]
+        is_tiny = (
+            chunk.endswith((".", "!", "?"))
+            and len(chunk) <= 20
+            and len(chunk.split()) <= 2
+        )
+        if is_tiny and index + 1 < len(pending):
+            pending[index + 1] = chunk + " " + pending[index + 1]
+        elif is_tiny and merged:
+            merged[-1] += " " + chunk
+        else:
+            merged.append(chunk)
+        index += 1
+    return merged
+
+
 def split_tts_text(
     text: str,
     max_chars: int = TTS_MAX_INPUT_CHARS,
@@ -86,11 +107,12 @@ def split_tts_text(
         )
     ]
     if not pack_sentences:
-        return [
+        repair_chunks = [
             clause
             for part in parts
             for clause in _split_long_repair_clause(part)
         ]
+        return _merge_tiny_repair_chunks(repair_chunks)
     chunks: list[str] = []
     current = ""
     for part in parts:

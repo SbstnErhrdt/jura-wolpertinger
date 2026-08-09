@@ -332,6 +332,12 @@ class PipelineResumeTests(unittest.TestCase):
                     reason="Fachbegriff falsch transkribiert",
                 ),
                 AudioIssue(
+                    segment_id="segment-009",
+                    expected="Schmidbauer",
+                    observed="Schmidtbauer",
+                    reason="Autorenname falsch transkribiert",
+                ),
+                AudioIssue(
                     segment_id="segment-015",
                     expected="ein ordnungsgemäßer Bauantrag",
                     observed="eine ordnungsgemäße Baugenehmigung",
@@ -586,6 +592,21 @@ class PipelineResumeTests(unittest.TestCase):
             "Nennt das Skript eine feste Zahl für die Klausur?",
         )
 
+    def test_pronunciation_repair_enunciates_vorrangloesung(self) -> None:
+        text = "Das klingt nach einer Vorranglösung."
+        issues = [
+            AudioIssue(
+                segment_id="segment-013",
+                expected="Vorranglösung",
+                observed="hervorragenden Lösung",
+                reason="Die rechtliche Einordnung ist verändert.",
+            )
+        ]
+
+        repaired_text, _ = _pronunciation_repair(text, issues)
+
+        self.assertIn("Vor-Rang-Lösung", repaired_text)
+
     def test_pronunciation_repair_separates_competing_author_attributions(self) -> None:
         text = (
             "Schmidbauer und Steiner gehen von höchstens drei Stunden aus, "
@@ -722,8 +743,8 @@ class PipelineResumeTests(unittest.TestCase):
             )
 
             self.assertEqual(
-                gateway.tts_texts[-2:],
-                ["schließlich kommen die Daten.", "Standard-Befugnis."],
+                gateway.tts_texts[-1],
+                "schließlich kommen die Daten. Standard-Befugnis.",
             )
 
     def test_empty_segment_transcript_is_treated_as_an_omission(self) -> None:

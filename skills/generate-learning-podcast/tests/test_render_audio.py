@@ -66,6 +66,16 @@ class RenderAudioTests(unittest.TestCase):
             ["Zum Schluss steigen wir ein.", "Womit beginne ich?"],
         )
 
+    def test_repair_mode_merges_tiny_lead_with_following_sentence(self) -> None:
+        text = "Ja. Schmidbauer verlangt eine doppelte Abstützung."
+
+        chunks = split_tts_text(text, pack_sentences=False)
+
+        self.assertEqual(
+            chunks,
+            ["Ja. Schmidbauer verlangt eine doppelte Abstützung."],
+        )
+
     def test_repair_mode_does_not_split_legal_abbreviations_from_numbers(self) -> None:
         text = (
             "Das folgt aus Art. 57, nicht aus Art. 58. "
