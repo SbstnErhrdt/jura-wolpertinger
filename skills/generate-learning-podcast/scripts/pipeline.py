@@ -568,6 +568,7 @@ _LEGAL_COMPOUND_SUFFIXES = (
 _VERIFIED_PRONUNCIATION_SPELLINGS = {
     "abweichungen": "Ab-weichungen",
     "abschliessen": "Ab-schließen",
+    "ausschnitt": "Aus-Schnitt",
     "fehle": "Feh-le",
     "fehlt": "Fählt",
     "gestattungsverfahren": "Ge-Schtattungs-Verfahren",

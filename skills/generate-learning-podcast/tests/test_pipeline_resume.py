@@ -553,6 +553,21 @@ class PipelineResumeTests(unittest.TestCase):
         self.assertIn("schließlich kommen die Daten", repaired_text)
         self.assertIn("Standard-Befugnis", repaired_text)
 
+    def test_pronunciation_repair_enunciates_source_excerpt(self) -> None:
+        text = "Der Ausschnitt liefert daher kein vollständiges Ergebnis."
+        issues = [
+            AudioIssue(
+                segment_id="segment-023",
+                expected="Der Ausschnitt liefert",
+                observed="Der Ausmit liefert",
+                reason="Die Quellenbegrenzung ist unverständlich.",
+            )
+        ]
+
+        repaired_text, _ = _pronunciation_repair(text, issues)
+
+        self.assertIn("Aus-Schnitt", repaired_text)
+
     def test_pronunciation_repair_separates_competing_author_attributions(self) -> None:
         text = (
             "Schmidbauer und Steiner gehen von höchstens drei Stunden aus, "
