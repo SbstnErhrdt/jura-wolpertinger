@@ -142,4 +142,3 @@
 - [ ] Sync implementieren und fokussierte Tests grün ausführen.
 - [ ] Vollständige Vitest-, Typecheck-, Build- und Electron-E2E-Matrix ausführen.
 - [ ] Desktop- und Mobil-Screenshots auf Überlauf, Player-Abdeckung und Navigation prüfen.
-

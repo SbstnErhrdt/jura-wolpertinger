@@ -97,4 +97,3 @@ Ein globaler Player bleibt bei Routenwechseln aktiv. Er bietet:
 - Komponentenverträge für Sidebar, Statistik und Podcast-Player
 - Electron-E2E für Navigation, Statistiken und fortgesetzte Wiedergabe
 - Responsive Screenshots für Desktop und Mobil
-
