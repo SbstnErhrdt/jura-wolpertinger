@@ -185,6 +185,40 @@ def spoken_word_count(draft: EpisodeDraft) -> int:
     )
 
 
+def _has_complete_disclosure(text: str) -> bool:
+    normalized = " ".join(text.lower().split())
+    identifies_ai = bool(re.search(r"\bki\b", normalized))
+    limits_sources = (
+        ("skript" in normalized or "pdf" in normalized)
+        and ("nur" in normalized or "ausschließ" in normalized)
+    )
+    disclaims_updates = (
+        "update-check" in normalized
+        or "updatecheck" in normalized
+        or "aktual" in normalized
+        or bool(
+            re.search(
+                r"(?:externe quellen|spätere entwicklungen).{0,100}"
+                r"(?:nicht|keine).{0,50}(?:geprüft|berücksichtigt)",
+                normalized,
+            )
+        )
+    )
+    disclaims_official_assessment = (
+        "keine offizielle" in normalized
+        or "nicht offiziell" in normalized
+        or "prüfungsbewertung" in normalized
+    )
+    return all(
+        (
+            identifies_ai,
+            limits_sources,
+            disclaims_updates,
+            disclaims_official_assessment,
+        )
+    )
+
+
 def validate_episode(plan: EpisodePlan, draft: EpisodeDraft) -> None:
     errors: list[str] = []
     if draft.number != plan.number or draft.slug != plan.slug:
@@ -265,13 +299,8 @@ def validate_episode(plan: EpisodePlan, draft: EpisodeDraft) -> None:
     expected_ids = [f"segment-{index:03d}" for index in range(1, len(ids) + 1)]
     if ids != expected_ids:
         errors.append("segment IDs must be unique and sequential")
-    spoken = " ".join(
-        segment.text
-        for segment in draft.segments
-        if isinstance(segment, SpeechSegment)
-    ).lower()
-    disclosure_terms = ("ki", "skript", "aktual", "prüfung")
-    if not all(term in spoken for term in disclosure_terms):
+    disclosure_text = disclosures[0].text if len(disclosures) == 1 else ""
+    if not _has_complete_disclosure(disclosure_text):
         errors.append("episode must disclose AI generation and source limitations")
     if not 1350 <= spoken_word_count(draft) <= 2025:
         errors.append("episode must contain 1350 to 2025 spoken words")

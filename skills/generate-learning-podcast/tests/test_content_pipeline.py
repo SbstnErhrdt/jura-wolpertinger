@@ -344,6 +344,17 @@ class ContentPipelineTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "retrieval pauses"):
             validate_episode(PLAN, broken)
 
+    def test_validate_episode_accepts_equivalent_update_limitation_wording(self) -> None:
+        draft = valid_draft().model_copy(deep=True)
+        draft.segments[0].text = (
+            "Hinweis vorab: Diese Folge ist KI-generiert. Sie stützt sich "
+            "ausschließlich auf das hochgeladene PDF und den bereitgestellten "
+            "Quellenplan. Externe Quellen und spätere Entwicklungen wurden "
+            "nicht geprüft. Die Folge ist keine offizielle rechtliche Bewertung."
+        )
+
+        validate_episode(PLAN, draft)
+
     def test_validate_episode_requires_unique_sequential_segment_ids(self) -> None:
         broken = valid_draft().model_copy(deep=True)
         broken.segments[1].id = "segment-001"
