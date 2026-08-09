@@ -588,8 +588,9 @@ _VERIFIED_REPAIR_REPHRASINGS = {
         "schmidbauer und steiner gehen von höchstens drei stunden aus, "
         "möstl und schwabenbauer nur von einer stunde."
     ): (
-        "Nach Schmidbauer und Steiner sind es höchstens drei Stunden. "
-        "Nach Möstl und Schwabenbauer ist es nur eine Stunde."
+        "Nach Schmidbauer, geschrieben S-C-H-M-I-D-B-A-U-E-R, und Steiner "
+        "sind es höchstens drei Stunden. Nach Möstl, geschrieben M-Ö-S-T-L, "
+        "und Schwabenbauer ist es nur eine Stunde."
     ),
 }
 
@@ -601,8 +602,9 @@ _VERIFIED_CONTEXTUAL_REPHRASINGS = (
             "Möstl und Schwabenbauer nur von einer Stunde."
         ),
         (
-            "Nach Schmidbauer und Steiner sind es höchstens drei Stunden. "
-            "Nach Möstl und Schwabenbauer ist es nur eine Stunde."
+            "Nach Schmidbauer, geschrieben S-C-H-M-I-D-B-A-U-E-R, und Steiner "
+            "sind es höchstens drei Stunden. Nach Möstl, geschrieben M-Ö-S-T-L, "
+            "und Schwabenbauer ist es nur eine Stunde."
         ),
     ),
 )

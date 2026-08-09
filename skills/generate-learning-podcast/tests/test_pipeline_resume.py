@@ -575,8 +575,9 @@ class PipelineResumeTests(unittest.TestCase):
         self.assertEqual(
             repaired_text,
             (
-                "Nach Schmidbauer und Steiner sind es höchstens drei Stunden. "
-                "Nach Möstl und Schwabenbauer ist es nur eine Stunde."
+                "Nach Schmidbauer, geschrieben S-C-H-M-I-D-B-A-U-E-R, und "
+                "Steiner sind es höchstens drei Stunden. Nach Möstl, geschrieben "
+                "M-Ö-S-T-L, und Schwabenbauer ist es nur eine Stunde."
             ),
         )
 
@@ -599,8 +600,9 @@ class PipelineResumeTests(unittest.TestCase):
         self.assertEqual(
             repaired_text,
             (
-                "Nach Schmidbauer und Steiner sind es höchstens drei Stunden. "
-                "Nach Möstl und Schwabenbauer ist es nur eine Stunde."
+                "Nach Schmidbauer, geschrieben S-C-H-M-I-D-B-A-U-E-R, und "
+                "Steiner sind es höchstens drei Stunden. Nach Möstl, geschrieben "
+                "M-Ö-S-T-L, und Schwabenbauer ist es nur eine Stunde."
             ),
         )
 
