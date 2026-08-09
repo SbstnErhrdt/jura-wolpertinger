@@ -104,6 +104,27 @@ class RenderAudioTests(unittest.TestCase):
         )
         self.assertEqual(" ".join(chunks), text)
 
+    def test_repair_mode_keeps_parallel_list_together_after_colon(self) -> None:
+        text = (
+            "Ergänze jetzt noch die entscheidenden Bezugspunkte: beim PAG die "
+            "erfassten Vollzugsdienstkräfte, beim POG die gesamte Organisation "
+            "samt Verwaltungsdienst."
+        )
+
+        chunks = split_tts_text(text, pack_sentences=False)
+
+        self.assertEqual(
+            chunks,
+            [
+                "Ergänze jetzt noch die entscheidenden Bezugspunkte:",
+                (
+                    "beim PAG die erfassten Vollzugsdienstkräfte, beim POG die "
+                    "gesamte Organisation samt Verwaltungsdienst."
+                ),
+            ],
+        )
+        self.assertEqual(" ".join(chunks), text)
+
     def test_silence_has_requested_duration(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "pause.wav"

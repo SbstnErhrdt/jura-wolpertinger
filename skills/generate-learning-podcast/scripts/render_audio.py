@@ -45,14 +45,15 @@ def _split_oversized_part(part: str, max_chars: int) -> list[str]:
 def _split_long_repair_clause(part: str) -> list[str]:
     if len(part) < REPAIR_CLAUSE_SPLIT_MIN_CHARS:
         return [part]
-    boundary = part.rfind(", ")
-    if boundary < 0:
-        return [part]
-    before = part[: boundary + 1]
-    after = part[boundary + 2 :]
-    if len(before.split()) < 3 or len(after.split()) < 3:
-        return [part]
-    return [before, after]
+    for separator in (": ", ", "):
+        boundary = part.rfind(separator)
+        if boundary < 0:
+            continue
+        before = part[: boundary + 1]
+        after = part[boundary + 2 :]
+        if len(before.split()) >= 3 and len(after.split()) >= 3:
+            return [before, after]
+    return [part]
 
 
 def split_tts_text(
