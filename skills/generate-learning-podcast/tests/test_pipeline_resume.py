@@ -518,6 +518,33 @@ class PipelineResumeTests(unittest.TestCase):
         self.assertIn("schließlich kommen die Daten", repaired_text)
         self.assertIn("Standard-Befugnis", repaired_text)
 
+    def test_pronunciation_repair_separates_competing_author_attributions(self) -> None:
+        text = (
+            "Schmidbauer und Steiner gehen von höchstens drei Stunden aus, "
+            "Möstl und Schwabenbauer nur von einer Stunde."
+        )
+        issues = [
+            AudioIssue(
+                segment_id="segment-009",
+                expected=text,
+                observed=(
+                    "Schmidtbauer und Steiner gehen von höchstens drei Stunden aus, "
+                    "Nästle und Schwabenbauer nur von einer Stunde."
+                ),
+                reason="Die Autorenzuordnung ist verfälscht.",
+            )
+        ]
+
+        repaired_text, _ = _pronunciation_repair(text, issues)
+
+        self.assertEqual(
+            repaired_text,
+            (
+                "Nach Schmidbauer und Steiner sind es höchstens drei Stunden. "
+                "Nach Möstl und Schwabenbauer ist es nur eine Stunde."
+            ),
+        )
+
     def test_segment_adjudication_avoids_false_positive_tts_repair(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

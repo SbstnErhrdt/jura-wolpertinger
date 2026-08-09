@@ -584,6 +584,13 @@ _VERIFIED_PRONUNCIATION_SPELLINGS = {
 
 _VERIFIED_REPAIR_REPHRASINGS = {
     "schliesslich daten": "schließlich kommen die Daten",
+    (
+        "schmidbauer und steiner gehen von höchstens drei stunden aus, "
+        "möstl und schwabenbauer nur von einer stunde."
+    ): (
+        "Nach Schmidbauer und Steiner sind es höchstens drei Stunden. "
+        "Nach Möstl und Schwabenbauer ist es nur eine Stunde."
+    ),
 }
 
 _LEGAL_COMPOUND_PREFIXES = ("bau",)
