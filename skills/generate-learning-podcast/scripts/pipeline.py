@@ -569,6 +569,7 @@ _VERIFIED_PRONUNCIATION_SPELLINGS = {
     "abweichungen": "Ab-weichungen",
     "abschliessen": "Ab-schließen",
     "ausschnitt": "Aus-Schnitt",
+    "bayversg": "Bayerische Versammlungsgesetz",
     "fehle": "Feh-le",
     "fehlt": "Fählt",
     "gestattungsverfahren": "Ge-Schtattungs-Verfahren",

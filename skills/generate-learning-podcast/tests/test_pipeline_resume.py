@@ -607,6 +607,24 @@ class PipelineResumeTests(unittest.TestCase):
 
         self.assertIn("Vor-Rang-Lösung", repaired_text)
 
+    def test_pronunciation_repair_expands_bayversg(self) -> None:
+        text = "In dieser Lage gilt ausschließlich das BayVersG."
+        issues = [
+            AudioIssue(
+                segment_id="segment-014",
+                expected="BayVersG",
+                observed="Beifers-G",
+                reason="Die Gesetzesabkürzung ist unverständlich.",
+            )
+        ]
+
+        repaired_text, _ = _pronunciation_repair(text, issues)
+
+        self.assertEqual(
+            repaired_text,
+            "In dieser Lage gilt ausschließlich das Bayerische Versammlungsgesetz.",
+        )
+
     def test_pronunciation_repair_separates_competing_author_attributions(self) -> None:
         text = (
             "Schmidbauer und Steiner gehen von höchstens drei Stunden aus, "
