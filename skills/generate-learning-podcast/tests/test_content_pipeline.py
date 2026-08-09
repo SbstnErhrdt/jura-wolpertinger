@@ -355,6 +355,17 @@ class ContentPipelineTests(unittest.TestCase):
 
         validate_episode(PLAN, draft)
 
+    def test_validate_episode_accepts_weder_official_assessment_wording(self) -> None:
+        draft = valid_draft().model_copy(deep=True)
+        draft.segments[0].text = (
+            "Hinweis vorab: Diese Folge ist KI-generiert. Sie verwendet "
+            "ausschließlich das hochgeladene Skript. Es wurde keine "
+            "Aktualitätsprüfung vorgenommen. Die Folge ist weder eine "
+            "offizielle Bewertung noch eine verbindliche rechtliche Einschätzung."
+        )
+
+        validate_episode(PLAN, draft)
+
     def test_validate_episode_requires_unique_sequential_segment_ids(self) -> None:
         broken = valid_draft().model_copy(deep=True)
         broken.segments[1].id = "segment-001"

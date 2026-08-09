@@ -206,6 +206,7 @@ def _has_complete_disclosure(text: str) -> bool:
     )
     disclaims_official_assessment = (
         "keine offizielle" in normalized
+        or "weder eine offizielle" in normalized
         or "nicht offiziell" in normalized
         or "prüfungsbewertung" in normalized
     )
