@@ -408,6 +408,7 @@ def draft_and_ground(
             )
         else:
             draft = repaired
+        validated_phase = "grounding-repair"
         try:
             validate_episode(plan, draft)
         except ValueError as error:
@@ -415,9 +416,33 @@ def draft_and_ground(
                 draft_observer(
                     "grounding-repair", repair_attempt, draft, str(error)
                 )
-            raise
+            if repair_attempt == max_rewrites:
+                raise
+            draft = gateway.generate_structured(
+                result_type=EpisodeDraft,
+                instructions=STRUCTURE_REPAIR_INSTRUCTIONS,
+                input_text=(
+                    source_map_text
+                    + "\nEPISODE\n"
+                    + draft.model_dump_json(indent=2)
+                    + "\nVALIDATION ERROR\n"
+                    + str(error)
+                ),
+            )
+            validated_phase = "post-grounding-structure-repair"
+            try:
+                validate_episode(plan, draft)
+            except ValueError as structure_error:
+                if draft_observer is not None:
+                    draft_observer(
+                        validated_phase,
+                        repair_attempt,
+                        draft,
+                        str(structure_error),
+                    )
+                raise
         if draft_observer is not None:
-            draft_observer("grounding-repair", repair_attempt, draft, None)
+            draft_observer(validated_phase, repair_attempt, draft, None)
         report = gateway.generate_structured(
             result_type=GroundingReport,
             instructions=GROUNDING_INSTRUCTIONS,

@@ -414,6 +414,42 @@ class ContentPipelineTests(unittest.TestCase):
             all("use only" in call["instructions"].lower() for call in gateway.calls)
         )
 
+    def test_invalid_grounding_repair_gets_structure_repair_and_recheck(self) -> None:
+        draft = valid_draft("Ungedeckte Behauptung")
+        too_short = valid_draft("Reparierte Aussage").model_copy(deep=True)
+        too_short.segments[1].text = "Zu kurz nach der Quellenkorrektur."
+        repaired = valid_draft("Reparierte und ausreichend ausführliche Aussage")
+        gateway = RoutingGateway(
+            [
+                draft,
+                GroundingReport(
+                    approved=False,
+                    issues=[
+                        GroundingIssue(
+                            segment_id="segment-002",
+                            reason="Nicht im Skript belegt",
+                        )
+                    ],
+                ),
+                too_short,
+                repaired,
+                GroundingReport(approved=True, issues=[]),
+            ]
+        )
+
+        result, report = draft_and_ground(
+            gateway,
+            PLAN,
+            SOURCE_MAP.model_dump_json(indent=2),
+            max_rewrites=2,
+        )
+
+        self.assertEqual(result, repaired)
+        self.assertTrue(report.approved)
+        self.assertEqual(len(gateway.calls), 5)
+        self.assertIn("complete corrected episode", gateway.calls[3]["instructions"])
+        self.assertIn("1350 to 2025", gateway.calls[3]["input_text"])
+
     def test_transcript_has_page_anchors_and_series_plan_is_readable(self) -> None:
         transcript = render_transcript(valid_draft())
         plan_markdown = render_series_plan(SeriesPlan(title="Testserie", episodes=[PLAN]))
