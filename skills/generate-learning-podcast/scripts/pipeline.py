@@ -516,6 +516,14 @@ _VERIFIED_PRONUNCIATION_SPELLINGS = {
     "fehlt": "Fählt",
     "gestattungsverfahren": "Ge-Schtattungs-Verfahren",
     "grenzen": "Gren-zen",
+    "owig": "O-Wi-G",
+    "pag": "Peh-Ah-Geh",
+    "pog": "Peh-Oh-Geh",
+    "polizeibegriff": "Polizei-Begriff",
+    "repressive": "Re-pressive",
+    "stpo": "S-T-P-O",
+    "trennsystem": "Tränn-System",
+    "zielrichtung": "Ziel – Richtung",
 }
 
 _LEGAL_COMPOUND_PREFIXES = ("bau",)

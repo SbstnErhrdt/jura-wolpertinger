@@ -449,6 +449,49 @@ class PipelineResumeTests(unittest.TestCase):
             ),
         )
 
+    def test_pronunciation_repair_enunciates_police_law_terms(self) -> None:
+        text = (
+            "PAG und POG stehen neben StPO und OWiG. Zielrichtung, "
+            "Trennsystem, Polizeibegriff und repressive Verfolgung."
+        )
+        issues = [
+            AudioIssue(
+                segment_id="segment-005",
+                expected="PAG und POG",
+                observed="PEG und Pock",
+                reason="Gesetzesabkürzungen verfälscht",
+            ),
+            AudioIssue(
+                segment_id="segment-012",
+                expected="StPO und OWiG",
+                observed="SPO und OWG",
+                reason="Gesetzesabkürzungen verfälscht",
+            ),
+            AudioIssue(
+                segment_id="segment-023",
+                expected=(
+                    "Zielrichtung, Trennsystem, Polizeibegriff und "
+                    "repressive Verfolgung"
+                ),
+                observed=(
+                    "Zieldichtung, Trendsystem, Polizeibedrift und "
+                    "Rechtsprechungsverfolgung"
+                ),
+                reason="Rechtsbegriffe verfälscht",
+            ),
+        ]
+
+        repaired_text, _ = _pronunciation_repair(text, issues)
+
+        self.assertIn("Peh-Ah-Geh", repaired_text)
+        self.assertIn("Peh-Oh-Geh", repaired_text)
+        self.assertIn("S-T-P-O", repaired_text)
+        self.assertIn("O-Wi-G", repaired_text)
+        self.assertIn("Ziel – Richtung", repaired_text)
+        self.assertIn("Tränn-System", repaired_text)
+        self.assertIn("Polizei-Begriff", repaired_text)
+        self.assertIn("re-pressive Verfolgung", repaired_text)
+
     def test_segment_adjudication_avoids_false_positive_tts_repair(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
