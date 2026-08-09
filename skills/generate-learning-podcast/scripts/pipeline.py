@@ -587,6 +587,9 @@ _VERIFIED_PRONUNCIATION_SPELLINGS = {
 }
 
 _VERIFIED_REPAIR_REPHRASINGS = {
+    (
+        "die beiden vorgänge können äusserlich ähnlich aussehen"
+    ): "Die beiden Abläufe können äußerlich ähnlich wirken",
     "gibt mir das skript eine feste zahl": "Nennt das Skript eine feste Zahl",
     "schliesslich daten": "schließlich kommen die Daten",
     "zwei schritte, ein sicherstellungsvorgang.": (
@@ -615,6 +618,18 @@ _VERIFIED_REPAIR_REPHRASINGS = {
 }
 
 _VERIFIED_CONTEXTUAL_REPHRASINGS = (
+    (
+        ("einmal die erreichbarkeit des fahrers",),
+        (
+            "Die Zeitfragen bleiben dabei getrennt: Einmal die Erreichbarkeit "
+            "des Fahrers, einmal die drei vollen Tage beim mobilen Halteverbot."
+        ),
+        (
+            "Halte die Zeitfragen auseinander. Erstens: Ist die Person am "
+            "Steuer schnell erreichbar? Zweitens: Sind beim mobilen Halteverbot "
+            "drei volle Tage eingehalten?"
+        ),
+    ),
     (
         ("schmidbauer und steiner", "möstl und schwabenbauer"),
         (

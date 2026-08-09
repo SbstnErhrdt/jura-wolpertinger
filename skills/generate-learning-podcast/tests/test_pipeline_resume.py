@@ -533,6 +533,39 @@ class PipelineResumeTests(unittest.TestCase):
         self.assertIn("Polizei-Begriff", repaired_text)
         self.assertIn("re-pressive Verfolgung", repaired_text)
 
+    def test_pronunciation_repair_avoids_towing_minimal_pairs(self) -> None:
+        text = (
+            "Die beiden Vorgänge können äußerlich ähnlich aussehen. "
+            "Die Zeitfragen bleiben dabei getrennt: Einmal die Erreichbarkeit "
+            "des Fahrers, einmal die drei vollen Tage beim mobilen Halteverbot."
+        )
+        issues = [
+            AudioIssue(
+                segment_id="segment-003",
+                expected="Die beiden Vorgänge können äußerlich ähnlich aussehen",
+                observed="Die beiden Vorgänger können äußerlich ähnlich aussehen",
+                reason="Vorgänge werden als Vorgänger verstanden.",
+            ),
+            AudioIssue(
+                segment_id="segment-030",
+                expected="einmal die Erreichbarkeit des Fahrers",
+                observed="einmal die Erreichbarkeit des Vaters",
+                reason="Fahrer wird als Vater verstanden.",
+            ),
+        ]
+
+        repaired_text, _ = _pronunciation_repair(text, issues)
+
+        self.assertIn("Die beiden Abläufe können äußerlich ähnlich wirken", repaired_text)
+        self.assertIn(
+            "Erstens: Ist die Person am Steuer schnell erreichbar?",
+            repaired_text,
+        )
+        self.assertIn(
+            "Zweitens: Sind beim mobilen Halteverbot drei volle Tage eingehalten?",
+            repaired_text,
+        )
+
     def test_pronunciation_repair_preserves_omitted_final_list_item(self) -> None:
         text = (
             "Informationserhebung; besondere Anordnungen; Gewahrsam; "
