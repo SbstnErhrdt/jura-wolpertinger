@@ -668,6 +668,29 @@ class PipelineResumeTests(unittest.TestCase):
             repaired_text,
         )
 
+    def test_pronunciation_repair_unglues_skript_article_reference(self) -> None:
+        text = "Den heimlichen Zugriff ordnet das Skript Art. 45 PAG zu."
+        issues = [
+            AudioIssue(
+                segment_id="segment-017",
+                expected=text,
+                observed=(
+                    "Den heimlichen Zugriff ordnet das Kryptoartikel 45 PAG zu."
+                ),
+                reason="Quellenbezug und Artikelangabe sind verschmolzen.",
+            )
+        ]
+
+        repaired_text, _ = _pronunciation_repair(text, issues)
+
+        self.assertEqual(
+            repaired_text,
+            (
+                "Der bereitgestellte Text ordnet den heimlichen Zugriff "
+                "Artikel 45 PAG zu."
+            ),
+        )
+
     def test_pronunciation_repair_separates_competing_author_attributions(self) -> None:
         text = (
             "Schmidbauer und Steiner gehen von höchstens drei Stunden aus, "

@@ -599,6 +599,12 @@ _VERIFIED_REPAIR_REPHRASINGS = {
         "Artikel 45 zuordnet"
     ),
     (
+        "den heimlichen zugriff ordnet das skript art. 45 pag zu."
+    ): (
+        "Der bereitgestellte Text ordnet den heimlichen Zugriff "
+        "Artikel 45 PAG zu."
+    ),
+    (
         "schmidbauer und steiner gehen von höchstens drei stunden aus, "
         "möstl und schwabenbauer nur von einer stunde."
     ): (
