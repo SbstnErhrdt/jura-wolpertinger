@@ -157,11 +157,15 @@ def source_slice(source_map: SourceMap, plan: EpisodePlan) -> SourceMap:
     concept_ids = set(plan.concept_ids)
     page_ids = set(plan.source_pages)
     concepts = [concept for concept in source_map.concepts if concept.id in concept_ids]
-    sections = [
-        section
-        for section in source_map.sections
-        if any(anchor.page in page_ids for anchor in section.anchors)
-    ]
+    sections = []
+    for section in source_map.sections:
+        relevant_anchors = [
+            anchor for anchor in section.anchors if anchor.page in page_ids
+        ]
+        if relevant_anchors:
+            sections.append(
+                section.model_copy(update={"anchors": relevant_anchors})
+            )
     terms = sorted({term for concept in concepts for term in concept.pronunciation_terms})
     if {concept.id for concept in concepts} != concept_ids:
         raise ValueError("episode source slice is missing a planned concept")

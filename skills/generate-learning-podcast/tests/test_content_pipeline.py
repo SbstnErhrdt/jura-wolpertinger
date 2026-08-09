@@ -208,6 +208,29 @@ class SourceAnalysisTests(unittest.TestCase):
         self.assertEqual([concept.id for concept in sliced.concepts], ["concept-wirksamkeit"])
         self.assertEqual(sliced.pronunciation_terms, ["Art. 43 BayVwVfG"])
 
+    def test_source_slice_removes_section_anchors_outside_planned_pages(self) -> None:
+        spillover_anchor = SourceAnchor(
+            page=4,
+            section="Wirksamkeit",
+            excerpt="Dieser Anker gehört in eine andere Folge.",
+        )
+        source_map = SOURCE_MAP.model_copy(
+            update={
+                "sections": [
+                    SECTION.model_copy(
+                        update={"anchors": [ANCHOR, spillover_anchor]}
+                    )
+                ]
+            }
+        )
+
+        sliced = source_slice(source_map, PLAN)
+
+        self.assertEqual(
+            [anchor.page for anchor in sliced.sections[0].anchors],
+            [3],
+        )
+
 
 class ContentPipelineTests(unittest.TestCase):
     def test_validation_reports_all_independent_structure_errors_together(self) -> None:
