@@ -593,6 +593,20 @@ _VERIFIED_REPAIR_REPHRASINGS = {
     ),
 }
 
+_VERIFIED_CONTEXTUAL_REPHRASINGS = (
+    (
+        ("schmidbauer und steiner", "möstl und schwabenbauer"),
+        (
+            "Schmidbauer und Steiner gehen von höchstens drei Stunden aus, "
+            "Möstl und Schwabenbauer nur von einer Stunde."
+        ),
+        (
+            "Nach Schmidbauer und Steiner sind es höchstens drei Stunden. "
+            "Nach Möstl und Schwabenbauer ist es nur eine Stunde."
+        ),
+    ),
+)
+
 _LEGAL_COMPOUND_PREFIXES = ("bau",)
 
 
@@ -602,6 +616,21 @@ def _pronunciation_repair(
 ) -> tuple[str, str]:
     repaired_text = text
     target_words: list[str] = []
+    reported_phrases = [
+        " ".join(issue.expected.casefold().split()) for issue in issues
+    ]
+    for triggers, original, replacement in _VERIFIED_CONTEXTUAL_REPHRASINGS:
+        if any(
+            trigger in reported
+            for trigger in triggers
+            for reported in reported_phrases
+        ):
+            repaired_text = re.sub(
+                re.escape(original),
+                replacement,
+                repaired_text,
+                flags=re.IGNORECASE,
+            )
     for issue in issues:
         expected_phrase = " ".join(issue.expected.casefold().split())
         verified_rephrasing = _VERIFIED_REPAIR_REPHRASINGS.get(expected_phrase)
@@ -1214,6 +1243,7 @@ def run_pipeline(
             segment_outputs=segment_outputs,
         )
 
+        repair_text_by_segment: dict[str, str] = {}
         for _ in range(config.max_audio_repairs):
             if audio_check.passed:
                 break
@@ -1243,9 +1273,12 @@ def run_pipeline(
                 )
             for segment_id in affected:
                 repair_text, repair_guidance = _pronunciation_repair(
-                    speech_by_id[segment_id].text,
+                    repair_text_by_segment.get(
+                        segment_id, speech_by_id[segment_id].text
+                    ),
                     issues_by_segment[segment_id],
                 )
+                repair_text_by_segment[segment_id] = repair_text
                 segment_outputs[segment_id] = _segment_audio(
                     config=config,
                     gateway=gateway,
