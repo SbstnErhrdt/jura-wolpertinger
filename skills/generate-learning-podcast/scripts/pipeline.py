@@ -584,6 +584,7 @@ _VERIFIED_PRONUNCIATION_SPELLINGS = {
 }
 
 _VERIFIED_REPAIR_REPHRASINGS = {
+    "gibt mir das skript eine feste zahl": "Nennt das Skript eine feste Zahl",
     "schliesslich daten": "schließlich kommen die Daten",
     (
         "schmidbauer und steiner gehen von höchstens drei stunden aus, "

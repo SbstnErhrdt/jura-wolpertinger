@@ -568,6 +568,24 @@ class PipelineResumeTests(unittest.TestCase):
 
         self.assertIn("Aus-Schnitt", repaired_text)
 
+    def test_pronunciation_repair_avoids_gibt_gib_minimal_pair(self) -> None:
+        text = "Gibt mir das Skript eine feste Zahl für die Klausur?"
+        issues = [
+            AudioIssue(
+                segment_id="segment-008",
+                expected="Gibt mir das Skript eine feste Zahl",
+                observed="Gib mir das Skript eine feste Zahl",
+                reason="Die Frage klingt wie ein Imperativ.",
+            )
+        ]
+
+        repaired_text, _ = _pronunciation_repair(text, issues)
+
+        self.assertEqual(
+            repaired_text,
+            "Nennt das Skript eine feste Zahl für die Klausur?",
+        )
+
     def test_pronunciation_repair_separates_competing_author_attributions(self) -> None:
         text = (
             "Schmidbauer und Steiner gehen von höchstens drei Stunden aus, "
