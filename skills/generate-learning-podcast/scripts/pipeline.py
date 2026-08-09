@@ -619,6 +619,14 @@ _VERIFIED_REPAIR_REPHRASINGS = {
 
 _VERIFIED_CONTEXTUAL_REPHRASINGS = (
     (
+        ("begründet unser material nicht näher",),
+        (
+            "Welche Auffassung letztlich vorzugswürdig ist, begründet unser "
+            "Material nicht näher."
+        ),
+        "Unser Material entscheidet nicht, welche Auffassung vorzugswürdig ist.",
+    ),
+    (
         ("einmal die erreichbarkeit des fahrers",),
         (
             "Die Zeitfragen bleiben dabei getrennt: Einmal die Erreichbarkeit "

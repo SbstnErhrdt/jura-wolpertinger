@@ -566,6 +566,28 @@ class PipelineResumeTests(unittest.TestCase):
             repaired_text,
         )
 
+    def test_pronunciation_repair_avoids_naeher_mehr_minimal_pair(self) -> None:
+        text = (
+            "Welche Auffassung letztlich vorzugswürdig ist, begründet unser "
+            "Material nicht näher. Mehr sollten wir deshalb nicht hineinlesen."
+        )
+        issues = [
+            AudioIssue(
+                segment_id="segment-019",
+                expected="begründet unser Material nicht näher",
+                observed="begründet unser Material nicht mehr",
+                reason="Die Aussage über den Quellenumfang verändert sich.",
+            )
+        ]
+
+        repaired_text, _ = _pronunciation_repair(text, issues)
+
+        self.assertIn(
+            "Unser Material entscheidet nicht, welche Auffassung vorzugswürdig ist.",
+            repaired_text,
+        )
+        self.assertNotIn("nicht näher", repaired_text)
+
     def test_pronunciation_repair_preserves_omitted_final_list_item(self) -> None:
         text = (
             "Informationserhebung; besondere Anordnungen; Gewahrsam; "
