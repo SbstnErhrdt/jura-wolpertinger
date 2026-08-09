@@ -38,7 +38,9 @@ import type {
   LearningDashboard,
   LearningImportResult,
   LearningReviewEvent,
+  LearningStatistics,
   LearningTask,
+  PodcastProgress,
   UserProfile,
   LegalArea,
   ReviewCard,
@@ -55,6 +57,9 @@ import {
   examTypeSchema,
   learningExportFileSchema,
   learningImportResultSchema,
+  learningStatisticsSchema,
+  podcastCatalogSchema,
+  podcastProgressSchema,
   learningCardQualityReasonSchema,
   learningCardQualityStatusSchema,
   learningTaskStatusSchema,
@@ -62,6 +67,7 @@ import {
   reviewRatingSchema
 } from '@shared/schemas'
 import { selectExamRevisionIdsForDeletion } from '@shared/revisionRetention'
+import { BAYBO_PODCAST_CATALOG } from '@shared/podcasts/baybo-april-2026'
 
 const BROWSER_STORE_KEY = 'jura-wolpertinger-browser-dev-v1'
 const AI_CORRECTION_NOT_IMPLEMENTED_MESSAGE = 'Diese Funktion ist derzeit nicht freigeschaltet.'
@@ -96,11 +102,13 @@ type BrowserStore = {
     lastRating: ReviewRating | null
     lastReviewedAt: string | null
   }>
+  podcastProgress: Array<PodcastProgress & { userId: string }>
   userProfiles: UserProfile[]
 }
 
 let browserDevApi: AppApi | null = null
 let cloudLearningApi: AppApi | null = null
+let browserDevFallbackReported = false
 
 export const isElectronApiAvailable = Boolean(window.juraApi)
 export const api: AppApi = getApi()
@@ -112,14 +120,16 @@ export function getApi(): AppApi {
     cloudLearningApi ??= createCloudLearningApi(browserDevApi)
     return cloudLearningApi
   }
+  if (!browserDevFallbackReported) {
+    console.warn(
+      'Electron API bridge is not available. Using browser-only localStorage fallback for development.'
+    )
+    browserDevFallbackReported = true
+  }
   return browserDevApi
 }
 
 function createBrowserDevApi(): AppApi {
-  console.warn(
-    'Electron API bridge is not available. Using browser-only localStorage fallback for development.'
-  )
-
   return {
     async getAppVersion() {
       return packageJson.version
@@ -655,6 +665,66 @@ function createBrowserDevApi(): AppApi {
         learnedToday: activityDays.has(localDateKey(new Date()))
       } satisfies LearningDashboard
     },
+    async getLearningStatistics(): Promise<LearningStatistics> {
+      const store = readStore()
+      const user = ensureBrowserUser(store)
+      const cards = store.learningCards.filter(
+        (card) => card.userId === user.id && !card.isArchived
+      )
+      const reviews = store.learningReviewEvents.filter((event) => event.userId === user.id)
+      const latestByCard = new Map<string, LearningReviewEvent>()
+      for (const review of reviews) {
+        const current = latestByCard.get(review.cardId)
+        if (!current || current.reviewedAt <= review.reviewedAt) latestByCard.set(review.cardId, review)
+      }
+      const activeCardIds = new Set(cards.map((card) => card.id))
+      const activityKeys = lastLocalDateKeys(14)
+      const activityCounts = new Map(activityKeys.map((date) => [date, 0]))
+      for (const review of reviews) {
+        const date = localDateKey(new Date(review.reviewedAt))
+        if (activityCounts.has(date)) activityCounts.set(date, (activityCounts.get(date) ?? 0) + 1)
+      }
+      const reviewDays = new Set(reviews.map((review) => localDateKey(new Date(review.reviewedAt))))
+      const last7Days = new Set(activityKeys.slice(-7))
+
+      return learningStatisticsSchema.parse({
+        totalCards: cards.length,
+        reviewedCards: [...latestByCard.keys()].filter((cardId) => activeCardIds.has(cardId)).length,
+        reviewCountTotal: reviews.length,
+        reviewsToday: activityCounts.get(activityKeys.at(-1) ?? '') ?? 0,
+        reviewsLast7Days: reviews.filter((review) =>
+          last7Days.has(localDateKey(new Date(review.reviewedAt)))
+        ).length,
+        streakDays: calculateBrowserStreakDays(reviewDays),
+        activeDaysLast14: [...activityCounts.values()].filter((count) => count > 0).length,
+        activity: activityKeys.map((date) => ({ date, reviews: activityCounts.get(date) ?? 0 })),
+        ratingCounts: ([1, 2, 3, 4] as const).map((rating) => ({
+          rating,
+          count: cards.filter((card) => latestByCard.get(card.id)?.rating === rating).length
+        })),
+        collections: store.learningCollections
+          .filter((collection) => collection.userId === user.id)
+          .map((collection) => {
+            const collectionCards = cards.filter((card) => card.collectionId === collection.id)
+            const ratings = collectionCards
+              .map((card) => latestByCard.get(card.id)?.rating)
+              .filter((rating): rating is ReviewRating => rating !== undefined)
+            return {
+              id: collection.id,
+              name: collection.name,
+              cardCount: collectionCards.length,
+              reviewedCards: ratings.length,
+              dueCount: collectionCards.filter(
+                (card) => browserScheduleFor(store, user.id, card.id).dueAt <= nowIso()
+              ).length,
+              averageRating: ratings.length
+                ? Math.round((ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length) * 100) /
+                  100
+                : null
+            }
+          })
+      })
+    },
     async exportLearningDecksJson() {
       const store = readStore()
       const user = ensureBrowserUser(store)
@@ -930,6 +1000,61 @@ function createBrowserDevApi(): AppApi {
         ...card,
         ...browserCardQualityFor(store, user.id, card.id)
       }
+    },
+    async getPodcastCatalog() {
+      const store = readStore()
+      const user = ensureBrowserUser(store)
+      const progressByEpisode = new Map(
+        store.podcastProgress
+          .filter((progress) => progress.userId === user.id)
+          .map((progress) => [progress.episodeId, progress])
+      )
+      return podcastCatalogSchema.parse({
+        legalAreas: BAYBO_PODCAST_CATALOG.legalAreas.map((area) => ({
+          ...area,
+          series: area.series.map((series) => ({
+            ...series,
+            episodes: series.episodes.map((episode) => ({
+              ...episode,
+              progress: progressByEpisode.get(episode.id) ?? null
+            }))
+          }))
+        }))
+      })
+    },
+    async savePodcastProgress(input) {
+      const store = readStore()
+      const user = ensureBrowserUser(store)
+      const durationSeconds = Math.max(0, input.durationSeconds)
+      const positionSeconds = Math.min(
+        Math.max(0, input.positionSeconds),
+        durationSeconds || Infinity
+      )
+      const existing = store.podcastProgress.find(
+        (progress) => progress.userId === user.id && progress.episodeId === input.episodeId
+      )
+      const completed =
+        Boolean(existing?.completed) ||
+        input.completed ||
+        (durationSeconds > 0 &&
+          (positionSeconds / durationSeconds >= 0.95 || durationSeconds - positionSeconds <= 30))
+      const updatedAt = nowIso()
+      const progress = {
+        userId: user.id,
+        episodeId: input.episodeId,
+        positionSeconds,
+        durationSeconds,
+        completed,
+        lastPlayedAt: updatedAt,
+        updatedAt
+      }
+      if (existing) {
+        Object.assign(existing, progress)
+      } else {
+        store.podcastProgress.push(progress)
+      }
+      writeStore(store)
+      return podcastProgressSchema.parse(progress)
     },
     async addAttachment() {
       console.warn('Attachments are only available in the Electron app window.')
@@ -1212,6 +1337,7 @@ function emptyStore(): BrowserStore {
     learningCardQualityEvents: [],
     learningReviewEvents: [],
     learningSchedules: [],
+    podcastProgress: [],
     userProfiles: []
   }
 }
@@ -1620,6 +1746,16 @@ function localDateKey(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
+}
+
+function lastLocalDateKeys(count: number): string[] {
+  const today = new Date()
+  return Array.from({ length: count }, (_, index) => {
+    const date = new Date(today)
+    date.setHours(12, 0, 0, 0)
+    date.setDate(today.getDate() - (count - index - 1))
+    return localDateKey(date)
+  })
 }
 
 function countBrowserMissedDaysThisWeek(activityDays: Set<string>): number {

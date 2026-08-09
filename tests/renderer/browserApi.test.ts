@@ -481,4 +481,53 @@ describe('browser development API', () => {
     const batch = await api.getReviewBatch({ collectionId: collection.id, limit: 5 })
     expect(batch.map((card) => card.id)).toEqual([newCard.id, reviewedCard.id])
   })
+
+  it('provides browser learning statistics and persists podcast progress', async () => {
+    const apiModulePath = '../../src/renderer/src/api'
+    const { getApi } = (await import(/* @vite-ignore */ apiModulePath)) as {
+      getApi: () => AppApi
+    }
+    const api = getApi()
+    const collection = await api.createLearningCollection({ name: 'Zivilrecht' })
+    const card = await api.createLearningCard({
+      collectionId: collection.id,
+      title: 'Anspruch',
+      frontMarkdown: 'Was ist ein Anspruch?',
+      backMarkdown: '§ 194 Abs. 1 BGB',
+      tags: ['bgb']
+    })
+    await api.recordReview({ cardId: card.id, rating: 3 })
+
+    await expect(api.getLearningStatistics()).resolves.toMatchObject({
+      totalCards: 1,
+      reviewedCards: 1,
+      reviewCountTotal: 1,
+      reviewsToday: 1,
+      ratingCounts: [
+        { rating: 1, count: 0 },
+        { rating: 2, count: 0 },
+        { rating: 3, count: 1 },
+        { rating: 4, count: 0 }
+      ]
+    })
+
+    const catalog = await api.getPodcastCatalog()
+    expect(catalog.legalAreas[0].series[0].episodes).toHaveLength(18)
+    const episode = catalog.legalAreas[0].series[0].episodes[0]
+    await expect(
+      api.savePodcastProgress({
+        episodeId: episode.id,
+        positionSeconds: 680,
+        durationSeconds: 700,
+        completed: false
+      })
+    ).resolves.toEqual(expect.objectContaining({ completed: true, positionSeconds: 680 }))
+    const resumedCatalog = await api.getPodcastCatalog()
+    expect(resumedCatalog.legalAreas[0].series[0].episodes[0].progress).toEqual(
+      expect.objectContaining({
+        episodeId: episode.id,
+        completed: true
+      })
+    )
+  })
 })

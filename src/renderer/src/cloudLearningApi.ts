@@ -30,6 +30,9 @@ import type {
   LearningDashboard,
   LearningImportResult,
   LearningReviewEvent,
+  LearningStatistics,
+  PodcastCatalog,
+  PodcastProgress,
   ReviewCard,
   ReviewRating,
   Submission,
@@ -41,6 +44,9 @@ import {
   learningCardQualityStatusSchema,
   learningExportFileSchema,
   learningImportResultSchema,
+  learningStatisticsSchema,
+  podcastCatalogSchema,
+  podcastProgressSchema,
   learningReviewEventSchema,
   reviewRatingSchema,
   userProfileSchema
@@ -300,6 +306,9 @@ export function createCloudLearningApi(localApi: AppApi): AppApi {
         learnedToday: activityDays.has(localDateKey(new Date()))
       } satisfies LearningDashboard
     },
+    async getLearningStatistics() {
+      return getCloudLearningStatistics()
+    },
     async exportLearningDecksJson() {
       const collections = await listCloudCollections()
       const collectionCards = await Promise.all(
@@ -439,6 +448,12 @@ export function createCloudLearningApi(localApi: AppApi): AppApi {
     },
     async rateLearningCardQuality(input: RateLearningCardQualityInput) {
       return rateCloudCardQuality(input)
+    },
+    async getPodcastCatalog() {
+      return getCloudPodcastCatalog()
+    },
+    async savePodcastProgress(input) {
+      return saveCloudPodcastProgress(input)
     }
   }
 }
@@ -1615,6 +1630,124 @@ async function getCloudLearningDashboardSummary(): Promise<{
     totalCards: Number(summary.total_cards ?? 0),
     collectionCount: Number(summary.collection_count ?? 0)
   }
+}
+
+async function getCloudLearningStatistics(): Promise<LearningStatistics> {
+  const { client } = await requireCloudContext()
+  const { data, error } = await client.rpc('get_learning_statistics', {})
+  if (error) throw error
+  const value = (data ?? {}) as Record<string, unknown>
+  const activity = Array.isArray(value.activity) ? value.activity : []
+  const ratingCounts = Array.isArray(value.rating_counts)
+    ? value.rating_counts
+    : Array.isArray(value.ratingCounts)
+      ? value.ratingCounts
+      : []
+  const collections = Array.isArray(value.collections) ? value.collections : []
+
+  return learningStatisticsSchema.parse({
+    totalCards: Number(value.total_cards ?? value.totalCards ?? 0),
+    reviewedCards: Number(value.reviewed_cards ?? value.reviewedCards ?? 0),
+    reviewCountTotal: Number(value.review_count_total ?? value.reviewCountTotal ?? 0),
+    reviewsToday: Number(value.reviews_today ?? value.reviewsToday ?? 0),
+    reviewsLast7Days: Number(value.reviews_last_7_days ?? value.reviewsLast7Days ?? 0),
+    streakDays: Number(value.streak_days ?? value.streakDays ?? 0),
+    activeDaysLast14: Number(value.active_days_last_14 ?? value.activeDaysLast14 ?? 0),
+    activity: activity.map((entry) => {
+      const row = entry as Record<string, unknown>
+      return {
+        date: String(row.date),
+        reviews: Number(row.reviews ?? 0)
+      }
+    }),
+    ratingCounts: ([1, 2, 3, 4] as const).map((rating) => {
+      const row = ratingCounts.find(
+        (entry) => Number((entry as Record<string, unknown>).rating) === rating
+      ) as Record<string, unknown> | undefined
+      return { rating, count: Number(row?.count ?? 0) }
+    }),
+    collections: collections.map((entry) => {
+      const row = entry as Record<string, unknown>
+      const averageRating = row.average_rating ?? row.averageRating
+      return {
+        id: String(row.id),
+        name: String(row.name),
+        cardCount: Number(row.card_count ?? row.cardCount ?? 0),
+        reviewedCards: Number(row.reviewed_cards ?? row.reviewedCards ?? 0),
+        dueCount: Number(row.due_count ?? row.dueCount ?? 0),
+        averageRating: averageRating === null || averageRating === undefined
+          ? null
+          : Number(averageRating)
+      }
+    })
+  })
+}
+
+type CloudPodcastLegalAreaRow = {
+  id: string
+  slug: string
+  name: string
+}
+
+type CloudPodcastSeriesRow = {
+  id: string
+  legal_area_id: string
+  slug: string
+  title: string
+  description: string | null
+  edition: string | null
+  artwork_url: string | null
+}
+
+type CloudPodcastEpisodeRow = {
+  id: string
+  series_id: string
+  slug: string
+  episode_number: number
+  title: string
+  description: string | null
+  duration_seconds: number
+  audio_url: string
+  published_at: string | null
+}
+
+type CloudPodcastProgressRow = {
+  episode_id: string
+  position_seconds: number
+  duration_seconds: number
+  completed: boolean
+  last_played_at: string | null
+  updated_at: string
+}
+
+async function getCloudPodcastCatalog(): Promise<PodcastCatalog> {
+  const { client } = await requireCloudContext()
+  const { data, error } = await client.rpc('get_podcast_catalog', {})
+  if (error) throw error
+  return podcastCatalogSchema.parse(data ?? { legalAreas: [] })
+}
+
+async function saveCloudPodcastProgress(
+  input: Parameters<AppApi['savePodcastProgress']>[0]
+): Promise<PodcastProgress> {
+  const { client } = await requireCloudContext()
+  const durationSeconds = Math.max(0, input.durationSeconds)
+  const positionSeconds = Math.min(Math.max(0, input.positionSeconds), durationSeconds || Infinity)
+  const completed =
+    input.completed ||
+    (durationSeconds > 0 &&
+      (positionSeconds / durationSeconds >= 0.95 || durationSeconds - positionSeconds <= 30))
+  const updatedAt = nowIso()
+  const { data, error } = await client.rpc('upsert_podcast_progress', {
+    p_episode_id: input.episodeId,
+    p_position_seconds: positionSeconds,
+    p_duration_seconds: durationSeconds,
+    p_completed: completed,
+    p_last_played_at: updatedAt,
+    p_updated_at: updatedAt
+  })
+  if (error) throw error
+  return podcastProgressSchema.parse(data)
 }
 
 function normalizeTags(tags: string[]): string[] {

@@ -1,0 +1,26 @@
+{
+  "legalArea": {
+    "id": "b19ffd85-c38c-43a3-870b-63ca52331d70",
+    "slug": "steuerrecht",
+    "name": "Steuerrecht",
+    "sortIndex": 30
+  },
+  "series": {
+    "id": "7be6edfa-9c51-48b0-9dde-53f5de29420f",
+    "slug": "steuerrecht-ao-august-2026",
+    "title": "Steuerrecht-AO",
+    "description": "Eine Lernfolge zur Abgabenordnung als Grundlage des steuerlichen Verwaltungsverfahrens.",
+    "edition": "August 2026",
+    "sortIndex": 10,
+    "publishedAt": "2026-08-09T00:00:00.000Z"
+  },
+  "episode": {
+    "id": "4e2ed99e-fad8-4f88-947f-becdc6ced300",
+    "slug": "die-abgabenordnung-als-betriebssystem-des-finanzamts",
+    "number": 1,
+    "title": "Die Abgabenordnung als Betriebssystem des Finanzamts",
+    "description": "Die Abgabenordnung als systematische Grundlage für Organisation, Verfahren und Entscheidungen des Finanzamts.",
+    "durationSeconds": 1413.407,
+    "publishedAt": "2026-08-09T00:00:00.000Z"
+  }
+}

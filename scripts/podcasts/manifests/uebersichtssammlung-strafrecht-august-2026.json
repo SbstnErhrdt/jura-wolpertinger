@@ -1,0 +1,26 @@
+{
+  "legalArea": {
+    "id": "fb96fddc-fc85-48a1-b746-7903f59681f8",
+    "slug": "strafrecht",
+    "name": "Strafrecht",
+    "sortIndex": 10
+  },
+  "series": {
+    "id": "a33d4dc5-48d4-448a-99be-77b7f8868d5c",
+    "slug": "uebersichtssammlung-strafrecht-august-2026",
+    "title": "Übersichtssammlung Strafrecht",
+    "description": "Eine Übersichtssammlung zu zentralen Strukturen und Prüfungsschemata des Strafrechts.",
+    "edition": "August 2026",
+    "sortIndex": 10,
+    "publishedAt": "2026-08-09T00:00:00.000Z"
+  },
+  "episode": {
+    "id": "6d7efa8a-3ad7-43e3-9753-7c44de28272d",
+    "slug": "urteilsaufbau-und-systematik-der-strafzumessung",
+    "number": 1,
+    "title": "Urteilsaufbau und Systematik der Strafzumessung",
+    "description": "Urteilsaufbau und Systematik der Strafzumessung kompakt und klausurorientiert erklärt.",
+    "durationSeconds": 1658.776,
+    "publishedAt": "2026-08-09T00:00:00.000Z"
+  }
+}

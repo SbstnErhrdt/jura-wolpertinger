@@ -14,6 +14,7 @@ import type {
   CloudLearningCard,
   CloudLearningCardQualityEvent,
   CloudLearningCollection,
+  CloudPodcastProgress,
   CloudLearningReviewEvent,
   CloudLearningSchedule,
   CloudLearningSyncState
@@ -227,6 +228,15 @@ export class SupabaseSyncClient {
       if (error) throw new Error(`Kartenqualitaet konnte nicht geladen werden: ${error.message}`)
       return (data ?? []) as Array<Record<string, unknown>>
     })
+    const { data: podcastProgressRows, error: podcastProgressError } = await this.client
+      .from('podcast_episode_progress')
+      .select(
+        'user_id, episode_id, position_seconds, duration_seconds, completed, last_played_at, updated_at'
+      )
+      .eq('user_id', account.remoteUserId)
+    if (podcastProgressError) {
+      throw new Error(`Podcast-Fortschritt konnte nicht geladen werden: ${podcastProgressError.message}`)
+    }
 
     const itemsById = new Map(items.map((item) => [String(item.id), item]))
     const tagsByItemId = groupTagsByItemId(tagRows)
@@ -290,7 +300,18 @@ export class SupabaseSyncClient {
         ratedAt: String(row.rated_at),
         createdAt: String(row.created_at),
         updatedAt: String(row.updated_at)
-      }))
+      })),
+      podcastProgress: ((podcastProgressRows ?? []) as Array<Record<string, unknown>>).map(
+        (row): CloudPodcastProgress => ({
+          userId: String(row.user_id),
+          episodeId: String(row.episode_id),
+          positionSeconds: Number(row.position_seconds),
+          durationSeconds: Number(row.duration_seconds),
+          completed: Boolean(row.completed),
+          lastPlayedAt: row.last_played_at ? String(row.last_played_at) : null,
+          updatedAt: String(row.updated_at)
+        })
+      )
     }
   }
 
@@ -404,6 +425,20 @@ export class SupabaseSyncClient {
         { onConflict: 'id' }
       )
       if (error) throw new Error(`Kartenqualitaet konnte nicht gesichert werden: ${error.message}`)
+    }
+
+    for (const progress of state.podcastProgress ?? []) {
+      const { error } = await this.client.rpc('upsert_podcast_progress', {
+        p_episode_id: progress.episodeId,
+        p_position_seconds: progress.positionSeconds,
+        p_duration_seconds: progress.durationSeconds,
+        p_completed: progress.completed,
+        p_last_played_at: progress.lastPlayedAt,
+        p_updated_at: progress.updatedAt
+      })
+      if (error) {
+        throw new Error(`Podcast-Fortschritt konnte nicht gesichert werden: ${error.message}`)
+      }
     }
   }
 

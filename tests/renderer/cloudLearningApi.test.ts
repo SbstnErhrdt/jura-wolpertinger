@@ -231,6 +231,88 @@ describe('cloud learning API', () => {
     expect(queryCalls.some((call) => call.table === 'learning_prompts')).toBe(false)
   })
 
+  it('loads cloud statistics and the public podcast catalog and upserts private progress', async () => {
+    const seriesId = 'ba7b2026-0400-4000-8000-000000000001'
+    const episodeId = 'ba7b2026-0400-4000-8000-000000000101'
+    tableData = {
+      podcast_legal_areas: [
+        { id: '33333333-3333-4333-8333-333333333333', slug: 'oeffentliches-recht', name: 'Öffentliches Recht' }
+      ],
+      podcast_series: [
+        {
+          id: seriesId,
+          legal_area_id: '33333333-3333-4333-8333-333333333333',
+          slug: 'baybo-april-2026',
+          title: 'BayBO',
+          description: 'Bauordnungsrecht',
+          edition: 'April 2026',
+          artwork_url: null
+        }
+      ],
+      podcast_episodes: [
+        {
+          id: episodeId,
+          series_id: seriesId,
+          slug: 'grundbegriffe',
+          episode_number: 1,
+          title: 'Grundbegriffe',
+          description: 'Die Grundlagen.',
+          duration_seconds: 700,
+          audio_url: 'https://app.jura-wolpi.de/audio/folge-1.mp3',
+          published_at: now
+        }
+      ],
+      podcast_episode_progress: []
+    }
+
+    vi.doMock('../../src/renderer/src/cloudAuth', () => ({
+      getSupabaseAuthClient: () => createSupabaseClientMock()
+    }))
+    const apiModulePath = '../../src/renderer/src/cloudLearningApi'
+    const { createCloudLearningApi } = (await import(/* @vite-ignore */ apiModulePath)) as {
+      createCloudLearningApi: (localApi: AppApi) => AppApi
+    }
+    const api = createCloudLearningApi(createLocalApiStub())
+
+    await expect(api.getLearningStatistics()).resolves.toMatchObject({
+      totalCards: 301,
+      reviewCountTotal: 12,
+      ratingCounts: [
+        { rating: 1, count: 1 },
+        { rating: 2, count: 2 },
+        { rating: 3, count: 3 },
+        { rating: 4, count: 4 }
+      ]
+    })
+    await expect(api.getPodcastCatalog()).resolves.toMatchObject({
+      legalAreas: [
+        {
+          slug: 'oeffentliches-recht',
+          series: [
+            {
+              id: seriesId,
+              episodes: [{ id: episodeId, progress: null }]
+            }
+          ]
+        }
+      ]
+    })
+    await expect(
+      api.savePodcastProgress({
+        episodeId,
+        positionSeconds: 200,
+        durationSeconds: 700,
+        completed: false
+      })
+    ).resolves.toEqual(expect.objectContaining({ episodeId, positionSeconds: 200 }))
+    expect(rpcCalls).toContainEqual(
+      expect.objectContaining({
+        name: 'upsert_podcast_progress',
+        args: expect.objectContaining({ p_episode_id: episodeId })
+      })
+    )
+  })
+
   it('loads and upserts the signed-in user profile', async () => {
     tableData = {
       user_profiles: [{
@@ -423,6 +505,74 @@ function createSupabaseClientMock() {
           error: null
         }
       }
+      if (name === 'get_learning_statistics') {
+        return {
+          data: {
+            total_cards: 301,
+            reviewed_cards: 10,
+            review_count_total: 12,
+            reviews_today: 2,
+            reviews_last_7_days: 8,
+            streak_days: 3,
+            active_days_last_14: 6,
+            activity: [{ date: '2026-07-05', reviews: 2 }],
+            rating_counts: [
+              { rating: 1, count: 1 },
+              { rating: 2, count: 2 },
+              { rating: 3, count: 3 },
+              { rating: 4, count: 4 }
+            ],
+            collections: []
+          },
+          error: null
+        }
+      }
+      if (name === 'get_podcast_catalog') {
+        return {
+          data: {
+            legalAreas: [
+              {
+                slug: 'oeffentliches-recht',
+                name: 'Öffentliches Recht',
+                series: tableData.podcast_series.map((series) => ({
+                  id: (series as Record<string, unknown>).id,
+                  slug: (series as Record<string, unknown>).slug,
+                  title: (series as Record<string, unknown>).title,
+                  description: (series as Record<string, unknown>).description,
+                  edition: (series as Record<string, unknown>).edition,
+                  artworkUrl: null,
+                  episodes: tableData.podcast_episodes.map((episode) => ({
+                    id: (episode as Record<string, unknown>).id,
+                    seriesId: (episode as Record<string, unknown>).series_id,
+                    slug: (episode as Record<string, unknown>).slug,
+                    number: (episode as Record<string, unknown>).episode_number,
+                    title: (episode as Record<string, unknown>).title,
+                    description: (episode as Record<string, unknown>).description,
+                    durationSeconds: (episode as Record<string, unknown>).duration_seconds,
+                    audioUrl: (episode as Record<string, unknown>).audio_url,
+                    publishedAt: (episode as Record<string, unknown>).published_at,
+                    progress: null
+                  }))
+                }))
+              }
+            ]
+          },
+          error: null
+        }
+      }
+      if (name === 'upsert_podcast_progress') {
+        return {
+          data: {
+            episodeId: args.p_episode_id,
+            positionSeconds: args.p_position_seconds,
+            durationSeconds: args.p_duration_seconds,
+            completed: args.p_completed,
+            lastPlayedAt: args.p_last_played_at,
+            updatedAt: args.p_updated_at
+          },
+          error: null
+        }
+      }
       if (name === 'record_review') {
         return {
           data: {
@@ -540,6 +690,7 @@ function createLocalApiStub(): AppApi {
     listLearningTasks: unimplemented,
     updateLearningTaskStatus: unimplemented,
     getLearningDashboard: unimplemented,
+    getLearningStatistics: unimplemented,
     exportLearningDecksJson: unimplemented,
     importLearningDecksJson: unimplemented,
     listLearningCollections: unimplemented,
@@ -552,6 +703,8 @@ function createLocalApiStub(): AppApi {
     getReviewBatch: unimplemented,
     recordReview: unimplemented,
     rateLearningCardQuality: unimplemented,
+    getPodcastCatalog: unimplemented,
+    savePodcastProgress: unimplemented,
     addAttachment: unimplemented,
     openAttachment: unimplemented,
     exportExamPackage: unimplemented,

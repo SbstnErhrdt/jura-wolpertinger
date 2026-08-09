@@ -15,10 +15,13 @@ import type {
   LearningCardQualityStatus,
   LearningCollection,
   LearningDashboard,
+  LearningStatistics,
   LearningImportResult,
   LearningReviewEvent,
   LearningTask,
   LegalArea,
+  PodcastCatalog,
+  PodcastProgress,
   ReviewCard,
   ReviewRating,
   SyncAuthInput,
@@ -220,6 +223,13 @@ export type RecordReviewResult = {
   intervalLabel: string
 }
 
+export type SavePodcastProgressInput = {
+  episodeId: string
+  positionSeconds: number
+  durationSeconds: number
+  completed: boolean
+}
+
 export type FeatureFlags = Record<string, boolean>
 
 export type VoiceSessionStartInput = {
@@ -325,6 +335,7 @@ export type AppApi = {
   listLearningTasks(): Promise<LearningTask[]>
   updateLearningTaskStatus(taskId: string, status: 'open' | 'in_progress' | 'done'): Promise<LearningTask>
   getLearningDashboard(): Promise<LearningDashboard>
+  getLearningStatistics(): Promise<LearningStatistics>
   exportLearningDecksJson(): Promise<string>
   importLearningDecksJson(json: string): Promise<LearningImportResult>
   listLearningCollections(): Promise<LearningCollection[]>
@@ -337,6 +348,8 @@ export type AppApi = {
   getReviewBatch(input?: GetReviewBatchInput): Promise<ReviewCard[]>
   recordReview(input: RecordReviewInput): Promise<RecordReviewResult>
   rateLearningCardQuality(input: RateLearningCardQualityInput): Promise<LearningCard>
+  getPodcastCatalog(): Promise<PodcastCatalog>
+  savePodcastProgress(input: SavePodcastProgressInput): Promise<PodcastProgress>
   addAttachment(examId: string, role?: AttachmentRole): Promise<Attachment | null>
   openAttachment(id: string): Promise<void>
   exportExamPackage(examId: string): Promise<string | null>

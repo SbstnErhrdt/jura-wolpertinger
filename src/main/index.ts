@@ -24,6 +24,7 @@ import type {
   ListLearningCardsInput,
   RateLearningCardQualityInput,
   RecordReviewInput,
+  SavePodcastProgressInput,
   SaveRevisionInput,
   SaveAiSettingsInput,
   SyncAuthInput,
@@ -334,6 +335,7 @@ function registerIpc(): void {
       services.updateLearningTaskStatus(taskId, status)
   )
   ipcMain.handle('learning:dashboard', () => services.getLearningDashboard())
+  ipcMain.handle('learning:statistics', () => services.getLearningStatistics())
   ipcMain.handle('learning:exportDecksJson', () => services.exportLearningDecks())
   ipcMain.handle('learning:importDecksJson', (_event, json: string) => services.importLearningDecksFromJson(json))
   ipcMain.handle('learning:collections', () => services.listLearningCollections())
@@ -363,6 +365,10 @@ function registerIpc(): void {
   )
   ipcMain.handle('learning:rateCardQuality', (_event, input: RateLearningCardQualityInput) =>
     services.rateLearningCardQuality(input)
+  )
+  ipcMain.handle('podcasts:catalog', () => services.getPodcastCatalog())
+  ipcMain.handle('podcasts:saveProgress', (_event, input: SavePodcastProgressInput) =>
+    services.savePodcastProgress(input)
   )
 
   ipcMain.handle('attachments:add', async (_event, examId: string, role: AttachmentRole = 'other') => {

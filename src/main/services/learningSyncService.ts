@@ -62,12 +62,23 @@ export type CloudLearningCardQualityEvent = {
   updatedAt: string
 }
 
+export type CloudPodcastProgress = {
+  userId: string
+  episodeId: string
+  positionSeconds: number
+  durationSeconds: number
+  completed: boolean
+  lastPlayedAt: string | null
+  updatedAt: string
+}
+
 export type CloudLearningSyncState = {
   collections: CloudLearningCollection[]
   cards: CloudLearningCard[]
   schedules: CloudLearningSchedule[]
   reviewEvents: CloudLearningReviewEvent[]
   qualityEvents: CloudLearningCardQualityEvent[]
+  podcastProgress?: CloudPodcastProgress[]
 }
 
 export type LearningSyncMergeResult = {
@@ -76,6 +87,7 @@ export type LearningSyncMergeResult = {
   schedulesImportedOrUpdated: number
   reviewEventsImported: number
   qualityEventsImported: number
+  podcastProgressImportedOrUpdated: number
 }
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -90,7 +102,8 @@ export function mergeCloudLearningStateIntoLocal(input: {
     cardsImportedOrUpdated: 0,
     schedulesImportedOrUpdated: 0,
     reviewEventsImported: 0,
-    qualityEventsImported: 0
+    qualityEventsImported: 0,
+    podcastProgressImportedOrUpdated: 0
   }
 
   input.db.transaction(() => {
@@ -236,6 +249,58 @@ export function mergeCloudLearningStateIntoLocal(input: {
         )
       result.qualityEventsImported += insert.changes
     }
+
+    for (const progress of input.cloudState.podcastProgress ?? []) {
+      const existing = input.db
+        .prepare(
+          `
+          SELECT position_seconds, duration_seconds, completed, updated_at
+          FROM podcast_episode_progress
+          WHERE user_id = ? AND episode_id = ?
+        `
+        )
+        .get(input.localUserId, progress.episodeId) as
+        | {
+            position_seconds: number
+            duration_seconds: number
+            completed: number
+            updated_at: string
+          }
+        | undefined
+      if (
+        existing &&
+        (existing.updated_at > progress.updatedAt ||
+          (existing.updated_at === progress.updatedAt &&
+            Number(existing.position_seconds) >= progress.positionSeconds &&
+            (Boolean(existing.completed) || !progress.completed)))
+      ) {
+        continue
+      }
+      input.db
+        .prepare(
+          `
+          INSERT INTO podcast_episode_progress
+            (user_id, episode_id, position_seconds, duration_seconds, completed, last_played_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(user_id, episode_id) DO UPDATE SET
+            position_seconds = excluded.position_seconds,
+            duration_seconds = MAX(podcast_episode_progress.duration_seconds, excluded.duration_seconds),
+            completed = podcast_episode_progress.completed OR excluded.completed,
+            last_played_at = excluded.last_played_at,
+            updated_at = excluded.updated_at
+        `
+        )
+        .run(
+          input.localUserId,
+          progress.episodeId,
+          progress.positionSeconds,
+          progress.durationSeconds,
+          progress.completed ? 1 : 0,
+          progress.lastPlayedAt,
+          progress.updatedAt
+        )
+      result.podcastProgressImportedOrUpdated += 1
+    }
   })()
 
   return result
@@ -318,7 +383,19 @@ export function buildCloudLearningStateFromLocal(input: {
     updatedAt: String(row.updated_at)
   }))
 
-  return { collections, cards, schedules, reviewEvents, qualityEvents }
+  const podcastProgress = (input.db
+    .prepare('SELECT * FROM podcast_episode_progress WHERE user_id = ?')
+    .all(input.localUserId) as Row[]).map((row): CloudPodcastProgress => ({
+    userId: input.remoteUserId,
+    episodeId: String(row.episode_id),
+    positionSeconds: Number(row.position_seconds),
+    durationSeconds: Number(row.duration_seconds),
+    completed: Boolean(row.completed),
+    lastPlayedAt: row.last_played_at ? String(row.last_played_at) : null,
+    updatedAt: String(row.updated_at)
+  }))
+
+  return { collections, cards, schedules, reviewEvents, qualityEvents, podcastProgress }
 }
 
 function ensureCollectionExists(db: SqliteDatabase, localUserId: string, collectionId: string, createdAt: string): void {

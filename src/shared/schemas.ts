@@ -7,7 +7,7 @@ import {
   JURA_FORMAT_VERSION
 } from './constants'
 
-export const isoDateSchema = z.string().datetime()
+export const isoDateSchema = z.string().datetime({ offset: true })
 export const uuidSchema = z.string().uuid()
 
 export const examStatusSchema = z.enum([
@@ -376,6 +376,80 @@ export const learningDashboardSchema = z.object({
   learnedToday: z.boolean()
 })
 
+export const learningActivityDaySchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  reviews: z.number().int().nonnegative()
+})
+
+export const learningRatingCountSchema = z.object({
+  rating: reviewRatingSchema,
+  count: z.number().int().nonnegative()
+})
+
+export const learningCollectionProgressSchema = z.object({
+  id: uuidSchema,
+  name: z.string().min(1),
+  cardCount: z.number().int().nonnegative(),
+  reviewedCards: z.number().int().nonnegative(),
+  dueCount: z.number().int().nonnegative(),
+  averageRating: z.number().min(1).max(4).nullable()
+})
+
+export const learningStatisticsSchema = z.object({
+  totalCards: z.number().int().nonnegative(),
+  reviewedCards: z.number().int().nonnegative(),
+  reviewCountTotal: z.number().int().nonnegative(),
+  reviewsToday: z.number().int().nonnegative(),
+  reviewsLast7Days: z.number().int().nonnegative(),
+  streakDays: z.number().int().nonnegative(),
+  activeDaysLast14: z.number().int().min(0).max(14),
+  activity: z.array(learningActivityDaySchema).max(14),
+  ratingCounts: z.array(learningRatingCountSchema).length(4),
+  collections: z.array(learningCollectionProgressSchema)
+})
+
+export const podcastProgressSchema = z.object({
+  episodeId: uuidSchema,
+  positionSeconds: z.number().nonnegative(),
+  durationSeconds: z.number().nonnegative(),
+  completed: z.boolean(),
+  lastPlayedAt: isoDateSchema.nullable(),
+  updatedAt: isoDateSchema
+})
+
+export const podcastEpisodeSchema = z.object({
+  id: uuidSchema,
+  seriesId: uuidSchema,
+  slug: z.string().min(1),
+  number: z.number().int().positive(),
+  title: z.string().min(1),
+  description: z.string(),
+  durationSeconds: z.number().nonnegative(),
+  audioUrl: z.string().url(),
+  publishedAt: isoDateSchema.nullable(),
+  progress: podcastProgressSchema.nullable()
+})
+
+export const podcastSeriesSchema = z.object({
+  id: uuidSchema,
+  slug: z.string().min(1),
+  title: z.string().min(1),
+  description: z.string(),
+  edition: z.string().nullable(),
+  artworkUrl: z.string().url().nullable(),
+  episodes: z.array(podcastEpisodeSchema)
+})
+
+export const podcastLegalAreaSchema = z.object({
+  slug: z.string().min(1),
+  name: z.string().min(1),
+  series: z.array(podcastSeriesSchema)
+})
+
+export const podcastCatalogSchema = z.object({
+  legalAreas: z.array(podcastLegalAreaSchema)
+})
+
 export const syncStatusSchema = z.object({
   connected: z.boolean(),
   remoteUserId: z.string().nullable(),
@@ -452,6 +526,15 @@ export type LearningImportResult = z.infer<typeof learningImportResultSchema>
 export type LearningReviewEvent = z.infer<typeof learningReviewEventSchema>
 export type LearningCardQualityEvent = z.infer<typeof learningCardQualityEventSchema>
 export type LearningDashboard = z.infer<typeof learningDashboardSchema>
+export type LearningActivityDay = z.infer<typeof learningActivityDaySchema>
+export type LearningRatingCount = z.infer<typeof learningRatingCountSchema>
+export type LearningCollectionProgress = z.infer<typeof learningCollectionProgressSchema>
+export type LearningStatistics = z.infer<typeof learningStatisticsSchema>
+export type PodcastProgress = z.infer<typeof podcastProgressSchema>
+export type PodcastEpisode = z.infer<typeof podcastEpisodeSchema>
+export type PodcastSeries = z.infer<typeof podcastSeriesSchema>
+export type PodcastLegalArea = z.infer<typeof podcastLegalAreaSchema>
+export type PodcastCatalog = z.infer<typeof podcastCatalogSchema>
 export type SyncStatus = z.infer<typeof syncStatusSchema>
 export type SyncAuthInput = z.infer<typeof syncAuthInputSchema>
 export type SyncRunAction = z.infer<typeof syncRunActionSchema>

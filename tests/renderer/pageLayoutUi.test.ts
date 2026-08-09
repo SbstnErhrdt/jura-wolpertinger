@@ -12,7 +12,7 @@ describe('page layout consistency', () => {
     expect(styles).toContain('--page-padding: 28px')
     expect(styles).toContain('--page-gap: 22px')
     expect(styles).toContain('--page-title-size: 32px')
-    expect(styles).toMatch(/\.home-view,\n\.dashboard,\n\.analytics-view,\n\.settings-view,\n\.about-view,\n\.help-view,\n\.flashcards-page,\n\.flashcard-review,\n\.mobile-hub-view,\n\.correction-page\s*\{[^}]*max-width:\s*var\(--page-max-width\);[^}]*padding:\s*0;/s)
+    expect(styles).toMatch(/\.home-view,\n\.dashboard,\n\.analytics-view,\n\.settings-view,\n\.about-view,\n\.help-view,\n\.flashcards-page,\n\.flashcard-review,\n\.mobile-hub-view,\n\.podcasts-view,\n\.podcast-series-view,\n\.correction-page\s*\{[^}]*max-width:\s*var\(--page-max-width\);[^}]*padding:\s*0;/s)
     expect(styles).toMatch(/\.main-pane\s*\{[^}]*padding:\s*var\(--page-padding\);/s)
   })
 

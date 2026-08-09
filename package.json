@@ -27,6 +27,8 @@
     "release:stage": "tsx scripts/release-stage.ts",
     "release:publish": "tsx scripts/release-publish.ts",
     "release:verify": "tsx scripts/verify-release-feed.ts",
+    "podcasts:seed:baybo": "tsx scripts/podcasts/seed-baybo-podcast.ts",
+    "podcasts:publish": "tsx scripts/podcasts/publish-podcast.ts",
     "test": "pnpm rebuild better-sqlite3 && vitest run",
     "test:e2e": "electron-rebuild -f -w better-sqlite3 && pnpm run build && playwright test",
     "test:watch": "vitest"

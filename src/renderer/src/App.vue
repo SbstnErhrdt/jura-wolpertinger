@@ -128,76 +128,36 @@
 
     <div v-else class="app-shell" :class="{ 'exam-shell': isExamFocus }">
       <aside v-if="!isExamFocus" class="sidebar">
-        <div class="beta-banner" aria-label="Beta-Version">BETA</div>
+        <div class="beta-banner-corner" aria-hidden="true">
+          <div class="beta-banner">BETA</div>
+        </div>
         <RouterLink class="brand" to="/">
           <img :src="iconUrl" alt="" />
           <span>Jura Wolpertinger</span>
         </RouterLink>
         <nav class="nav" aria-label="Hauptnavigation">
           <UNavigationMenu :items="homeNavigationItems" orientation="vertical" />
-        <p class="nav-section">Karteikarten</p>
+          <p class="nav-section">Karteikarten</p>
           <UNavigationMenu :items="flashcardNavigationItems" orientation="vertical" />
-        <p class="nav-section">Prüfungen</p>
+          <p class="nav-section">Audio</p>
+          <UNavigationMenu :items="podcastNavigationItems" orientation="vertical" />
+          <p class="nav-section">Prüfungen</p>
           <UNavigationMenu :items="examNavigationItems" orientation="vertical" />
-          <UNavigationMenu :items="moreNavigationItems" orientation="vertical" />
         </nav>
         <div class="sidebar-footer">
-          <section v-if="isCloudShell" class="sidebar-account" aria-label="Konto">
-            <span class="sidebar-account-label">Konto</span>
-            <div class="sidebar-account-card">
+          <UDropdownMenu
+            :items="accountMenuItems"
+            :content="{ align: 'start', side: 'top', sideOffset: 8 }"
+          >
+            <UButton class="sidebar-account-trigger" color="neutral" variant="ghost">
               <div class="sidebar-account-avatar" aria-hidden="true">{{ cloudAccountInitial }}</div>
               <div class="sidebar-account-copy">
                 <strong>{{ cloudAccountTitle }}</strong>
-                <span>{{ cloudAccountSubtitle }}</span>
+                <span>{{ accountSubtitle }}</span>
               </div>
-            </div>
-            <UButton class="sidebar-small-button" color="neutral" variant="ghost" :to="{ name: 'settings' }">
-              <Settings :size="15" />
-              Profil
+              <ChevronsUpDown class="sidebar-account-chevron" :size="16" aria-hidden="true" />
             </UButton>
-            <UButton class="sidebar-small-button" color="neutral" variant="ghost" @click="signOut">
-              <LogOut :size="15" />
-              Abmelden
-            </UButton>
-            <UButton class="sidebar-small-button" color="neutral" variant="ghost" @click="startTour">
-              <Route :size="15" />
-              Tour
-            </UButton>
-          </section>
-          <section v-else class="sidebar-user" aria-label="Nutzer">
-            <UFormField label="Nutzer">
-              <USelect
-                id="user-switcher"
-                class="user-switcher"
-                :model-value="currentUser?.id"
-                :items="userOptions"
-                value-key="value"
-                @update:model-value="switchUser"
-              />
-            </UFormField>
-            <UButton class="sidebar-small-button" color="neutral" variant="ghost" @click="showCreateUser = true">
-              <UserPlus :size="15" />
-              Neuer Nutzer
-            </UButton>
-            <UButton class="sidebar-small-button" color="neutral" variant="ghost" @click="startTour">
-              <Route :size="15" />
-              Tour
-            </UButton>
-          </section>
-          <UButton
-            class="sidebar-theme-toggle"
-            color="neutral"
-            variant="ghost"
-            :title="isDark ? 'Hellmodus' : 'Dunkelmodus'"
-            @click="toggleTheme"
-          >
-            <span class="theme-toggle-option" :class="{ active: !isDark }">
-              <Sun :size="17" />
-            </span>
-            <span class="theme-toggle-option" :class="{ active: isDark }">
-              <Moon :size="17" />
-            </span>
-          </UButton>
+          </UDropdownMenu>
           <span class="sidebar-version">Version {{ appVersion }}</span>
         </div>
       </aside>
@@ -212,6 +172,7 @@
       <main class="main-pane">
         <RouterView />
       </main>
+      <PodcastPlayer v-if="!isExamFocus" />
 
       <UModal
         :open="showTourPrompt"
@@ -312,7 +273,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Cloud, FolderKanban, HardDrive, Layers, LibraryBig, LogOut, Moon, Route, Settings, Sun, UserPlus } from 'lucide-vue-next'
+import { ChevronsUpDown, Cloud, FolderKanban, HardDrive, Layers, LibraryBig, Moon, Settings, Sun } from 'lucide-vue-next'
 import type { AppUser } from '@shared/ipc'
 import { APP_VERSION } from '@shared/constants'
 import { RELEASE_SMOKE_READY_EVENT } from '@shared/releaseSmoke'
@@ -321,6 +282,8 @@ import { getSupabaseAuthClient, readCloudAuthState, requiresCloudAuth, type Clou
 import { startOnboardingTour } from './onboarding'
 import { getWorkspaceSyncModeOptions, type WorkspaceSyncMode } from './syncWorkspaceUx'
 import { useTheme } from './theme'
+import PodcastPlayer from './components/PodcastPlayer.vue'
+import { usePodcastPlayer } from './podcasts/usePodcastPlayer'
 
 const route = useRoute()
 const router = useRouter()
@@ -329,6 +292,7 @@ const iconUrl = 'assets/icon.png'
 const welcomeImageUrl = 'assets/hello.png'
 const appVersion = ref(APP_VERSION)
 const { isDark, toggleTheme, applyTheme } = useTheme()
+const podcastPlayer = usePodcastPlayer()
 const users = ref<AppUser[]>([])
 const currentUser = ref<AppUser | null>(null)
 const showTourPrompt = ref(false)
@@ -414,12 +378,69 @@ const cloudAccountInitial = computed(() => {
   const source = cloudAccountTitle.value.trim()
   return source ? source.slice(0, 1).toUpperCase() : 'J'
 })
-const userOptions = computed(() =>
-  users.value.map((user) => ({
-    label: `${user.displayName}${user.kind === 'demo' ? ' · Demo' : ''}`,
-    value: user.id
-  }))
+const accountSubtitle = computed(() =>
+  isCloudShell.value
+    ? cloudAccountSubtitle.value
+    : currentUser.value?.kind === 'demo'
+      ? 'Lokaler Demo-Bereich'
+      : 'Lokaler Arbeitsbereich'
 )
+const accountMenuItems = computed(() => {
+  const workspaceItems = isCloudShell.value
+    ? []
+    : [
+        ...users.value.map((user) => ({
+          label: `${user.displayName}${user.kind === 'demo' ? ' · Demo' : ''}`,
+          icon: user.id === currentUser.value?.id ? 'i-lucide-check' : 'i-lucide-user-round',
+          onSelect: () => void switchUser(user.id)
+        })),
+        {
+          label: 'Neuer Nutzer',
+          icon: 'i-lucide-user-plus',
+          onSelect: () => {
+            showCreateUser.value = true
+          }
+        }
+      ]
+  const utilityItems = [
+    {
+      label: 'Einstellungen',
+      icon: 'i-lucide-settings',
+      onSelect: () => void router.push({ name: 'settings' })
+    },
+    {
+      label: 'Hilfe',
+      icon: 'i-lucide-circle-help',
+      onSelect: () => void router.push({ name: 'help' })
+    },
+    {
+      label: 'About',
+      icon: 'i-lucide-info',
+      onSelect: () => void router.push({ name: 'about' })
+    },
+    {
+      label: 'Tour starten',
+      icon: 'i-lucide-route',
+      onSelect: () => void startTour()
+    },
+    {
+      label: isDark.value ? 'Hellmodus' : 'Dunkelmodus',
+      icon: isDark.value ? 'i-lucide-sun' : 'i-lucide-moon',
+      onSelect: toggleTheme
+    }
+  ]
+  const signOutItems = isCloudShell.value
+    ? [
+        {
+          label: 'Abmelden',
+          icon: 'i-lucide-log-out',
+          color: 'error' as const,
+          onSelect: () => void signOut()
+        }
+      ]
+    : []
+  return [workspaceItems, utilityItems, signOutItems].filter((group) => group.length)
+})
 const homeNavigationItems = computed(() => [
   { label: 'Home', icon: 'i-lucide-house', to: { name: 'home' }, active: route.name === 'home' }
 ])
@@ -435,6 +456,20 @@ const flashcardNavigationItems = computed(() => [
     icon: 'i-lucide-folder-kanban',
     to: { name: 'flashcards-collections' },
     active: ['flashcards-collections', 'flashcards-collection'].includes(String(route.name))
+  },
+  {
+    label: 'Statistik',
+    icon: 'i-lucide-chart-no-axes-combined',
+    to: { name: 'flashcards-statistics' },
+    active: route.name === 'flashcards-statistics'
+  }
+])
+const podcastNavigationItems = computed(() => [
+  {
+    label: 'Podcasts',
+    icon: 'i-lucide-headphones',
+    to: { name: 'podcasts' },
+    active: ['podcasts', 'podcast-series'].includes(String(route.name))
   }
 ])
 const examNavigationItems = computed(() => [
@@ -457,11 +492,6 @@ const examNavigationItems = computed(() => [
     active: route.name === 'analytics'
   }
 ])
-const moreNavigationItems = computed(() => [
-  { label: 'Einstellungen', icon: 'i-lucide-settings', to: { name: 'settings' }, active: route.name === 'settings' },
-  { label: 'About', icon: 'i-lucide-info', to: { name: 'about' }, active: route.name === 'about' },
-  { label: 'Hilfe', icon: 'i-lucide-circle-help', to: { name: 'help' }, active: route.name === 'help' }
-])
 const mobileNavigationItems = computed(() => [
   { label: 'Home', icon: 'i-lucide-house', to: { name: 'home' }, active: route.path === '/' },
   {
@@ -469,6 +499,12 @@ const mobileNavigationItems = computed(() => [
     icon: 'i-lucide-layers',
     to: { name: 'flashcards' },
     active: route.path.startsWith('/flashcards')
+  },
+  {
+    label: 'Podcasts',
+    icon: 'i-lucide-headphones',
+    to: { name: 'podcasts' },
+    active: route.path.startsWith('/podcasts')
   },
   {
     label: 'Prüfungen',
@@ -544,6 +580,7 @@ onMounted(async () => {
   }
   cloudAuth.value = await readCloudAuthState()
   getSupabaseAuthClient()?.auth.onAuthStateChange((event, session) => {
+    if (event === 'SIGNED_OUT') void podcastPlayer.prepareForAccountChange(false)
     cloudAuth.value = session
       ? { status: 'signed_in', session, error: null }
       : { status: 'signed_out', session: null, error: null }
@@ -579,6 +616,7 @@ async function loadUsers(): Promise<void> {
 
 async function switchUser(userId: string | undefined): Promise<void> {
   if (!userId) return
+  await podcastPlayer.prepareForAccountChange()
   currentUser.value = await api.switchUser(userId)
   showTourPrompt.value = !currentUser.value.onboardingCompletedAt
   if (showTourPrompt.value) onboardingStep.value = 'workspace'
@@ -588,6 +626,7 @@ async function switchUser(userId: string | undefined): Promise<void> {
 async function createUser(): Promise<void> {
   const name = newUserName.value.trim()
   if (!name) return
+  await podcastPlayer.prepareForAccountChange()
   currentUser.value = await api.createUser(name)
   users.value = await api.listUsers()
   newUserName.value = ''
@@ -777,6 +816,7 @@ async function updateRecoveredPassword(): Promise<void> {
 async function signOut(): Promise<void> {
   const client = getSupabaseAuthClient()
   if (!client) return
+  await podcastPlayer.prepareForAccountChange()
   await client.auth.signOut()
   users.value = []
   currentUser.value = null

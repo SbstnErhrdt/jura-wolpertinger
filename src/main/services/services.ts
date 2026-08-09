@@ -31,8 +31,11 @@ import {
   learningExportFileSchema,
   learningImportResultSchema,
   learningReviewEventSchema,
+  learningStatisticsSchema,
   learningTaskSchema,
   legalAreaSchema,
+  podcastCatalogSchema,
+  podcastProgressSchema,
   revisionSchema,
   reviewCardSchema,
   reviewRatingSchema,
@@ -55,7 +58,10 @@ import {
   type LearningExportFile,
   type LearningImportResult,
   type LearningReviewEvent,
+  type LearningStatistics,
   type LearningTask,
+  type PodcastCatalog,
+  type PodcastProgress,
   type JuraDocument,
   type JuraManifest,
   type ReviewCard,
@@ -81,6 +87,7 @@ import type {
   RecordReviewInput,
   RecordReviewResult,
   RateLearningCardQualityInput,
+  SavePodcastProgressInput,
   SaveAiCorrectionDraftInput,
   SaveAiSettingsInput,
   SubmissionDetails,
@@ -124,6 +131,7 @@ import {
   mergeCloudLearningStateIntoLocal,
   type CloudLearningSyncState
 } from './learningSyncService'
+import { PODCAST_CATALOG } from '@shared/podcasts/catalog'
 
 type Row = Record<string, unknown>
 type AiCredentialSource = 'stored' | 'environment'
@@ -1281,6 +1289,203 @@ export class AppServices {
     })
   }
 
+  getLearningStatistics(): LearningStatistics {
+    const userId = this.getCurrentUserId()
+    const now = nowIso()
+    const reviewRows = this.db
+      .prepare('SELECT card_id, reviewed_at FROM learning_review_events WHERE user_id = ?')
+      .all(userId) as Array<{ card_id: string; reviewed_at: string }>
+    const latestRatingRows = this.db
+      .prepare(
+        `
+        SELECT event.card_id, event.rating
+        FROM learning_review_events event
+        JOIN learning_cards card ON card.id = event.card_id AND card.user_id = event.user_id
+        WHERE event.user_id = ?
+          AND card.is_archived = 0
+          AND event.rowid = (
+            SELECT latest.rowid
+            FROM learning_review_events latest
+            WHERE latest.user_id = event.user_id AND latest.card_id = event.card_id
+            ORDER BY latest.reviewed_at DESC, latest.rowid DESC
+            LIMIT 1
+          )
+      `
+      )
+      .all(userId) as Array<{ card_id: string; rating: ReviewRating }>
+    const collectionRows = this.db
+      .prepare(
+        `
+        SELECT
+          collection.id,
+          collection.name,
+          COUNT(card.id) AS card_count,
+          SUM(CASE WHEN latest.rating IS NOT NULL THEN 1 ELSE 0 END) AS reviewed_cards,
+          SUM(
+            CASE
+              WHEN card.id IS NOT NULL AND COALESCE(schedule.due_at, card.created_at) <= ?
+              THEN 1 ELSE 0
+            END
+          ) AS due_count,
+          AVG(latest.rating) AS average_rating
+        FROM learning_collections collection
+        LEFT JOIN learning_cards card
+          ON card.collection_id = collection.id
+          AND card.user_id = collection.user_id
+          AND card.is_archived = 0
+        LEFT JOIN learning_card_schedules schedule
+          ON schedule.card_id = card.id
+          AND schedule.user_id = card.user_id
+        LEFT JOIN learning_review_events latest ON latest.rowid = (
+          SELECT event.rowid
+          FROM learning_review_events event
+          WHERE event.user_id = card.user_id AND event.card_id = card.id
+          ORDER BY event.reviewed_at DESC, event.rowid DESC
+          LIMIT 1
+        )
+        WHERE collection.user_id = ?
+        GROUP BY collection.id
+        ORDER BY collection.updated_at DESC, collection.name ASC
+      `
+      )
+      .all(now, userId) as Array<{
+      id: string
+      name: string
+      card_count: number
+      reviewed_cards: number
+      due_count: number
+      average_rating: number | null
+    }>
+
+    const activityKeys = lastLocalDateKeys(14)
+    const activityCounts = new Map(activityKeys.map((date) => [date, 0]))
+    for (const review of reviewRows) {
+      const date = localDateKey(new Date(review.reviewed_at))
+      if (activityCounts.has(date)) activityCounts.set(date, (activityCounts.get(date) ?? 0) + 1)
+    }
+    const reviewActivityDays = new Set(
+      reviewRows.map((review) => localDateKey(new Date(review.reviewed_at)))
+    )
+    const last7Days = new Set(activityKeys.slice(-7))
+    const ratingCounts = new Map<ReviewRating, number>([
+      [1, 0],
+      [2, 0],
+      [3, 0],
+      [4, 0]
+    ])
+    for (const row of latestRatingRows) {
+      ratingCounts.set(row.rating, (ratingCounts.get(row.rating) ?? 0) + 1)
+    }
+
+    const totalCards = Number(
+      (
+        this.db
+          .prepare('SELECT COUNT(*) AS count FROM learning_cards WHERE user_id = ? AND is_archived = 0')
+          .get(userId) as { count: number }
+      ).count
+    )
+
+    return learningStatisticsSchema.parse({
+      totalCards,
+      reviewedCards: latestRatingRows.length,
+      reviewCountTotal: reviewRows.length,
+      reviewsToday: activityCounts.get(activityKeys.at(-1) ?? '') ?? 0,
+      reviewsLast7Days: reviewRows.filter((review) =>
+        last7Days.has(localDateKey(new Date(review.reviewed_at)))
+      ).length,
+      streakDays: calculateStreakDays(reviewActivityDays),
+      activeDaysLast14: [...activityCounts.values()].filter((count) => count > 0).length,
+      activity: activityKeys.map((date) => ({ date, reviews: activityCounts.get(date) ?? 0 })),
+      ratingCounts: ([1, 2, 3, 4] as const).map((rating) => ({
+        rating,
+        count: ratingCounts.get(rating) ?? 0
+      })),
+      collections: collectionRows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        cardCount: Number(row.card_count),
+        reviewedCards: Number(row.reviewed_cards),
+        dueCount: Number(row.due_count),
+        averageRating:
+          row.average_rating === null ? null : Math.round(Number(row.average_rating) * 100) / 100
+      }))
+    })
+  }
+
+  getPodcastCatalog(): PodcastCatalog {
+    const progressRows = this.db
+      .prepare('SELECT * FROM podcast_episode_progress WHERE user_id = ?')
+      .all(this.getCurrentUserId()) as Row[]
+    const progressByEpisode = new Map(
+      progressRows.map((row) => {
+        const progress = podcastProgressFromRow(row)
+        return [progress.episodeId, progress]
+      })
+    )
+
+    return podcastCatalogSchema.parse({
+      legalAreas: PODCAST_CATALOG.legalAreas.map((area) => ({
+        ...area,
+        series: area.series.map((series) => ({
+          ...series,
+          episodes: series.episodes.map((episode) => ({
+            ...episode,
+            progress: progressByEpisode.get(episode.id) ?? null
+          }))
+        }))
+      }))
+    })
+  }
+
+  savePodcastProgress(input: SavePodcastProgressInput): PodcastProgress {
+    const durationSeconds = Math.max(0, input.durationSeconds)
+    const positionSeconds = Math.min(Math.max(0, input.positionSeconds), durationSeconds || Infinity)
+    const existing = this.db
+      .prepare(
+        'SELECT completed FROM podcast_episode_progress WHERE user_id = ? AND episode_id = ?'
+      )
+      .get(this.getCurrentUserId(), input.episodeId) as { completed: number } | undefined
+    const completed =
+      Boolean(existing?.completed) ||
+      input.completed ||
+      (durationSeconds > 0 &&
+        (positionSeconds / durationSeconds >= 0.95 || durationSeconds - positionSeconds <= 30))
+    const updatedAt = nowIso()
+
+    this.db
+      .prepare(
+        `
+        INSERT INTO podcast_episode_progress
+          (user_id, episode_id, position_seconds, duration_seconds, completed, last_played_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(user_id, episode_id) DO UPDATE SET
+          position_seconds = excluded.position_seconds,
+          duration_seconds = excluded.duration_seconds,
+          completed = excluded.completed,
+          last_played_at = excluded.last_played_at,
+          updated_at = excluded.updated_at
+      `
+      )
+      .run(
+        this.getCurrentUserId(),
+        input.episodeId,
+        positionSeconds,
+        durationSeconds,
+        completed ? 1 : 0,
+        updatedAt,
+        updatedAt
+      )
+
+    return podcastProgressSchema.parse({
+      episodeId: input.episodeId,
+      positionSeconds,
+      durationSeconds,
+      completed,
+      lastPlayedAt: updatedAt,
+      updatedAt
+    })
+  }
+
   listLearningCollections(): LearningCollection[] {
     const rows = this.db
       .prepare(
@@ -1352,7 +1557,7 @@ export class AppServices {
             LEFT JOIN learning_card_schedules s ON s.card_id = c.id AND s.user_id = c.user_id
             ${LATEST_LEARNING_CARD_QUALITY_JOIN}
             WHERE c.user_id = ? AND c.collection_id = ? AND c.is_archived = 0
-            ORDER BY c.updated_at DESC
+            ORDER BY COALESCE(q.rated_at, c.updated_at) DESC, c.updated_at DESC, c.id ASC
           `
           )
           .all(userId, collectionId) as Row[])
@@ -1365,7 +1570,7 @@ export class AppServices {
             LEFT JOIN learning_card_schedules s ON s.card_id = c.id AND s.user_id = c.user_id
             ${LATEST_LEARNING_CARD_QUALITY_JOIN}
             WHERE c.user_id = ? AND c.is_archived = 0
-            ORDER BY c.updated_at DESC
+            ORDER BY COALESCE(q.rated_at, c.updated_at) DESC, c.updated_at DESC, c.id ASC
           `
           )
           .all(userId) as Row[])
@@ -2527,7 +2732,8 @@ function hasCloudLearningState(state: CloudLearningSyncState): boolean {
       state.cards.length ||
       state.schedules.length ||
       state.reviewEvents.length ||
-      state.qualityEvents.length
+      state.qualityEvents.length ||
+      (state.podcastProgress?.length ?? 0)
   )
 }
 
@@ -2543,7 +2749,8 @@ function createLearningDownloadOnlyResult(state: CloudLearningSyncState): SyncRu
       learning_cards: state.cards.length,
       learning_card_schedules: state.schedules.length,
       learning_review_events: state.reviewEvents.length,
-      learning_card_quality_events: state.qualityEvents.length
+      learning_card_quality_events: state.qualityEvents.length,
+      podcast_episode_progress: state.podcastProgress?.length ?? 0
     }
   }
 }
@@ -2915,6 +3122,16 @@ function localDateKey(date: Date): string {
   return `${year}-${month}-${day}`
 }
 
+function lastLocalDateKeys(count: number): string[] {
+  const today = new Date()
+  return Array.from({ length: count }, (_, index) => {
+    const date = new Date(today)
+    date.setHours(12, 0, 0, 0)
+    date.setDate(today.getDate() - (count - index - 1))
+    return localDateKey(date)
+  })
+}
+
 function calculateStreakDays(activityDays: Set<string>): number {
   let streak = 0
   let freeDays = 2
@@ -2931,6 +3148,17 @@ function calculateStreakDays(activityDays: Set<string>): number {
     cursor.setDate(cursor.getDate() - 1)
   }
   return streak
+}
+
+function podcastProgressFromRow(row: Row): PodcastProgress {
+  return podcastProgressSchema.parse({
+    episodeId: String(row.episode_id),
+    positionSeconds: Number(row.position_seconds),
+    durationSeconds: Number(row.duration_seconds),
+    completed: Boolean(row.completed),
+    lastPlayedAt: row.last_played_at ? String(row.last_played_at) : null,
+    updatedAt: String(row.updated_at)
+  })
 }
 
 async function readZipText(zip: JSZip, path: string): Promise<string> {

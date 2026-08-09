@@ -8,8 +8,11 @@ import {
   learningCardSchema,
   learningCollectionSchema,
   learningDashboardSchema,
+  learningStatisticsSchema,
   learningReviewEventSchema,
   learningTaskSchema,
+  podcastCatalogSchema,
+  podcastProgressSchema,
   revisionSchema,
   reviewCardSchema,
   reviewRatingSchema,
@@ -30,6 +33,42 @@ import {
 import { hashJson } from '@main/services/utils'
 
 describe('shared schemas', () => {
+  it('accepts PostgreSQL timezone offsets in podcast catalog timestamps', () => {
+    const seriesId = crypto.randomUUID()
+    const episodeId = crypto.randomUUID()
+
+    const catalog = podcastCatalogSchema.parse({
+      legalAreas: [{
+        slug: 'oeffentliches-recht',
+        name: 'Öffentliches Recht',
+        series: [{
+          id: seriesId,
+          slug: 'baybo',
+          title: 'BayBO',
+          description: '',
+          edition: null,
+          artworkUrl: null,
+          episodes: [{
+            id: episodeId,
+            seriesId,
+            slug: 'grundlagen',
+            number: 1,
+            title: 'Grundlagen',
+            description: '',
+            durationSeconds: 703.392,
+            audioUrl: 'https://app.jura-wolpi.de/audio/grundlagen.mp3',
+            publishedAt: '2026-04-01T00:00:00+00:00',
+            progress: null
+          }]
+        }]
+      }]
+    })
+
+    expect(catalog.legalAreas[0].series[0].episodes[0].publishedAt).toBe(
+      '2026-04-01T00:00:00+00:00'
+    )
+  })
+
   it('validates user profile names used for Wolpi personalization', () => {
     const profile = userProfileSchema.parse({
       userId: crypto.randomUUID(),
@@ -373,5 +412,89 @@ describe('shared schemas', () => {
         learnedToday: true
       }).learnedToday
     ).toBe(true)
+  })
+
+  it('validates detailed learning statistics', () => {
+    expect(
+      learningStatisticsSchema.parse({
+        totalCards: 20,
+        reviewedCards: 12,
+        reviewCountTotal: 34,
+        reviewsToday: 5,
+        reviewsLast7Days: 18,
+        streakDays: 4,
+        activeDaysLast14: 7,
+        activity: [
+          { date: '2026-07-25', reviews: 2 },
+          { date: '2026-07-26', reviews: 5 }
+        ],
+        ratingCounts: [
+          { rating: 1, count: 3 },
+          { rating: 2, count: 5 },
+          { rating: 3, count: 17 },
+          { rating: 4, count: 9 }
+        ],
+        collections: [
+          {
+            id: crypto.randomUUID(),
+            name: 'BGB AT',
+            cardCount: 20,
+            reviewedCards: 12,
+            dueCount: 4,
+            averageRating: 3.1
+          }
+        ]
+      }).collections[0].reviewedCards
+    ).toBe(12)
+  })
+
+  it('validates podcast catalogs and private listening progress', () => {
+    const seriesId = crypto.randomUUID()
+    const episodeId = crypto.randomUUID()
+    const updatedAt = new Date().toISOString()
+    const progress = podcastProgressSchema.parse({
+      episodeId,
+      positionSeconds: 412,
+      durationSeconds: 812,
+      completed: false,
+      lastPlayedAt: updatedAt,
+      updatedAt
+    })
+
+    const catalog = podcastCatalogSchema.parse({
+      legalAreas: [
+        {
+          slug: 'oeffentliches-recht',
+          name: 'Öffentliches Recht',
+          series: [
+            {
+              id: seriesId,
+              slug: 'baybo-april-2026',
+              title: 'Bayerische Bauordnung',
+              description: 'Grundlagen, Verfahren und Bauaufsicht.',
+              edition: 'April 2026',
+              artworkUrl: null,
+              episodes: [
+                {
+                  id: episodeId,
+                  seriesId,
+                  slug: 'regelungsgegenstand-und-grundbegriffe',
+                  number: 1,
+                  title: 'Regelungsgegenstand und Grundbegriffe',
+                  description: '',
+                  durationSeconds: 812,
+                  audioUrl: 'https://app.jura-wolpi.de/api/storage/v1/object/public/podcast-audio/baybo/01.mp3',
+                  publishedAt: null,
+                  progress
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    })
+
+    expect(catalog.legalAreas[0].series[0].episodes[0].progress?.positionSeconds).toBe(412)
+    expect(() => podcastProgressSchema.parse({ ...progress, positionSeconds: -1 })).toThrow()
   })
 })
