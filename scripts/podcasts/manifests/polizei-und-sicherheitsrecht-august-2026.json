@@ -1,0 +1,27 @@
+{
+  "legalArea": {
+    "id": "ba7b2026-0400-4000-8000-000000000000",
+    "slug": "oeffentliches-recht",
+    "name": "Öffentliches Recht",
+    "sortIndex": 20
+  },
+  "series": {
+    "id": "7ca1a2cc-17be-4aec-a833-d4cf4ad1e3bf",
+    "slug": "polizei-und-sicherheitsrecht-august-2026",
+    "title": "Polizei- und Sicherheitsrecht",
+    "description": "Eine Lernfolge zu typischen Klausurfallen im bayerischen Polizei- und Versammlungsrecht.",
+    "edition": "August 2026",
+    "artworkUrl": "https://app.jura-wolpi.de/api/storage/v1/object/public/podcast-audio/polizei-und-sicherheitsrecht-august-2026/cover.png",
+    "sortIndex": 20,
+    "publishedAt": "2026-08-09T00:00:00.000Z"
+  },
+  "episode": {
+    "id": "2756538a-67e2-4457-8f0e-a94764e99233",
+    "slug": "klausurfallen-im-bayerischen-polizei-und-versammlungsrecht",
+    "number": 1,
+    "title": "Klausurfallen im bayerischen Polizei- und Versammlungsrecht",
+    "description": "Typische Prüfungsprobleme und Fehlerquellen im bayerischen Polizei- und Versammlungsrecht.",
+    "durationSeconds": 1555.043,
+    "publishedAt": "2026-08-09T00:00:00.000Z"
+  }
+}

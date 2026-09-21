@@ -9,10 +9,13 @@ import FlashcardsCollectionDetailView from './views/FlashcardsCollectionDetailVi
 import FlashcardsCollectionsView from './views/FlashcardsCollectionsView.vue'
 import FlashcardsHubView from './views/FlashcardsHubView.vue'
 import FlashcardsReviewView from './views/FlashcardsReviewView.vue'
+import FlashcardsStatisticsView from './views/FlashcardsStatisticsView.vue'
 import HelpView from './views/HelpView.vue'
 import HomeView from './views/HomeView.vue'
 import MoreHubView from './views/MoreHubView.vue'
 import SettingsView from './views/SettingsView.vue'
+import PodcastsView from './views/PodcastsView.vue'
+import PodcastSeriesView from './views/PodcastSeriesView.vue'
 
 export const router = createRouter({
   history: createWebHashHistory(),
@@ -20,8 +23,11 @@ export const router = createRouter({
     { path: '/', name: 'home', component: HomeView },
     { path: '/flashcards', name: 'flashcards', component: FlashcardsHubView },
     { path: '/flashcards/review', name: 'flashcards-review', component: FlashcardsReviewView },
+    { path: '/flashcards/statistics', name: 'flashcards-statistics', component: FlashcardsStatisticsView },
     { path: '/flashcards/collections', name: 'flashcards-collections', component: FlashcardsCollectionsView },
     { path: '/flashcards/collections/:id', name: 'flashcards-collection', component: FlashcardsCollectionDetailView },
+    { path: '/podcasts', name: 'podcasts', component: PodcastsView },
+    { path: '/podcasts/:seriesSlug', name: 'podcast-series', component: PodcastSeriesView },
     { path: '/exams', name: 'exams', component: ExamsHubView },
     { path: '/exams/library', name: 'dashboard', component: DashboardView },
     { path: '/exams/analytics', name: 'analytics', component: AnalyticsView },

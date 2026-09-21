@@ -24,7 +24,7 @@ describe('Nuxt UI migration completeness', () => {
     for (const file of files) {
       if (protectedFiles.has(file.relative)) continue
       expect(file.source, file.relative).not.toMatch(/<(button|input|select|textarea)\b/)
-      expect(file.source, file.relative).not.toMatch(/components\/ui\/(ActionMenu|AppBadge|AppBreadcrumb|AppPagination|ListSkeleton)/)
+      expect(file.source, file.relative).not.toMatch(/components\/ui\/(ActionMenu|AppBadge|AppPagination|ListSkeleton)/)
     }
   })
 

@@ -2,7 +2,7 @@
   <section class="help-view">
     <header class="page-header">
       <div>
-        <UBreadcrumb class="app-breadcrumb" :items="withHomeIcon(breadcrumbItems)" />
+        <AppBreadcrumb :items="breadcrumbItems" />
         <p class="eyebrow">Hilfe</p>
         <h1>Fragen und Antworten</h1>
       </div>
@@ -36,7 +36,8 @@
 
 <script setup lang="ts">
 import { Route } from 'lucide-vue-next'
-import { type AppBreadcrumbItem, withHomeIcon } from '../ui/breadcrumbs'
+import AppBreadcrumb from '../components/ui/AppBreadcrumb.vue'
+import type { AppBreadcrumbItem } from '../ui/breadcrumbs'
 
 const breadcrumbItems: AppBreadcrumbItem[] = [
   { label: 'Home', to: { name: 'home' } },
@@ -45,6 +46,10 @@ const breadcrumbItems: AppBreadcrumbItem[] = [
 ]
 
 const faq = [
+  {
+    question: 'Wo finde ich frühere Bewertungen und Originaldateien?',
+    answer: 'Öffne die passende Prüfung und wähle eine Abgabe, um ihre Punkte, Gesamtrückmeldung und Randbemerkungen zu lesen. Hinterlegte Originalabgaben und Korrekturdateien findest du bei den Anhängen der Prüfung. In der Online-Version lädt ein Klick die Datei herunter. Dein aktueller Entwurf bleibt beim Übernehmen früherer Abgaben erhalten.'
+  },
   {
     question: 'Gehen meine Klausuren verloren, wenn der Rechner abstürzt?',
     answer:
@@ -56,14 +61,38 @@ const faq = [
       'Öffne zuerst eine Sammlung. Dort kannst du neue Karteikarten anlegen, Vorderseite und Rückseite schreiben und passende Schlagwörter hinzufügen.'
   },
   {
+    question: 'Welche Sammlung sollte ich als Nächstes lernen?',
+    answer: 'Unter Als Nächstes lernen findest du einen begründeten Vorschlag aus allen deinen Sammlungen: zuerst fällige Wiederholungen, danach den zuletzt begonnenen offenen Durchgang und sonst eine Sammlung mit wenigen neuen Karten. Die Suche findet Sammlungsnamen und Rechtsgebiete über alle Seiten. Du kannst jederzeit eine andere Sammlung wählen.'
+  },
+  {
+    question: 'Was zeigt der Fortschrittsbalken einer Sammlung?',
+    answer: 'Der Balken zeigt den letzten Lernstand deiner aktuell lernbaren Karten: Rot steht für Nicht gewusst, Orange für Teilweise gewusst, Grün für Gewusst und der helle Rest für noch nicht bearbeitete Karten. Wegen ihrer Qualität pausierte Karten zählen nicht mit. Wiederholungen können auch bei vollständig bearbeiteten Sammlungen fällig sein.'
+  },
+  {
+    question: 'Wie finde ich einen bestimmten Podcast?',
+    answer: 'Die Suche in der Podcast-Übersicht findet Rechtsgebiete, Reihen, Ausgaben und einzelne Folgen. Auch Begriffe aus der Beschreibung und Schreibweisen ohne Akzente werden berücksichtigt. Mit Suche zurücksetzen siehst du wieder alle Reihen.'
+  },
+  {
+    question: 'Was zeigt der Fortschrittsbalken eines Podcasts?',
+    answer: 'Der Balken zeigt den Anteil der bereits gehörten Zeit an der gesamten Podcast-Reihe. Angefangene Folgen zählen deshalb anteilig. Als abgeschlossen gilt eine Folge erst, wenn sie vollständig beziehungsweise bis kurz vor das Ende gehört wurde.'
+  },
+  {
     question: 'Wie wiederhole ich Karteikarten?',
     answer:
-      'Starte eine Wiederholung über Home, über den Bereich Karteikarten oder direkt aus einer Sammlung. Nach dem Aufdecken bewertest du selbst, wie gut du die Antwort konntest.'
+      'Wähle unter Karteikarten eine Sammlung und starte den ersten Durchgang. Jede bewertete Karte zählt als bearbeitet, auch wenn du die Antwort nicht wusstest. Die nächsten offenen Karten folgen ohne feste Rundenlänge. Du kannst jederzeit pausieren und den gespeicherten Durchgang später fortsetzen. Empfohlene oder unsichere Karten lassen sich zusätzlich bewusst wiederholen.'
+  },
+  {
+    question: 'Wann gratuliert Wolpi beim Lernen?',
+    answer: 'Nach jeweils zehn bearbeiteten Karten eines Durchgangs zeigt Wolpi kurz ein Erfolgsbild. Jede Einschätzung zählt, auch Nicht gewusst. Du kannst sofort weiterlernen oder das Bild schließen. Pausen und Neuladen erhalten den Motivationszähler auf diesem Gerät. Rückgängigmachen korrigiert ihn, ohne dieselbe Gratulation erneut auszulösen. Am vollständigen Abschluss bleibt ein Wolpi-Bild in der Zusammenfassung stehen, auch bei kleinen Sammlungen.'
   },
   {
     question: 'Was bedeuten die Bewertungen bei Karteikarten?',
     answer:
-      'Nochmal, Schwer, Gut und Leicht zeigen deinen letzten Lernstand. Die App nutzt diese Rückmeldung, damit schwierige Karten früher wieder auftauchen.'
+      'Nicht gewusst, Teilweise gewusst und Gewusst beschreiben deine Antwort vor dem Aufdecken. Sie beeinflussen spätere Wiederholungsempfehlungen. Im aktuellen Durchgang erscheint jede Karte einmal. Einmal bearbeitet bedeutet deshalb nicht sicher beherrscht. Eine versehentliche Bewertung kannst du direkt rückgängig machen.'
+  },
+  {
+    question: 'Was passiert mit zurückgestellten Karten?',
+    answer: 'Für später zurückstellen speichert keine Bewertung. Die Karte bleibt offen, während zuerst die übrigen Karten kommen. Am Ende kannst du die zurückgestellten Karten bewusst bearbeiten. Auch nach einer Pause bleiben sie erhalten.'
   },
   {
     question: 'Was ist die Kartenqualität?',
@@ -116,9 +145,24 @@ const faq = [
       'Deine lokalen Daten sollen erhalten bleiben. Eine spätere Anmeldung soll vorhandene Klausuren und Karteikarten übernehmen, statt sie ungefragt zu ersetzen.'
   },
   {
+    question: 'Wie öffne ich einen Prüfungsordner direkt?',
+    answer:
+      'Öffne den Ordner in der Bibliothek. Im Browser kannst du seine Adresse als Lesezeichen speichern und später denselben Ordner wieder öffnen. Die Auswahl bleibt beim Neuladen erhalten. Über den Pfad oberhalb einer Prüfung gelangst du zurück in ihren Ordner oder zur gesamten Bibliothek.'
+  },
+  {
+    question: 'Warum sehe ich nicht alle Klausuren auf einmal?',
+    answer:
+      'Die Bibliothek zeigt zunächst 25 Klausuren pro Seite. Unter der Liste wechselst du zur nächsten Seite oder wählst bis zu 100 Einträge pro Seite. Prüfungen nennt die Gesamtzahl im ausgewählten Ordner. Abgegeben, Korrigiert und Schnitt beziehen sich auf die angezeigte Seite. In einer Bewertung führt Zur Prüfung zur zugehörigen Klausur.'
+  },
+  {
     question: 'Wie sollte ich Tags nutzen?',
     answer:
-      'Nutze Schlagwörter für Rechtsgebiet, Prüfungsgebiet, Klausurtyp, Thema und typische Fehler. Beispiele: zivilrecht, relationstechnik, strafurteil, verwaltungsrecht, fristen.'
+      'Nutze Schlagwörter für Rechtsgebiet, Prüfungsgebiet, Klausurtyp, Thema und typische Fehler. Tippe einen Teil des Begriffs und wähle einen Vorschlag, um das vollständige Schlagwort zu übernehmen. Einen eigenen Begriff bestätigst du mit Enter. Beispiele: zivilrecht, relationstechnik, strafurteil, verwaltungsrecht, fristen.'
+  },
+  {
+    question: 'Was zeigt der Bewertungsverlauf?',
+    answer:
+      'Der Verlauf zeigt den Durchschnitt deiner Bewertungen pro Monat im gewählten Zeitraum und mit den ausgewählten Schlagwörtern. Die Zeitachse nennt jeden Monat samt Jahr. Monate ohne Bewertung bleiben leer. Bewege den Zeiger auf einen Punkt, wähle ihn mit der Tab-Taste oder tippe ihn an: Dann erscheinen der genaue Monatsdurchschnitt und die Anzahl der Bewertungen. Bei langen Zeiträumen kannst du das Diagramm seitlich verschieben.'
   },
   {
     question: 'Warum sind Schlagwörter für Auswertungen wichtig?',

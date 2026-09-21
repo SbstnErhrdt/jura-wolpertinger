@@ -1,0 +1,27 @@
+{
+  "legalArea": {
+    "id": "b19ffd85-c38c-43a3-870b-63ca52331d70",
+    "slug": "steuerrecht",
+    "name": "Steuerrecht",
+    "sortIndex": 30
+  },
+  "series": {
+    "id": "7d61a370-ece1-4c4a-a613-3b2c00707fce",
+    "slug": "grundskript-steuerrecht-april-2026",
+    "title": "Grundskript Steuerrecht",
+    "description": "Eine klausurorientierte Lernreihe zu den Grundlagen und zur Systematik des Steuerrechts im zweiten Staatsexamen.",
+    "edition": "April 2026",
+    "artworkUrl": "https://app.jura-wolpi.de/api/storage/v1/object/public/podcast-audio/grundskript-steuerrecht-april-2026/cover.png",
+    "sortIndex": 20,
+    "publishedAt": "2026-09-21T00:00:00.000Z"
+  },
+  "episode": {
+    "id": "2abfbda4-e81d-4e31-b518-d319bf56c391",
+    "slug": "systematik-des-einkommensteuerrechts-im-zweiten-staatsexamen",
+    "number": 1,
+    "title": "Systematik des Einkommensteuerrechts im zweiten Staatsexamen",
+    "description": "Die Systematik des Einkommensteuerrechts als Einstieg in das Grundskript Steuerrecht.",
+    "durationSeconds": 1740.487,
+    "publishedAt": "2026-09-21T00:00:00.000Z"
+  }
+}

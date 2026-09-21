@@ -1,4 +1,6 @@
 {{ define "main" }}
+{{ $heroWolpi := resources.Get "images/wolpi/hero.png" | fingerprint }}
+{{ $linuxIcon := resources.Get "images/platforms/linux.svg" | fingerprint }}
 {{ partial "site-header.html" . }}
 
 <main>
@@ -13,7 +15,7 @@
       <h1>Jura Wolpertinger herunterladen</h1>
       <p>Installiere die Desktop-App für konzentriertes Lernen und Klausurschreiben oder öffne die Web-App direkt im Browser.</p>
     </div>
-    <img src="/assets/wolpi/hero.png" alt="">
+    <img src="{{ $heroWolpi.RelPermalink }}" alt="">
   </section>
 
   <section class="doc-section download-section compact-download">
@@ -46,7 +48,7 @@
         <small>Download noch nicht bereit</small>
       </a>
       <a class="download-card" data-os="linux" href="#download" aria-disabled="true">
-        <span class="download-icon">◆</span>
+        <span class="download-icon"><img src="{{ $linuxIcon.RelPermalink }}" alt="" aria-hidden="true" width="30" height="30"></span>
         <strong>Linux</strong>
         <span>AppImage</span>
         <small>Download noch nicht bereit</small>

@@ -45,14 +45,46 @@ def _split_oversized_part(part: str, max_chars: int) -> list[str]:
 def _split_long_repair_clause(part: str) -> list[str]:
     if len(part) < REPAIR_CLAUSE_SPLIT_MIN_CHARS:
         return [part]
-    boundary = part.rfind(", ")
-    if boundary < 0:
-        return [part]
-    before = part[: boundary + 1]
-    after = part[boundary + 2 :]
-    if len(before.split()) < 3 or len(after.split()) < 3:
-        return [part]
-    return [before, after]
+    boundary = part.rfind(": ")
+    if boundary >= 0:
+        before = part[: boundary + 1]
+        after = part[boundary + 2 :]
+        if len(before.split()) >= 3 and len(after.split()) >= 3:
+            list_parts = re.split(r"(?<=;)\s+", after)
+            return [before, *list_parts]
+    list_parts = re.split(r"(?<=;)\s+", part)
+    if len(list_parts) > 1:
+        return list_parts
+    for separator in (", ",):
+        boundary = part.rfind(separator)
+        if boundary < 0:
+            continue
+        before = part[: boundary + 1]
+        after = part[boundary + 2 :]
+        if len(before.split()) >= 3 and len(after.split()) >= 3:
+            return [before, after]
+    return [part]
+
+
+def _merge_tiny_repair_chunks(chunks: list[str]) -> list[str]:
+    pending = list(chunks)
+    merged: list[str] = []
+    index = 0
+    while index < len(pending):
+        chunk = pending[index]
+        is_tiny = (
+            chunk.endswith((".", "!", "?"))
+            and len(chunk) <= 20
+            and len(chunk.split()) <= 2
+        )
+        if is_tiny and index + 1 < len(pending):
+            pending[index + 1] = chunk + " " + pending[index + 1]
+        elif is_tiny and merged:
+            merged[-1] += " " + chunk
+        else:
+            merged.append(chunk)
+        index += 1
+    return merged
 
 
 def split_tts_text(
@@ -75,11 +107,12 @@ def split_tts_text(
         )
     ]
     if not pack_sentences:
-        return [
+        repair_chunks = [
             clause
             for part in parts
             for clause in _split_long_repair_clause(part)
         ]
+        return _merge_tiny_repair_chunks(repair_chunks)
     chunks: list[str] = []
     current = ""
     for part in parts:

@@ -2,6 +2,8 @@
 
 Dieses Runbook beschreibt den manuellen Import vorbereiteter Karteikarten-Decks in die produktive Cloud-Datenbank.
 
+Für neue Sammlungen den aktuellen [Import-Skill](../../.agents/skills/karteikarten-in-app-laden/SKILL.md) und dessen CLI verwenden. Für Korrekturen oder Ergänzungen einer bestehenden Sammlung gilt zuerst der [Ablauf für bestehende Sammlungen](../../.agents/skills/karteikarten-in-app-laden/BESTEHENDE_SAMMLUNGEN.md): aktuellen Stand sichern, persönliche Änderungen erhalten und nur den beauftragten Umfang aktualisieren. Der vollständige Import ist kein abgesicherter Patch-Modus.
+
 ## Zweck
 
 Die vorbereiteten Deck-Dateien liegen typischerweise als JSON-Dateien vor, z. B. unter:
@@ -76,11 +78,11 @@ group by c.id, c.name, c.external_id;
 \""
 ```
 
-Wenn die Sammlung schon existiert, den Import trotzdem idempotent ausführen oder bewusst abbrechen. Nicht manuell löschen.
+Wenn die Sammlung schon existiert, vor einem erneuten Import die aktuellen Inhalte und Lernstände mit dem vorgesehenen Ergebnis vergleichen. Idempotenz verhindert Duplikate, schützt aber nicht vor dem Überschreiben persönlicher Texte. Einen vollständigen Neuimport nur im entsprechend beauftragten Umfang ausführen; einzelne Korrekturen nach dem oben verlinkten Ablauf durchführen. Nicht manuell löschen.
 
 ## Importskript
 
-Das folgende Muster importiert ein Deck in einen Zielaccount. Vor dem Ausführen diese Werte ersetzen:
+Das folgende historische Muster erläutert einen vollständigen Import. Für die Ausführung den aktuellen CLI-Importer aus dem Skill mit seinen Prüfungen und nutzerbezogenen IDs bevorzugen. Vor dem Übertragen des Musters diese Werte ersetzen:
 
 - `<USER_ID>`
 - `<DECK_FILE>`
@@ -255,11 +257,13 @@ group by c.id,c.name,c.subject,c.source,c.external_id;
 \""
 ```
 
-Erwartung:
+Erwartung bei einem vollständigen Import:
 
 - `items` entspricht der Kartenanzahl in der JSON-Datei.
 - `prompts` entspricht der Kartenanzahl.
 - `schedules` entspricht der Kartenanzahl.
+
+Bei gezielten Ergänzungen ist der bisherige Bestand plus neue Karten die erwartete Gesamtzahl. Die Anzahl der Karten in einem Änderungspaket ist dafür kein Vergleichswert. Zusätzlich die tatsächlich gespeicherten Zieltexte und Tags prüfen und den Erhalt der übrigen Inhalte sowie Lernstände nachweisen. Diese SQL-Abfragen und das CLI-Argument `--verify-only` prüfen nur Anzahlen.
 
 Zusätzlich Gesamtbestand prüfen:
 
@@ -295,10 +299,10 @@ Nicht blind alle Sammlungen erneut kopieren. Vorhandene Decks anhand des Namens 
 
 ## Abschlussnotiz
 
-In der Antwort an den Nutzer keine technischen SQL-Details ausgeben. Nennen:
+In der Antwort an den Nutzer keine technischen SQL-Details ausgeben. Nur tatsächlich ausgeführte Änderungen und Prüfungen nennen:
 
 - Zielaccount
 - importierte oder kopierte Sammlungen
 - Kartenanzahl
-- dass Prompts und Wiederholungspläne angelegt wurden
-- dass die Produktionsdatenbank geprüft wurde
+- ob Prompts und Wiederholungspläne angelegt oder vorhandene Lernstände erhalten wurden
+- welche Produktionsprüfung stattgefunden hat; eine reine Anzahlprüfung nicht als Inhaltsvergleich darstellen

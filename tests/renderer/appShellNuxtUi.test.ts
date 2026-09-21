@@ -11,7 +11,7 @@ describe('Nuxt UI app shell', () => {
     expect(app).toContain('<UNavigationMenu')
     expect(app).toContain('<UButton')
     expect(app).toContain('<UInput')
-    expect(app).toContain('<USelect')
+    expect(app).toContain('<UDropdownMenu')
     expect(app).toContain('<UModal')
     expect(app).not.toMatch(/<(button|input|select|textarea)\b/)
   })
@@ -24,6 +24,8 @@ describe('Nuxt UI app shell', () => {
       'flashcards',
       'flashcards-review',
       'flashcards-collections',
+      'flashcards-statistics',
+      'podcasts',
       'exams',
       'dashboard',
       'correction',
@@ -36,7 +38,7 @@ describe('Nuxt UI app shell', () => {
       expect(app).toContain(`name: '${routeName}'`)
     }
 
-    for (const label of ['Home', 'Karteikarten', 'Prüfungen', 'Mehr']) {
+    for (const label of ['Home', 'Karteikarten', 'Podcasts', 'Prüfungen', 'Mehr']) {
       expect(app).toContain(`label: '${label}'`)
     }
   })
@@ -94,17 +96,55 @@ describe('Nuxt UI app shell', () => {
     expect(styles).not.toMatch(/#(?:004f80|008bd2|006ea8|075d88|0f6c9d|0f506f|168fd1|7fcaf0|43bce8|82d5f2|159fd8|b9e7f8|dff3fc|0091ea|007fbe|0086d7|008fe3)\b/i)
   })
 
-  it('keeps cloud account controls separate from local user switching', async () => {
+  it('uses one compact account menu for cloud and local user actions', async () => {
     const app = await readFile(resolve(rendererRoot, 'App.vue'), 'utf8')
 
     expect(app).toContain('const isCloudShell = computed')
-    expect(app).toContain('<section v-if="isCloudShell" class="sidebar-account" aria-label="Konto">')
-    expect(app).toContain('<section v-else class="sidebar-user" aria-label="Nutzer">')
-    expect(app).toContain('Profil')
-    expect(app).toContain(`:to="{ name: 'settings' }"`)
+    expect(app).toContain('<UDropdownMenu')
+    expect(app).toContain(':items="accountMenuItems"')
+    expect(app).toContain('class="sidebar-account-trigger"')
+    expect(app).toContain('const accountMenuItems = computed')
+    expect(app).toContain('Einstellungen')
+    expect(app).toContain('Neuer Nutzer')
     expect(app).toContain('Abmelden')
     expect(app).toContain('async function signOut')
-    expect(app).toContain('showCreateUser = true')
+    expect(app).toContain('showCreateUser.value = true')
+  })
+
+  it('flushes and clears podcast state before the active account changes', async () => {
+    const app = await readFile(resolve(rendererRoot, 'App.vue'), 'utf8')
+    const player = await readFile(resolve(rendererRoot, 'podcasts/usePodcastPlayer.ts'), 'utf8')
+
+    for (const [functionName, accountAction] of [
+      ['switchUser', 'api.switchUser'],
+      ['createUser', 'api.createUser'],
+      ['signOut', 'client.auth.signOut']
+    ]) {
+      const block = app.match(new RegExp(`async function ${functionName}[^]*?\\n}`))?.[0] ?? ''
+      expect(block.indexOf('await podcastPlayer.prepareForAccountChange()')).toBeGreaterThan(-1)
+      expect(block.indexOf('await podcastPlayer.prepareForAccountChange()')).toBeLessThan(
+        block.indexOf(accountAction)
+      )
+    }
+
+    expect(player).toContain('async function prepareForAccountChange')
+    expect(player).toContain('currentEpisode.value = null')
+    expect(player).toContain('catalog.value = null')
+  })
+
+  it('renders the beta badge as a clean top-right corner ribbon', async () => {
+    const app = await readFile(resolve(rendererRoot, 'App.vue'), 'utf8')
+    const styles = await readFile(resolve(rendererRoot, 'styles/main.css'), 'utf8')
+
+    expect(app).toContain('class="beta-banner-corner"')
+    expect(styles).toMatch(/\.beta-banner-corner\s*\{[^}]*height:\s*72px/s)
+    expect(styles).toMatch(/\.beta-banner-corner\s*\{[^}]*overflow:\s*hidden/s)
+    expect(styles).toMatch(/\.beta-banner-corner\s*\{[^}]*position:\s*absolute/s)
+    expect(styles).toMatch(/\.beta-banner-corner\s*\{[^}]*right:\s*0/s)
+    expect(styles).toMatch(/\.beta-banner-corner\s*\{[^}]*top:\s*0/s)
+    expect(styles).toMatch(/\.beta-banner-corner\s*\{[^}]*width:\s*72px/s)
+    expect(styles).toMatch(/\.beta-banner\s*\{[^}]*transform:\s*rotate\(45deg\)/s)
+    expect(styles).not.toMatch(/\.beta-banner\s*\{[^}]*translate\(/s)
   })
 
   it('keeps the cloud auth form readable, recoverable and theme-aware', async () => {

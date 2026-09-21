@@ -26,6 +26,19 @@ describe('browser development API', () => {
     vi.stubGlobal('localStorage', localStorageMock)
   })
 
+  it('loads collection orientation without writing local learning state', async () => {
+    const apiModulePath = '../../src/renderer/src/api'
+    const { getApi } = await import(/* @vite-ignore */ apiModulePath)
+    const api: AppApi = getApi()
+    const collection = await api.createLearningCollection({ name: 'Baurecht', subject: 'Öffentliches Recht' })
+    await api.createLearningCard({ collectionId: collection.id, title: 'Bau', frontMarkdown: 'Frage', backMarkdown: 'Antwort', tags: [] })
+    const before = localStorageMock.getItem(browserStoreKey)
+    expect((await api.studyFlashcards({ action: 'catalog', search: ' öffentliches ' })).catalog).toMatchObject({
+      total: 1, items: [{ id: collection.id, name: 'Baurecht' }], recommendation: { kind: 'new', collection: { id: collection.id } }
+    })
+    expect(localStorageMock.getItem(browserStoreKey)).toBe(before)
+  })
+
   it('does not persist OpenAI API keys in localStorage', async () => {
     const apiModulePath = '../../src/renderer/src/api'
     const { getApi } = (await import(/* @vite-ignore */ apiModulePath)) as {
@@ -480,5 +493,80 @@ describe('browser development API', () => {
 
     const batch = await api.getReviewBatch({ collectionId: collection.id, limit: 5 })
     expect(batch.map((card) => card.id)).toEqual([newCard.id, reviewedCard.id])
+  })
+
+  it('persists collection traversal, deferred cards and reversible idempotent ratings', async () => {
+    const apiModulePath = '../../src/renderer/src/api'
+    const { getApi } = await import(/* @vite-ignore */ apiModulePath) as { getApi: () => AppApi }
+    const api = getApi()
+    const collection = await api.createLearningCollection({ name: 'Durchgang' })
+    for (let i = 0; i < 45; i++) await api.createLearningCard({ collectionId: collection.id, title: `Karte ${i}`, frontMarkdown: 'Frage', backMarkdown: 'Antwort', tags: [] })
+    const start = await api.studyFlashcards({ action: 'start', collectionId: collection.id, mode: 'first_pass' })
+    const runId = start.run!.id
+    expect(start.cards).toHaveLength(40)
+    const skipped = start.cards[0].id
+    await api.studyFlashcards({ action: 'defer', runId, cardId: skipped })
+    const command = { action: 'rate' as const, runId, cardId: start.cards[1].id, rating: 1 as const, eventId: crypto.randomUUID() }
+    await api.studyFlashcards(command)
+    await api.studyFlashcards(command)
+    expect((await api.getLearningStatistics()).reviewCountTotal).toBe(1)
+    vi.resetModules()
+    const { getApi: freshApi } = await import(/* @vite-ignore */ apiModulePath) as { getApi: () => AppApi }
+    const reloaded = freshApi()
+    const next = await reloaded.studyFlashcards({ action: 'start', collectionId: collection.id, mode: 'first_pass' })
+    expect(next.run).toMatchObject({ id: runId, completed: 1, deferred: 1, remaining: 44 })
+    expect(next.cards.map((card) => card.id)).not.toContain(skipped)
+    await reloaded.studyFlashcards({ action: 'undo', runId, eventId: command.eventId })
+    expect((await reloaded.getLearningStatistics()).reviewCountTotal).toBe(0)
+    expect((await reloaded.studyFlashcards({ action: 'batch', runId })).run?.completed).toBe(0)
+  })
+
+  it('provides browser learning statistics and persists podcast progress', async () => {
+    const apiModulePath = '../../src/renderer/src/api'
+    const { getApi } = (await import(/* @vite-ignore */ apiModulePath)) as {
+      getApi: () => AppApi
+    }
+    const api = getApi()
+    const collection = await api.createLearningCollection({ name: 'Zivilrecht' })
+    const card = await api.createLearningCard({
+      collectionId: collection.id,
+      title: 'Anspruch',
+      frontMarkdown: 'Was ist ein Anspruch?',
+      backMarkdown: '§ 194 Abs. 1 BGB',
+      tags: ['bgb']
+    })
+    await api.recordReview({ cardId: card.id, rating: 3 })
+
+    await expect(api.getLearningStatistics()).resolves.toMatchObject({
+      totalCards: 1,
+      reviewedCards: 1,
+      reviewCountTotal: 1,
+      reviewsToday: 1,
+      ratingCounts: [
+        { rating: 1, count: 0 },
+        { rating: 2, count: 0 },
+        { rating: 3, count: 1 },
+        { rating: 4, count: 0 }
+      ]
+    })
+
+    const catalog = await api.getPodcastCatalog()
+    expect(catalog.legalAreas[0].series[0].episodes).toHaveLength(18)
+    const episode = catalog.legalAreas[0].series[0].episodes[0]
+    await expect(
+      api.savePodcastProgress({
+        episodeId: episode.id,
+        positionSeconds: 680,
+        durationSeconds: 700,
+        completed: false
+      })
+    ).resolves.toEqual(expect.objectContaining({ completed: true, positionSeconds: 680 }))
+    const resumedCatalog = await api.getPodcastCatalog()
+    expect(resumedCatalog.legalAreas[0].series[0].episodes[0].progress).toEqual(
+      expect.objectContaining({
+        episodeId: episode.id,
+        completed: true
+      })
+    )
   })
 })

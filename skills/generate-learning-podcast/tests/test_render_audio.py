@@ -66,6 +66,16 @@ class RenderAudioTests(unittest.TestCase):
             ["Zum Schluss steigen wir ein.", "Womit beginne ich?"],
         )
 
+    def test_repair_mode_merges_tiny_lead_with_following_sentence(self) -> None:
+        text = "Ja. Schmidbauer verlangt eine doppelte Abstützung."
+
+        chunks = split_tts_text(text, pack_sentences=False)
+
+        self.assertEqual(
+            chunks,
+            ["Ja. Schmidbauer verlangt eine doppelte Abstützung."],
+        )
+
     def test_repair_mode_does_not_split_legal_abbreviations_from_numbers(self) -> None:
         text = (
             "Das folgt aus Art. 57, nicht aus Art. 58. "
@@ -100,6 +110,49 @@ class RenderAudioTests(unittest.TestCase):
                     "genannt hast,"
                 ),
                 "sitzt die zeitliche Struktur.",
+            ],
+        )
+        self.assertEqual(" ".join(chunks), text)
+
+    def test_repair_mode_keeps_parallel_list_together_after_colon(self) -> None:
+        text = (
+            "Ergänze jetzt noch die entscheidenden Bezugspunkte: beim PAG die "
+            "erfassten Vollzugsdienstkräfte, beim POG die gesamte Organisation "
+            "samt Verwaltungsdienst."
+        )
+
+        chunks = split_tts_text(text, pack_sentences=False)
+
+        self.assertEqual(
+            chunks,
+            [
+                "Ergänze jetzt noch die entscheidenden Bezugspunkte:",
+                (
+                    "beim PAG die erfassten Vollzugsdienstkräfte, beim POG die "
+                    "gesamte Organisation samt Verwaltungsdienst."
+                ),
+            ],
+        )
+        self.assertEqual(" ".join(chunks), text)
+
+    def test_repair_mode_splits_long_semicolon_list_after_colon(self) -> None:
+        text = (
+            "Ergänze die fünf Themenfelder für die Wiederholung: "
+            "Informationserhebung; besondere Anordnungen; Gewahrsam; "
+            "Durchsuchung und weitere Maßnahmen; schließlich kommen die Daten."
+        )
+
+        chunks = split_tts_text(text, pack_sentences=False)
+
+        self.assertEqual(
+            chunks,
+            [
+                "Ergänze die fünf Themenfelder für die Wiederholung:",
+                "Informationserhebung;",
+                "besondere Anordnungen;",
+                "Gewahrsam;",
+                "Durchsuchung und weitere Maßnahmen;",
+                "schließlich kommen die Daten.",
             ],
         )
         self.assertEqual(" ".join(chunks), text)

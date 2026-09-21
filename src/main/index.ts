@@ -1,4 +1,5 @@
 import { existsSync, renameSync } from 'node:fs'
+import type { StudyCommand } from '@shared/flashcardStudy'
 import { join } from 'node:path'
 import {
   app,
@@ -24,6 +25,7 @@ import type {
   ListLearningCardsInput,
   RateLearningCardQualityInput,
   RecordReviewInput,
+  SavePodcastProgressInput,
   SaveRevisionInput,
   SaveAiSettingsInput,
   SyncAuthInput,
@@ -42,6 +44,7 @@ import { AppServices } from './services/services'
 import { seedDemoDataIfEnabled } from './services/demoData'
 import { exportExamPdf } from './services/pdf'
 import { resolveRuntimeDockIconPath } from './appIdentity'
+import { shouldShowAppWindows } from './appWindowVisibility'
 import { configureAutoUpdaterFeed, resolveUpdateFeedUrl } from './updateFeed'
 import { createAutoUpdateCoordinator, createUpdateMenuTemplate, type AutoUpdateCoordinator } from './autoUpdates'
 import { handleReleaseSmokeRendererReady } from './releaseSmoke'
@@ -208,7 +211,7 @@ function createSplashWindow(): void {
   })
 
   splashWindow.once('ready-to-show', () => {
-    splashWindow?.show()
+    if (shouldShowAppWindows(process.env)) splashWindow?.show()
   })
   splashWindow.on('closed', () => {
     splashWindow = null
@@ -334,6 +337,8 @@ function registerIpc(): void {
       services.updateLearningTaskStatus(taskId, status)
   )
   ipcMain.handle('learning:dashboard', () => services.getLearningDashboard())
+  ipcMain.handle('learning:study', (_event, input: StudyCommand) => services.studyFlashcards(input))
+  ipcMain.handle('learning:statistics', () => services.getLearningStatistics())
   ipcMain.handle('learning:exportDecksJson', () => services.exportLearningDecks())
   ipcMain.handle('learning:importDecksJson', (_event, json: string) => services.importLearningDecksFromJson(json))
   ipcMain.handle('learning:collections', () => services.listLearningCollections())
@@ -363,6 +368,10 @@ function registerIpc(): void {
   )
   ipcMain.handle('learning:rateCardQuality', (_event, input: RateLearningCardQualityInput) =>
     services.rateLearningCardQuality(input)
+  )
+  ipcMain.handle('podcasts:catalog', () => services.getPodcastCatalog())
+  ipcMain.handle('podcasts:saveProgress', (_event, input: SavePodcastProgressInput) =>
+    services.savePodcastProgress(input)
   )
 
   ipcMain.handle('attachments:add', async (_event, examId: string, role: AttachmentRole = 'other') => {
@@ -500,7 +509,7 @@ function configureReleaseSmokeUserDataPath(): void {
 function revealMainWindow(): void {
   const delay = Math.max(0, SPLASH_MINIMUM_MS - (Date.now() - splashStartedAt))
   setTimeout(() => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow && !mainWindow.isDestroyed() && shouldShowAppWindows(process.env)) {
       mainWindow.show()
       mainWindow.focus()
       if (!app.isPackaged && process.env.JURA_E2E !== '1') {

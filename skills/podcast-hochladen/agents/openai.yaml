@@ -1,0 +1,4 @@
+interface:
+  display_name: "Podcast hochladen"
+  short_description: "Podcasts sicher veröffentlichen und prüfen"
+  default_prompt: "Nutze $podcast-hochladen, um diese Audiodatei als Podcast in Jura Wolpertinger zu veröffentlichen."

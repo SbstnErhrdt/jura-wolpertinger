@@ -9,7 +9,7 @@ describe('Nuxt UI exam support views', () => {
   it.each(files)('%s has no native standard controls or legacy wrappers', async (file) => {
     const source = await readFile(resolve(viewsRoot, file), 'utf8')
     expect(source).not.toMatch(/<(button|input|select|textarea)\b/)
-    expect(source).not.toMatch(/components\/ui\/(AppBreadcrumb|AppPagination|ListSkeleton)/)
+    expect(source).not.toMatch(/components\/ui\/(AppPagination|ListSkeleton)/)
   })
 
   it('uses Nuxt UI without changing support workflow handlers', async () => {
@@ -17,7 +17,7 @@ describe('Nuxt UI exam support views', () => {
       files.map((file) => readFile(resolve(viewsRoot, file), 'utf8'))
     )
     const combined = `${dashboard}\n${correction}\n${analytics}`
-    expect(combined).toContain('<UBreadcrumb')
+    expect(combined).toContain('<AppBreadcrumb')
     expect(combined).toContain('<UButton')
     expect(combined).toContain('<UInput')
     expect(combined).toContain('<UTextarea')

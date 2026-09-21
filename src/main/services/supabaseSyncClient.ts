@@ -14,11 +14,23 @@ import type {
   CloudLearningCard,
   CloudLearningCardQualityEvent,
   CloudLearningCollection,
+  CloudPodcastProgress,
   CloudLearningReviewEvent,
   CloudLearningSchedule,
   CloudLearningSyncState
 } from './learningSyncService'
 import type { WorkspaceSnapshot } from './syncService'
+import type { StoredStudyRun } from '@shared/flashcardStudyEngine'
+import { z } from 'zod'
+
+const cloudStudyRunSchema = z.object({
+  id: z.string().uuid(), userId: z.string().uuid(), collectionId: z.string().uuid(),
+  mode: z.enum(['first_pass', 'review', 'weak', 'all']),
+  createdAt: z.string().datetime({ offset: true }), updatedAt: z.string().datetime({ offset: true }),
+  completion: z.object({ total: z.number().int().nonnegative(), completed: z.number().int().nonnegative(), excluded: z.number().int().nonnegative() }).nullable().optional(),
+  items: z.array(z.object({ cardId: z.string().uuid(), completed: z.boolean(), deferred: z.boolean() })).max(100000),
+  actions: z.array(z.never()).max(0)
+})
 
 const DEFAULT_SYNC_URL = 'https://app.jura-wolpi.de/api'
 const SYNC_BUCKET = 'user-files'
@@ -170,6 +182,69 @@ export class SupabaseSyncClient {
     return new Uint8Array(await data.arrayBuffer())
   }
 
+  async downloadStudyRuns(): Promise<StoredStudyRun[]> {
+    const account = this.requireAccount()
+    const runs: StoredStudyRun[] = []
+    const seen = new Set<string>()
+    for (let offset = 0; ; offset += 25) {
+      const { data, error } = await this.client.rpc('get_flashcard_study_runs', { p_offset: offset, p_limit: 25 })
+      if (error) throw new Error(`Lerndurchgänge konnten nicht geladen werden: ${error.message}`)
+      const page = z.array(cloudStudyRunSchema).max(25).parse(data)
+      for (const run of page) {
+        if (run.userId !== account.remoteUserId || seen.has(run.id)) throw new Error('Die Lerndurchgänge haben sich während des Ladens geändert. Bitte erneut abgleichen.')
+        seen.add(run.id)
+        runs.push(run)
+      }
+      if (page.length < 25) return runs
+    }
+  }
+
+  async uploadStudyRun(run: StoredStudyRun, expectedUpdatedAt: string | null): Promise<StoredStudyRun> {
+    const account = this.requireAccount()
+    const { data, error } = await this.client.rpc('sync_flashcard_study_run', {
+      p_state: { id: run.id, collectionId: run.collectionId, mode: run.mode,
+        createdAt: run.createdAt, updatedAt: run.updatedAt, items: run.items, completion: run.completion ?? null },
+      p_expected_updated_at: expectedUpdatedAt
+    })
+    if (error?.code === '40001') throw new Error('Der Durchgang wurde auf einem anderen Gerät geändert. Deine lokalen Änderungen bleiben erhalten. Lade die Online-Daten ausdrücklich neu, um den dortigen Stand zu übernehmen.')
+    if (error) throw new Error(`Lerndurchgang konnte nicht gesichert werden: ${error.message}`)
+    const result = cloudStudyRunSchema.parse(data)
+    if (result.userId !== account.remoteUserId || result.id !== run.id || result.collectionId !== run.collectionId) {
+      throw new Error('Die Antwort gehört nicht zu diesem Lerndurchgang.')
+    }
+    return result
+  }
+
+  async uploadStudyProgress(state: CloudLearningSyncState, runs: StoredStudyRun[], expectedSchedules: CloudLearningSchedule[]): Promise<StoredStudyRun[]> {
+    const account = this.requireAccount()
+    const expected = new Map(expectedSchedules.map((schedule) => [schedule.cardId, schedule.updatedAt]))
+    const scheduledCards = new Set(state.schedules.map(schedule => schedule.cardId))
+    const voidedEvents = new Set(state.reviewEvents.filter(event => event.voidedAt).map(event => event.id))
+    const deletions = new Map<string, { cardId: string; eventId: string; runId: string }>()
+    for (const run of runs) {
+      for (const action of run.actions) {
+        if (action.undone && action.previous === null && !scheduledCards.has(action.cardId)
+          && expected.has(action.cardId) && voidedEvents.has(action.review.event.id)
+          && run.items.some(item => item.cardId === action.cardId && !item.completed)) {
+          deletions.set(action.cardId, { cardId: action.cardId, eventId: action.review.event.id, runId: run.id })
+        }
+      }
+    }
+    const cardIds = [...new Set([...scheduledCards, ...state.reviewEvents.map((event) => event.cardId), ...deletions.keys()])]
+    const { data, error } = await this.client.rpc('sync_flashcard_learning_progress', {
+      p_schedules: state.schedules, p_review_events: state.reviewEvents,
+      p_schedule_deletions: [...deletions.values()],
+      p_expected_schedules: cardIds.map((cardId) => ({ cardId, updatedAt: expected.get(cardId) ?? null })),
+      p_runs: runs.map((run) => ({ state: { id: run.id, collectionId: run.collectionId, mode: run.mode,
+        createdAt: run.createdAt, updatedAt: run.updatedAt, items: run.items, completion: run.completion ?? null }, expectedUpdatedAt: run.cloudUpdatedAt ?? null }))
+    })
+    if (error?.code === '40001') throw new Error('Der Lernstand wurde auf einem anderen Gerät geändert. Deine lokalen Änderungen bleiben erhalten. Bitte gleiche die Daten erneut ab.')
+    if (error) throw new Error(`Der Lernstand konnte nicht gesichert werden: ${error.message}`)
+    const result = z.array(cloudStudyRunSchema).max(1000).parse(data)
+    if (result.length !== runs.length || result.some((run, index) => run.id !== runs[index].id || run.userId !== account.remoteUserId)) throw new Error('Die Antwort gehört nicht zu diesen Lerndurchgängen.')
+    return result
+  }
+
   async downloadLearningState(): Promise<CloudLearningSyncState> {
     const account = this.requireAccount()
     const { data: collectionRows, error: collectionError } = await this.client
@@ -214,7 +289,7 @@ export class SupabaseSyncClient {
     })
     const { data: reviewRows, error: reviewError } = await this.client
       .from('review_events')
-      .select('id, user_id, prompt_id, rating, reviewed_at, elapsed_ms')
+      .select('id, user_id, prompt_id, rating, reviewed_at, elapsed_ms, voided_at')
       .eq('user_id', account.remoteUserId)
     if (reviewError) throw new Error(`Karteikarten-Bewertungen konnten nicht geladen werden: ${reviewError.message}`)
 
@@ -227,6 +302,15 @@ export class SupabaseSyncClient {
       if (error) throw new Error(`Kartenqualitaet konnte nicht geladen werden: ${error.message}`)
       return (data ?? []) as Array<Record<string, unknown>>
     })
+    const { data: podcastProgressRows, error: podcastProgressError } = await this.client
+      .from('podcast_episode_progress')
+      .select(
+        'user_id, episode_id, position_seconds, duration_seconds, completed, last_played_at, updated_at'
+      )
+      .eq('user_id', account.remoteUserId)
+    if (podcastProgressError) {
+      throw new Error(`Podcast-Fortschritt konnte nicht geladen werden: ${podcastProgressError.message}`)
+    }
 
     const itemsById = new Map(items.map((item) => [String(item.id), item]))
     const tagsByItemId = groupTagsByItemId(tagRows)
@@ -278,7 +362,8 @@ export class SupabaseSyncClient {
         cardId: String(row.prompt_id),
         rating: Number(row.rating) as CloudLearningReviewEvent['rating'],
         reviewedAt: String(row.reviewed_at),
-        elapsedMs: row.elapsed_ms === null || row.elapsed_ms === undefined ? null : Number(row.elapsed_ms)
+        elapsedMs: row.elapsed_ms === null || row.elapsed_ms === undefined ? null : Number(row.elapsed_ms),
+        voidedAt: row.voided_at ? String(row.voided_at) : null
       })),
       qualityEvents: qualityRows.map((row): CloudLearningCardQualityEvent => ({
         id: String(row.id),
@@ -290,7 +375,18 @@ export class SupabaseSyncClient {
         ratedAt: String(row.rated_at),
         createdAt: String(row.created_at),
         updatedAt: String(row.updated_at)
-      }))
+      })),
+      podcastProgress: ((podcastProgressRows ?? []) as Array<Record<string, unknown>>).map(
+        (row): CloudPodcastProgress => ({
+          userId: String(row.user_id),
+          episodeId: String(row.episode_id),
+          positionSeconds: Number(row.position_seconds),
+          durationSeconds: Number(row.duration_seconds),
+          completed: Boolean(row.completed),
+          lastPlayedAt: row.last_played_at ? String(row.last_played_at) : null,
+          updatedAt: String(row.updated_at)
+        })
+      )
     }
   }
 
@@ -355,39 +451,6 @@ export class SupabaseSyncClient {
       await this.replaceLearningTags(state.cards)
     }
 
-    if (state.schedules.length) {
-      const { error } = await this.client.from('learning_prompt_schedules').upsert(
-        state.schedules.map((schedule) => ({
-          user_id: account.remoteUserId,
-          prompt_id: schedule.cardId,
-          due_at: schedule.dueAt,
-          reps: schedule.reps,
-          lapses: schedule.lapses,
-          last_rating: schedule.lastRating,
-          last_reviewed_at: schedule.lastReviewedAt,
-          updated_at: schedule.updatedAt
-        })),
-        { onConflict: 'user_id,prompt_id' }
-      )
-      if (error) throw new Error(`Karteikarten-Zeitplan konnte nicht gesichert werden: ${error.message}`)
-    }
-
-    if (state.reviewEvents.length) {
-      const { error } = await this.client.from('review_events').upsert(
-        state.reviewEvents.map((event) => ({
-          id: event.id,
-          client_event_id: event.id,
-          user_id: account.remoteUserId,
-          prompt_id: event.cardId,
-          rating: event.rating,
-          reviewed_at: event.reviewedAt,
-          elapsed_ms: event.elapsedMs
-        })),
-        { onConflict: 'id' }
-      )
-      if (error) throw new Error(`Karteikarten-Bewertungen konnten nicht gesichert werden: ${error.message}`)
-    }
-
     if (state.qualityEvents.length) {
       const { error } = await this.client.from('learning_card_quality_events').upsert(
         state.qualityEvents.map((event) => ({
@@ -404,6 +467,20 @@ export class SupabaseSyncClient {
         { onConflict: 'id' }
       )
       if (error) throw new Error(`Kartenqualitaet konnte nicht gesichert werden: ${error.message}`)
+    }
+
+    for (const progress of state.podcastProgress ?? []) {
+      const { error } = await this.client.rpc('upsert_podcast_progress', {
+        p_episode_id: progress.episodeId,
+        p_position_seconds: progress.positionSeconds,
+        p_duration_seconds: progress.durationSeconds,
+        p_completed: progress.completed,
+        p_last_played_at: progress.lastPlayedAt,
+        p_updated_at: progress.updatedAt
+      })
+      if (error) {
+        throw new Error(`Podcast-Fortschritt konnte nicht gesichert werden: ${error.message}`)
+      }
     }
   }
 

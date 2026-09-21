@@ -1,4 +1,5 @@
 import type { SupabaseClient, User as SupabaseUser } from '@supabase/supabase-js'
+import { z } from 'zod'
 import type {
   AddInlineCommentInput,
   AppApi,
@@ -30,6 +31,9 @@ import type {
   LearningDashboard,
   LearningImportResult,
   LearningReviewEvent,
+  LearningStatistics,
+  PodcastCatalog,
+  PodcastProgress,
   ReviewCard,
   ReviewRating,
   Submission,
@@ -37,15 +41,24 @@ import type {
   UserProfile
 } from '@shared/schemas'
 import {
+  attachmentSchema,
   learningCardQualityReasonSchema,
   learningCardQualityStatusSchema,
   learningExportFileSchema,
   learningImportResultSchema,
+  learningStatisticsSchema,
+  podcastCatalogSchema,
+  podcastProgressSchema,
   learningReviewEventSchema,
   reviewRatingSchema,
   userProfileSchema
 } from '@shared/schemas'
 import { getSupabaseAuthClient } from './cloudAuth'
+import { studyCatalogQuerySchema, studyResponseSchema } from '@shared/flashcardStudy'
+import type { StudyCollection, StudyResponse } from '@shared/flashcardStudy'
+import { learningStatusCountsSchema, type LearningStatusCounts } from '@shared/learningStatus'
+import { mergeCloudExamCorrectionImports } from './cloudExamCorrectionImports'
+import { mergeCloudExamDateImports } from './cloudExamDateImports'
 
 type CloudCollectionRow = {
   id: string
@@ -140,6 +153,7 @@ type CloudBrowserStore = {
 
 let cloudBrowserSnapshotUploadPromise: Promise<void> | null = null
 let cloudBrowserSnapshotUploadQueued = false
+let cloudBrowserWorkspaceLoadedUserId: string | null = null
 
 export function createCloudLearningApi(localApi: AppApi): AppApi {
   return {
@@ -228,6 +242,40 @@ export function createCloudLearningApi(localApi: AppApi): AppApi {
       await ensureCloudBrowserWorkspaceLoaded()
       return localApi.getExam(id)
     },
+    async openAttachment(attachmentId: string) {
+      const { client, user } = await requireCloudContext()
+      await ensureCloudBrowserWorkspaceLoaded()
+      const store = readCloudBrowserStore()
+      const matches = store?.attachments.filter(row => row.id === attachmentId) ?? []
+      const parsed = attachmentSchema.safeParse(matches.length === 1 ? matches[0] : null)
+      if (store?.currentUserId !== user.id || !parsed.success || parsed.data.userId !== user.id
+        || !store.exams.some(exam => exam.id === parsed.data.examId && exam.userId === user.id)
+        || !safeFileComponent(parsed.data.storedName)) {
+        throw new Error('Dieser Anhang ist in deinem Arbeitsbereich nicht verfügbar.')
+      }
+      const attachment = parsed.data
+      if ((await requireCloudContext()).user.id !== user.id) throw new Error('Das Konto wurde gewechselt. Bitte öffne den Anhang erneut.')
+      const { data, error } = await client.storage.from('user-files').download(
+        cloudAttachmentStoragePath(user.id, attachment.id, attachment.storedName)
+      )
+      if (error) throw error
+      if (!data) throw new Error('Der Anhang konnte nicht geladen werden.')
+      if ((await requireCloudContext()).user.id !== user.id || readCloudBrowserStore()?.currentUserId !== user.id) {
+        throw new Error('Das Konto wurde gewechselt. Bitte öffne den Anhang erneut.')
+      }
+      const url = URL.createObjectURL(data)
+      const link = document.createElement('a')
+      try {
+        link.href = url
+        link.download = safeFileComponent(attachment.originalName) ? attachment.originalName : attachment.storedName
+        document.body.appendChild(link)
+        link.click()
+      } finally {
+        link.remove()
+        // Let the browser consume the download before releasing its blob.
+        setTimeout(() => URL.revokeObjectURL(url), 0)
+      }
+    },
     async updateExam(input: UpdateExamInput) {
       await ensureCloudBrowserWorkspaceLoaded()
       const exam = await localApi.updateExam(input)
@@ -299,6 +347,9 @@ export function createCloudLearningApi(localApi: AppApi): AppApi {
         freeDaysRemainingThisWeek: Math.max(0, 2 - countCloudMissedDaysThisWeek(activityDays)),
         learnedToday: activityDays.has(localDateKey(new Date()))
       } satisfies LearningDashboard
+    },
+    async getLearningStatistics() {
+      return getCloudLearningStatistics()
     },
     async exportLearningDecksJson() {
       const collections = await listCloudCollections()
@@ -390,6 +441,36 @@ export function createCloudLearningApi(localApi: AppApi): AppApi {
     async deleteLearningCard(input: DeleteLearningCardInput) {
       return deleteCloudCard(input)
     },
+    async studyFlashcards(input) {
+      const { client } = await requireCloudContext()
+      if (input.action === 'catalog') {
+        const query = studyCatalogQuerySchema.parse(input)
+        const [{ data, error }, statusResult] = await Promise.all([
+          client.rpc('get_study_collection_catalog', { p_search: query.search, p_page: query.page }),
+          client.rpc('get_learning_status_counts', {})
+        ])
+        if (error) throw error
+        if (statusResult.error) throw statusResult.error
+        const response = applyCloudLearningStatusCounts(
+          studyResponseSchema.parse(data),
+          statusResult.data
+        )
+        if (!response.catalog) throw new Error('Die Sammlungsübersicht konnte nicht geladen werden.')
+        return response
+      }
+      if (input.action === 'overview') {
+        const [{ data, error }, statusResult] = await Promise.all([
+          client.rpc('study_flashcards', { p_command: input }),
+          client.rpc('get_learning_status_counts', {})
+        ])
+        if (error) throw error
+        if (statusResult.error) throw statusResult.error
+        return applyCloudLearningStatusCounts(studyResponseSchema.parse(data), statusResult.data)
+      }
+      const { data, error } = await client.rpc('study_flashcards', { p_command: input })
+      if (error) throw error
+      return studyResponseSchema.parse(data)
+    },
     async getReviewBatch(input: GetReviewBatchInput = {}) {
       if (!input.tag) return listCloudReviewBatch(input)
       const cards = await listCloudCards(input.collectionId ?? null)
@@ -439,8 +520,47 @@ export function createCloudLearningApi(localApi: AppApi): AppApi {
     },
     async rateLearningCardQuality(input: RateLearningCardQualityInput) {
       return rateCloudCardQuality(input)
+    },
+    async getPodcastCatalog() {
+      return getCloudPodcastCatalog()
+    },
+    async savePodcastProgress(input) {
+      return saveCloudPodcastProgress(input)
     }
   }
+}
+
+function applyCloudLearningStatusCounts(response: StudyResponse, payload: unknown): StudyResponse {
+  const parsed = z.array(z.object({
+    collectionId: z.string().uuid(),
+    statusCounts: learningStatusCountsSchema
+  })).parse(payload)
+  const countsByCollection = new Map<string, LearningStatusCounts>(
+    parsed.map((entry) => [entry.collectionId, entry.statusCounts])
+  )
+  const withCounts = (collection: StudyCollection): StudyCollection => ({
+    ...collection,
+    overview: {
+      ...collection.overview,
+      statusCounts: countsByCollection.get(collection.id) ?? collection.overview.statusCounts
+    }
+  })
+  return studyResponseSchema.parse({
+    ...response,
+    overviews: response.overviews.map((overview) => ({
+      ...overview,
+      statusCounts: countsByCollection.get(overview.collectionId) ?? overview.statusCounts
+    })),
+    catalog: response.catalog
+      ? {
+          ...response.catalog,
+          items: response.catalog.items.map(withCounts),
+          recommendation: response.catalog.recommendation
+            ? { ...response.catalog.recommendation, collection: withCounts(response.catalog.recommendation.collection) }
+            : null
+        }
+      : undefined
+  })
 }
 
 async function requireCloudContext(): Promise<{
@@ -523,7 +643,7 @@ async function ensureCloudBrowserWorkspaceLoaded(): Promise<void> {
   const existingStore = readCloudBrowserStore()
   const marker = readCloudBrowserSnapshotMarker()
 
-  if (existingStore && marker?.userId === user.id) {
+  if (existingStore && marker?.userId === user.id && cloudBrowserWorkspaceLoadedUserId === user.id) {
     writeCloudBrowserStore(ensureCloudBrowserUser(existingStore, cloudUser))
     return
   }
@@ -540,8 +660,19 @@ async function ensureCloudBrowserWorkspaceLoaded(): Promise<void> {
 
   const payload = data?.payload_json as { browserStore?: unknown } | null | undefined
   const snapshotStore = parseCloudBrowserStore(payload?.browserStore)
-  const store = ensureCloudBrowserUser(snapshotStore ?? existingStore ?? createEmptyCloudBrowserStore(), cloudUser)
+  const currentContext = await requireCloudContext()
+  if (currentContext.user.id !== user.id) throw new Error('Das Konto wurde gewechselt. Bitte öffne die Prüfung erneut.')
+  // Re-read after the request so another concurrent load cannot be overwritten.
+  const currentStore = readCloudBrowserStore() ?? existingStore
+  const ownsCurrentStore = currentStore?.currentUserId === user.id
+  const store = ensureCloudBrowserUser(
+    ownsCurrentStore && currentStore
+      ? mergeCloudBrowserExamImports(currentStore, snapshotStore, user.id)
+      : snapshotStore ?? createEmptyCloudBrowserStore(),
+    cloudUser
+  )
   writeCloudBrowserStore(store)
+  cloudBrowserWorkspaceLoadedUserId = user.id
   writeCloudBrowserSnapshotMarker({
     userId: user.id,
     updatedAt: String((data as { updated_at?: unknown } | null)?.updated_at ?? nowIso())
@@ -569,8 +700,24 @@ function queueCloudBrowserSnapshotUpload(): void {
 async function uploadCloudBrowserSnapshot(): Promise<void> {
   const { client, user } = await requireCloudContext()
   const cloudUser = cloudUserFromSupabaseUser(user)
+  // A browser opened before an external import must not erase those new exams
+  // when it next saves. Abort the upload if this read fails; local work is saved.
+  const { data, error: readError } = await client
+    .from('user_sync_snapshots')
+    .select('payload_json,file_manifest_json')
+    .eq('user_id', user.id)
+    .eq('local_user_id', user.id)
+    .limit(1)
+    .maybeSingle()
+  if (readError) throw readError
+  const currentContext = await requireCloudContext()
+  const currentStore = readCloudBrowserStore()
+  if (currentContext.user.id !== user.id || currentStore?.currentUserId !== user.id) return
+  const remoteStore = parseCloudBrowserStore(
+    (data?.payload_json as { browserStore?: unknown } | undefined)?.browserStore
+  )
   const store = ensureCloudBrowserUser(
-    readCloudBrowserStore() ?? createEmptyCloudBrowserStore(),
+    mergeCloudBrowserExamImports(currentStore, remoteStore, user.id, true),
     cloudUser
   )
   writeCloudBrowserStore(store)
@@ -589,12 +736,131 @@ async function uploadCloudBrowserSnapshot(): Promise<void> {
         local_user_id: user.id,
         snapshot_version: 1,
         payload_json: payload,
-        file_manifest_json: []
+        file_manifest_json: buildCloudBrowserFileManifest(store, data?.file_manifest_json, user.id)
       },
       { onConflict: 'user_id,local_user_id' }
     )
   if (error) throw error
   writeCloudBrowserSnapshotMarker({ userId: user.id, updatedAt: exportedAt })
+}
+
+const cloudExamTagImportSchema = z.object({
+  schemaVersion: z.literal(1),
+  revision: z.number().int().positive().safe(),
+  tags: z.array(z.string().trim().min(1))
+})
+
+const cloudFileManifestSchema = z.object({
+  attachmentId: z.string().uuid(),
+  relativePath: z.string(),
+  storagePath: z.string(),
+  size: z.number().int().nonnegative()
+})
+
+function safeFileComponent(value: string): boolean {
+  return Boolean(value) && value !== '.' && value !== '..' && !/[\\/%:\u0000-\u001f\u007f]/.test(value)
+}
+
+function safeRelativePath(value: string): boolean {
+  return value.split('/').every(safeFileComponent)
+}
+
+function cloudAttachmentStoragePath(userId: string, attachmentId: string, storedName: string): string {
+  return `users/${userId}/workspaces/${userId}/attachments/${attachmentId}/${storedName}`
+}
+
+function buildCloudBrowserFileManifest(store: CloudBrowserStore, remote: unknown, userId: string): Array<z.infer<typeof cloudFileManifestSchema>> {
+  const files = new Map<string, z.infer<typeof cloudFileManifestSchema>>()
+  for (const raw of Array.isArray(remote) ? remote : []) {
+    const parsed = cloudFileManifestSchema.safeParse(raw)
+    if (!parsed.success) continue
+    const file = parsed.data
+    const storedName = file.storagePath.split('/').at(-1) ?? ''
+    if (!safeFileComponent(storedName) || !safeRelativePath(file.relativePath)
+      || file.storagePath !== cloudAttachmentStoragePath(userId, file.attachmentId, storedName)) continue
+    files.set(file.attachmentId, file)
+  }
+  const examIds = new Set(store.exams.filter(exam => exam.userId === userId).map(exam => exam.id))
+  for (const raw of store.attachments) {
+    const parsed = attachmentSchema.safeParse(raw)
+    if (!parsed.success) continue
+    const file = parsed.data
+    if (file.userId !== userId || !examIds.has(file.examId) || !safeFileComponent(file.storedName) || !safeRelativePath(file.relativePath)) continue
+    files.set(file.id, {
+      attachmentId: file.id, relativePath: file.relativePath, size: file.size,
+      storagePath: cloudAttachmentStoragePath(userId, file.id, file.storedName)
+    })
+  }
+  return [...files.values()]
+}
+
+function mergeCloudBrowserExamImports(
+  local: CloudBrowserStore,
+  remote: CloudBrowserStore | null,
+  userId: string,
+  rejectUnappliedImport = false
+): CloudBrowserStore {
+  if (!remote) return local
+  if (remote.currentUserId !== userId) {
+    if (rejectUnappliedImport) throw new Error('Die Online-Sicherung gehört nicht zum aktuellen Arbeitsbereich und bleibt unverändert.')
+    return local
+  }
+  local = mergeCloudExamDateImports(local, remote, userId, rejectUnappliedImport)
+  local = mergeCloudExamCorrectionImports(local, remote, userId, rejectUnappliedImport)
+  const remoteExams = new Map(remote.exams.filter(exam => exam.userId === userId).map(exam => [exam.id, exam]))
+  const localExams = local.exams.map(exam => {
+    if (exam.userId !== userId) return exam
+    const incoming = remoteExams.get(exam.id)
+    const imported = cloudExamTagImportSchema.safeParse(incoming?.tagImport)
+    if (!imported.success) return exam
+    const applied = cloudExamTagImportSchema.safeParse(exam.tagImport)
+    if (exam.tagImport != null && !applied.success) return exam
+    if (applied.success && applied.data.revision >= imported.data.revision) return exam
+    // Adopt an explicitly versioned enrichment once, without replacing local work.
+    // Retain the marker so later manual tag removals survive a stale cloud copy.
+    const presentTags = new Set(Array.isArray(incoming?.tags) ? incoming.tags : [])
+    const localTags = Array.isArray(exam.tags) ? exam.tags.filter((tag): tag is string => typeof tag === 'string') : []
+    return {
+      ...exam,
+      tags: normalizeTags([...localTags, ...imported.data.tags.filter(tag => presentTags.has(tag))]),
+      tagImport: imported.data
+    }
+  })
+  const localExamIds = new Set(local.exams.map(exam => exam.id))
+  const exams = remote.exams.filter(exam => exam.userId === userId && !localExamIds.has(exam.id))
+  if (!exams.length) return { ...local, exams: localExams }
+  const examIds = new Set(exams.map(exam => exam.id))
+  const submissions = remote.submissions.filter(row => row.userId === userId && examIds.has(row.examId))
+  const submissionIds = new Set(submissions.map(row => row.id))
+  const corrections = remote.corrections.filter(row => row.userId === userId && submissionIds.has(row.targetSubmissionId))
+  const correctionIds = new Set(corrections.map(row => row.id))
+  const draftRecord = (row: unknown): Record<string, unknown> | null =>
+    row && typeof row === 'object' ? row as Record<string, unknown> : null
+  const localDraftIds = new Set(local.aiCorrectionDrafts.map(row => draftRecord(row)?.id))
+  const appendMissing = <T extends { id: string }>(existing: T[], incoming: T[]): T[] => {
+    const ids = new Set(existing.map(row => row.id))
+    return [...existing, ...incoming.filter(row => {
+      if (ids.has(row.id)) return false
+      ids.add(row.id)
+      return true
+    })]
+  }
+  // Preserve local work, archives and immutable snapshots; marked metadata is merged above.
+  // Only bring in the dependency tree of exams absent from this browser.
+  return {
+    ...local,
+    exams: [...localExams, ...exams],
+    folders: appendMissing(local.folders, remote.folders.filter(row => row.userId === userId)),
+    revisions: appendMissing(local.revisions, remote.revisions.filter(row => row.userId === userId && examIds.has(row.examId))),
+    submissions: appendMissing(local.submissions, submissions),
+    attachments: appendMissing(local.attachments, remote.attachments.filter(row => row.userId === userId && examIds.has(row.examId))),
+    corrections: appendMissing(local.corrections, corrections),
+    inlineComments: appendMissing(local.inlineComments ?? [], (remote.inlineComments ?? []).filter(row => row.userId === userId && correctionIds.has(row.correctionId))),
+    aiCorrectionDrafts: [...local.aiCorrectionDrafts, ...remote.aiCorrectionDrafts.filter(row => {
+      const draft = draftRecord(row)
+      return draft?.userId === userId && submissionIds.has(String(draft.submissionId)) && !localDraftIds.has(draft.id)
+    })]
+  }
 }
 
 function readCloudBrowserStore(): CloudBrowserStore | null {
@@ -827,7 +1093,11 @@ function buildCloudBrowserSnapshotTables(
         grading_comment: correction.gradingComment,
         tags_json: JSON.stringify(correction.tags)
       })),
-    inline_comments: (store.inlineComments ?? [])
+    // Browser editing owns the nested comments; the flattened import copy may
+    // already be stale. An empty nested array also means an intentional removal.
+    inline_comments: corrections.flatMap(correction => Array.isArray(correction.inlineComments)
+      ? correction.inlineComments
+      : (store.inlineComments ?? []).filter(comment => comment.correctionId === correction.id))
       .filter((comment) => comment.userId === user.id && correctionIds.has(comment.correctionId))
       .map((comment) => ({
         id: comment.id,
@@ -1591,6 +1861,7 @@ async function listCloudReviewDays(): Promise<string[]> {
     .from('review_events')
     .select('reviewed_at')
     .eq('user_id', user.id)
+    .is('voided_at', null)
     .order('reviewed_at', { ascending: false })
     .limit(500)
   if (error) throw error
@@ -1615,6 +1886,124 @@ async function getCloudLearningDashboardSummary(): Promise<{
     totalCards: Number(summary.total_cards ?? 0),
     collectionCount: Number(summary.collection_count ?? 0)
   }
+}
+
+async function getCloudLearningStatistics(): Promise<LearningStatistics> {
+  const { client } = await requireCloudContext()
+  const { data, error } = await client.rpc('get_learning_statistics', {})
+  if (error) throw error
+  const value = (data ?? {}) as Record<string, unknown>
+  const activity = Array.isArray(value.activity) ? value.activity : []
+  const ratingCounts = Array.isArray(value.rating_counts)
+    ? value.rating_counts
+    : Array.isArray(value.ratingCounts)
+      ? value.ratingCounts
+      : []
+  const collections = Array.isArray(value.collections) ? value.collections : []
+
+  return learningStatisticsSchema.parse({
+    totalCards: Number(value.total_cards ?? value.totalCards ?? 0),
+    reviewedCards: Number(value.reviewed_cards ?? value.reviewedCards ?? 0),
+    reviewCountTotal: Number(value.review_count_total ?? value.reviewCountTotal ?? 0),
+    reviewsToday: Number(value.reviews_today ?? value.reviewsToday ?? 0),
+    reviewsLast7Days: Number(value.reviews_last_7_days ?? value.reviewsLast7Days ?? 0),
+    streakDays: Number(value.streak_days ?? value.streakDays ?? 0),
+    activeDaysLast14: Number(value.active_days_last_14 ?? value.activeDaysLast14 ?? 0),
+    activity: activity.map((entry) => {
+      const row = entry as Record<string, unknown>
+      return {
+        date: String(row.date),
+        reviews: Number(row.reviews ?? 0)
+      }
+    }),
+    ratingCounts: ([1, 2, 3, 4] as const).map((rating) => {
+      const row = ratingCounts.find(
+        (entry) => Number((entry as Record<string, unknown>).rating) === rating
+      ) as Record<string, unknown> | undefined
+      return { rating, count: Number(row?.count ?? 0) }
+    }),
+    collections: collections.map((entry) => {
+      const row = entry as Record<string, unknown>
+      const averageRating = row.average_rating ?? row.averageRating
+      return {
+        id: String(row.id),
+        name: String(row.name),
+        cardCount: Number(row.card_count ?? row.cardCount ?? 0),
+        reviewedCards: Number(row.reviewed_cards ?? row.reviewedCards ?? 0),
+        dueCount: Number(row.due_count ?? row.dueCount ?? 0),
+        averageRating: averageRating === null || averageRating === undefined
+          ? null
+          : Number(averageRating)
+      }
+    })
+  })
+}
+
+type CloudPodcastLegalAreaRow = {
+  id: string
+  slug: string
+  name: string
+}
+
+type CloudPodcastSeriesRow = {
+  id: string
+  legal_area_id: string
+  slug: string
+  title: string
+  description: string | null
+  edition: string | null
+  artwork_url: string | null
+}
+
+type CloudPodcastEpisodeRow = {
+  id: string
+  series_id: string
+  slug: string
+  episode_number: number
+  title: string
+  description: string | null
+  duration_seconds: number
+  audio_url: string
+  published_at: string | null
+}
+
+type CloudPodcastProgressRow = {
+  episode_id: string
+  position_seconds: number
+  duration_seconds: number
+  completed: boolean
+  last_played_at: string | null
+  updated_at: string
+}
+
+async function getCloudPodcastCatalog(): Promise<PodcastCatalog> {
+  const { client } = await requireCloudContext()
+  const { data, error } = await client.rpc('get_podcast_catalog', {})
+  if (error) throw error
+  return podcastCatalogSchema.parse(data ?? { legalAreas: [] })
+}
+
+async function saveCloudPodcastProgress(
+  input: Parameters<AppApi['savePodcastProgress']>[0]
+): Promise<PodcastProgress> {
+  const { client } = await requireCloudContext()
+  const durationSeconds = Math.max(0, input.durationSeconds)
+  const positionSeconds = Math.min(Math.max(0, input.positionSeconds), durationSeconds || Infinity)
+  const completed =
+    input.completed ||
+    (durationSeconds > 0 &&
+      (positionSeconds / durationSeconds >= 0.95 || durationSeconds - positionSeconds <= 30))
+  const updatedAt = nowIso()
+  const { data, error } = await client.rpc('upsert_podcast_progress', {
+    p_episode_id: input.episodeId,
+    p_position_seconds: positionSeconds,
+    p_duration_seconds: durationSeconds,
+    p_completed: completed,
+    p_last_played_at: updatedAt,
+    p_updated_at: updatedAt
+  })
+  if (error) throw error
+  return podcastProgressSchema.parse(data)
 }
 
 function normalizeTags(tags: string[]): string[] {

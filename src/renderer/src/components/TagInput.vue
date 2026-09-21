@@ -44,6 +44,7 @@
         class="tag-input-suggestion"
         color="neutral"
         variant="ghost"
+        @pointerdown.prevent
         @click="addTag(tag)"
       >
         {{ tag }}

@@ -5,8 +5,147 @@ import { _electron as electron, expect, test, type ElectronApplication, type Pag
 import { mkdtemp, readdir, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import type { AppApi } from '../../src/shared/ipc'
 
 test.describe('Jura Wolpertinger Electron app', () => {
+  test('shows every exam when changing library pages and page size', async () => {
+    const userDataDir = await mkdtemp(join(tmpdir(), 'jura-pagination-e2e-'))
+    const app = await launchApp(userDataDir)
+    try {
+      const page = await findMainWindow(app)
+      if (process.env.JURA_E2E_SHOW !== '1') {
+        const browserWindow = await app.browserWindow(page)
+        expect(await browserWindow.evaluate((window) => window.isVisible())).toBe(false)
+      }
+      await page.setViewportSize({ width: 1440, height: 1050 })
+      await expect(page.locator('.home-view')).toBeVisible()
+      await page.getByRole('button', { name: 'Später entscheiden' }).click()
+      await page.evaluate(async () => {
+        const api = (window as unknown as { juraApi: AppApi }).juraApi
+        const folder = await api.createFolder('Kleine Auswahl')
+        for (let n = 1; n <= 40; n++) {
+          await api.createExam({ title: `Klausur ${String(n).padStart(2, '0')}`, folderId: n <= 3 ? folder.id : null })
+        }
+      })
+      await page.click('.nav a:has-text("Bibliothek")')
+      await expect(page.locator('.exam-row')).toHaveCount(25)
+      await expect(page.locator('.app-pagination')).toContainText('1-25 von 40')
+      const firstPage = await page.locator('.exam-row').evaluateAll(rows => rows.map(row => row.getAttribute('href')))
+      const pager = page.locator('.app-pagination')
+      await pager.getByRole('button', { name: 'Page 2', exact: true }).click()
+      await expect(page.locator('.exam-row')).toHaveCount(15)
+      await expect(pager).toContainText('26-40 von 40')
+      const secondPage = await page.locator('.exam-row').evaluateAll(rows => rows.map(row => row.getAttribute('href')))
+      expect(new Set([...firstPage, ...secondPage]).size).toBe(40)
+      await pager.getByRole('button', { name: 'Previous Page', exact: true }).click()
+      await expect(page.locator('.exam-row')).toHaveCount(25)
+      await expect(pager.getByRole('button', { name: 'Page 1', exact: true })).toHaveAttribute('aria-current', 'page')
+      await page.getByRole('combobox', { name: 'Einträge pro Seite' }).click()
+      await page.getByRole('option', { name: '50', exact: true }).click()
+      await expect(page.locator('.exam-row')).toHaveCount(40)
+      await expect(pager).toContainText('1-40 von 40')
+      await page.getByRole('combobox', { name: 'Einträge pro Seite' }).click()
+      await page.getByRole('option', { name: '25', exact: true }).click()
+      await expect(page.locator('.exam-row')).toHaveCount(25)
+      await pager.getByRole('button', { name: 'Last Page', exact: true }).click()
+      await expect(page.locator('.exam-row')).toHaveCount(15)
+      await page.getByRole('button', { name: 'Kleine Auswahl', exact: true }).click()
+      await expect(page.locator('.exam-row')).toHaveCount(3)
+      await expect(pager).toContainText('1-3 von 3')
+      await expect(pager.getByRole('button', { name: 'Page 1', exact: true })).toHaveAttribute('aria-current', 'page')
+      await expect(pager.getByRole('button', { name: 'Next Page', exact: true })).toBeDisabled()
+    } finally {
+      await app.close()
+      await rm(userDataDir, { recursive: true, force: true })
+    }
+  })
+
+  test('keeps library folders in the URL and breadcrumb navigation across reloads and history', async () => {
+    const userDataDir = await mkdtemp(join(tmpdir(), 'jura-folder-e2e-'))
+    const app = await launchApp(userDataDir)
+    try {
+      const page = await findMainWindow(app)
+      await page.setViewportSize({ width: 1440, height: 1050 })
+      await expect(page.locator('.home-view')).toBeVisible()
+      await page.getByRole('button', { name: 'Später entscheiden' }).click()
+      const ids = await page.evaluate(async () => {
+        const api = (window as unknown as { juraApi: AppApi }).juraApi
+        const a = await api.createFolder('Kurs A')
+        const b = await api.createFolder('Kurs B')
+        const exam = await api.createExam({ title: 'Prüfung in A', folderId: a.id })
+        await api.createExam({ title: 'Prüfung in B', folderId: b.id })
+        await api.createExam({ title: 'Prüfung ohne Ordner' })
+        return { a: a.id, b: b.id, exam: exam.id }
+      })
+      await page.click('.nav a:has-text("Bibliothek")')
+      await page.getByRole('button', { name: 'Kurs A', exact: true }).click()
+      await expect(page).toHaveURL(new RegExp('folder=' + ids.a))
+      await expect(page.locator('h1')).toHaveText('Kurs A')
+      await expect(page.locator('.exam-row')).toHaveCount(1)
+      await expect(page.locator('.exam-row')).toContainText('Prüfung in A')
+      const crumbs = page.locator('.dashboard .app-breadcrumb')
+      await expect(crumbs.locator('[aria-current="page"]')).toHaveCount(1)
+      await expect(crumbs.locator('[aria-current="page"]')).toHaveText('Kurs A')
+      await expect(crumbs.getByRole('link', { name: 'Bibliothek', exact: true })).toBeVisible()
+      const folderUrl = page.url()
+      await page.reload()
+      await expect(page.locator('h1')).toHaveText('Kurs A')
+      await expect(page.locator('.exam-row')).toHaveCount(1)
+      await page.getByRole('button', { name: 'Kurs B', exact: true }).click()
+      await expect(page.locator('.exam-row')).toContainText('Prüfung in B')
+      await page.goBack()
+      await expect(page).toHaveURL(folderUrl)
+      await expect(page.locator('.exam-row')).toContainText('Prüfung in A')
+      await page.goForward()
+      await expect(page.locator('h1')).toHaveText('Kurs B')
+      await page.goto(folderUrl)
+      await page.locator('.exam-row').click()
+      await expect(page.locator('.exam-view')).toBeVisible()
+      await page.locator('.app-breadcrumb').getByRole('link', { name: 'Kurs A', exact: true }).click()
+      await expect(page).toHaveURL(folderUrl)
+      await expect(page.locator('.exam-row')).toHaveCount(1)
+      await crumbs.getByRole('link', { name: 'Bibliothek', exact: true }).click()
+      await expect(page).not.toHaveURL(/folder=/)
+      await expect(page.locator('.exam-row')).toHaveCount(3)
+      await page.evaluate(() => { window.location.hash = '/exams/library?folder=missing-folder&view=keep' })
+      await expect(page).toHaveURL(/#\/exams\/library\?view=keep$/)
+      await expect(page.locator('.folder-notice')).toContainText('nicht verfügbar')
+      await page.getByRole('button', { name: 'Ohne Ordner', exact: true }).click()
+      await expect(page).toHaveURL(/folder=unassigned/)
+      await page.reload()
+      await expect(page.locator('.exam-row')).toHaveCount(1)
+      await expect(page.locator('.exam-row')).toContainText('Prüfung ohne Ordner')
+      await page.goto(folderUrl)
+      await page.evaluate(async id => {
+        await (window as unknown as { juraApi: AppApi }).juraApi.updateFolder({ id, name: 'Kurs umbenannt' })
+      }, ids.a)
+      await page.reload()
+      await expect(page.locator('h1')).toHaveText('Kurs umbenannt')
+      await expect(page).toHaveURL(folderUrl)
+      await page.screenshot({ path: '/tmp/jura-folder-navigation-light.png' })
+      await scanAccessibility(page, 'library')
+      await page.evaluate(() => {
+        localStorage.setItem('jura-wolpertinger-theme', 'dark')
+        document.documentElement.dataset.theme = 'dark'
+      })
+      const activeFolder = page.getByRole('button', { name: 'Kurs umbenannt', exact: true })
+      await expect(activeFolder).toHaveCSS('background-color', 'rgb(15, 64, 88)')
+      await expect(activeFolder).toHaveCSS('color', 'rgb(228, 247, 255)')
+      await scanAccessibility(page, 'library')
+      await page.screenshot({ path: '/tmp/jura-folder-navigation-dark.png' })
+      await page.evaluate(async id => {
+        await (window as unknown as { juraApi: AppApi }).juraApi.trashFolder({ id, moveExamsToFolderId: null })
+      }, ids.a)
+      await page.reload()
+      await expect(page).not.toHaveURL(/folder=/)
+      await expect(page.locator('.folder-notice')).toContainText('nicht verfügbar')
+      await expect(page.locator('.exam-row')).toHaveCount(3)
+    } finally {
+      await app.close()
+      await rm(userDataDir, { recursive: true, force: true })
+    }
+  })
+
   test('covers writing, focus mode, dark mode, PDF export, submission and correction', async () => {
     const userDataDir = await mkdtemp(join(tmpdir(), 'jura-e2e-'))
     const app = await launchApp(userDataDir)
@@ -40,7 +179,7 @@ test.describe('Jura Wolpertinger Electron app', () => {
       await page.getByRole('button', { name: 'Später entscheiden' }).click()
       await expect(page.locator('.onboarding-card')).toHaveCount(0)
       await scanAccessibility(page, 'home')
-      await expect(page.locator('.sidebar-user .user-switcher')).toContainText('Lokaler Nutzer')
+      await expect(page.locator('.sidebar-account-trigger')).toContainText('Lokaler Nutzer')
       await page.click('.nav a:has-text("Bewertung")')
       await expect(page).toHaveURL(/#\/exams\/corrections/)
       await expect(page.locator('.correction-page .app-breadcrumb')).toHaveCount(1)
@@ -92,25 +231,27 @@ test.describe('Jura Wolpertinger Electron app', () => {
         'Wozu dient eine Abmahnung?'
       )
       const collectionUrl = page.url()
-      await page.locator('header').getByRole('link', { name: 'Wiederholen' }).click()
+      await page.locator('header').getByRole('link', { name: 'Sammlung durcharbeiten' }).click()
       await expect(page).toHaveURL(/#\/flashcards\/review\?collection=/)
       await expect(page.locator('.study-card')).toContainText('Abmahnung')
-      await page.click('button:has-text("Rückseite zeigen")')
-      await page.click('button:has-text("Gut")')
-      await expect(page.locator('.empty-state')).toContainText('Runde geschafft')
-      await page.click('button:has-text("Nochmal üben")')
+      await page.getByRole('button', { name: 'Antwort zeigen' }).click()
+      await page.getByRole('button', { name: /^Gewusst/ }).click()
+      await expect(page.locator('.study-summary')).toContainText('Sammlung einmal vollständig bearbeitet')
+      await page.getByRole('button', { name: 'Sammlung erneut durcharbeiten' }).click()
       await expect(page.locator('.study-card')).toContainText('Abmahnung')
       await page.goto(collectionUrl)
-      await page.locator('header').getByRole('link', { name: 'Wiederholen' }).click()
+      await page.locator('header').getByRole('link', { name: 'Durchgang fortsetzen' }).click()
       await expect(page.locator('.study-card')).toContainText('Abmahnung')
-      await page.click('.nav a:has-text("Hilfe")')
+      await page.locator('.sidebar-account-trigger').click()
+      await page.getByRole('menuitem', { name: 'Hilfe' }).click()
       await expect(page).toHaveURL(/#\/more\/help/)
       await expect(page.locator('.help-item', { hasText: 'Gehen meine Klausuren verloren' })).toBeVisible()
       await expect.poll(() => page.locator('.help-view').evaluate((element) => element.getBoundingClientRect().width)).toBeGreaterThan(1550)
       await expect(page.locator('.help-item', { hasText: 'Was passiert, wenn ich die Online-Sicherung einrichte?' })).toContainText(
         'Nach der Anmeldung'
       )
-      await page.click('.nav a:has-text("Einstellungen")')
+      await page.locator('.sidebar-account-trigger').click()
+      await page.getByRole('menuitem', { name: 'Einstellungen' }).click()
       await expect(page).toHaveURL(/#\/more\/settings/)
       await expect(page.locator('.settings-view')).toBeVisible()
       await expect.poll(() => page.locator('.settings-view').evaluate((element) => element.getBoundingClientRect().width)).toBeGreaterThan(1550)
@@ -122,8 +263,9 @@ test.describe('Jura Wolpertinger Electron app', () => {
       await userSettingsPanel.locator('input[placeholder="Name"]').fill('Sebastian')
       await userSettingsPanel.locator('button:has-text("Speichern")').click()
       await expect(page.locator('.action-notice')).toContainText('Nutzername gespeichert')
-      await expect(page.locator('.sidebar-user .user-switcher')).toContainText('Sebastian')
-      await page.click('.nav a:has-text("Hilfe")')
+      await expect(page.locator('.sidebar-account-trigger')).toContainText('Sebastian')
+      await page.locator('.sidebar-account-trigger').click()
+      await page.getByRole('menuitem', { name: 'Hilfe' }).click()
       await page.click('button:has-text("Tour starten")')
       await expect(page).toHaveURL(/#\/exams/)
       await expect(page.locator('.driver-popover')).toBeVisible()
@@ -290,6 +432,148 @@ test.describe('Jura Wolpertinger Electron app', () => {
   })
 })
 
+test('finishes a large collection across batches, pause, undo, reload and deferred cards', async () => {
+  test.setTimeout(180_000)
+  const userDataDir = await mkdtemp(join(tmpdir(), 'jura-study-e2e-'))
+  const app = await launchApp(userDataDir)
+  try {
+    const page = await findMainWindow(app)
+    await page.getByRole('button', { name: 'Später entscheiden' }).click()
+    const seeded = await page.evaluate(async () => {
+      const api = (window as unknown as { juraApi: AppApi }).juraApi
+      const collection = await api.createLearningCollection({ name: 'Große Sammlung', subject: 'Zivilrecht' })
+      const cards = []
+      for (let i = 0; i < 47; i++) cards.push(await api.createLearningCard({ collectionId: collection.id,
+        title: `Lösungstitel ${i}`, frontMarkdown: `Frage ${i}`, tags: ['verrät-die-lösung'],
+        backMarkdown: '1. **Anspruch entstanden**\n2. Anspruch nicht erloschen\n\n<script>window.studyUnsafe=true</script>\n\n[Quelle](javascript:alert(1))' }))
+      return { collection: collection.id, questions: cards.sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)).map((card) => card.frontMarkdown) }
+    })
+    await page.goto(page.url().split('#')[0] + `#/flashcards/review?collection=${seeded.collection}`)
+    await expect(page.locator('.study-card-toolbar')).toContainText('0 von 47')
+    await expect(page.locator('.study-card')).not.toContainText('Lösungstitel')
+    await expect(page.locator('.study-card-tags')).toHaveCount(0)
+    await page.getByRole('button', { name: 'Für später zurückstellen' }).click()
+    let firstMilestoneImage: string | null = null
+    for (let i = 1; i <= 42; i++) {
+      await expect(page.locator('.study-question .markdown-block')).toHaveText(seeded.questions[i])
+      await page.getByRole('button', { name: 'Antwort zeigen' }).click()
+      if (i === 1) {
+        await expect(page.locator('.study-question')).toBeVisible()
+        await expect(page.locator('.study-answer ol > li')).toHaveCount(2)
+        await expect(page.locator('.study-answer strong')).toHaveText('Anspruch entstanden')
+        await expect(page.locator('.study-answer script')).toHaveCount(0)
+        expect(await page.locator('.study-answer a').getAttribute('href')).toBeNull()
+        await page.screenshot({ path: '/tmp/study-desktop.png', fullPage: true })
+        await scanAccessibility(page, 'study')
+      }
+      await page.getByRole('button', { name: /^Nicht gewusst/ }).click()
+      if (i === 9) {
+        await expect(page.getByRole('complementary', { name: 'Lernerfolg', exact: true })).toHaveCount(0)
+        await page.reload()
+        await expect(page.locator('.study-card-toolbar')).toContainText('9 von 47')
+      }
+      if (i === 10) {
+        const celebration = page.getByRole('complementary', { name: 'Lernerfolg', exact: true })
+        await expect(celebration).toContainText('10 Karten bearbeitet')
+        await expect(celebration.locator('img')).toHaveJSProperty('complete', true)
+        firstMilestoneImage = await celebration.locator('img').getAttribute('src')
+        await page.screenshot({ path: '/tmp/wolpi-milestone-desktop.png', fullPage: true })
+        await scanAccessibility(page, 'study')
+        await page.getByRole('button', { name: 'Bewertung rückgängig machen' }).click()
+        await expect(celebration).toHaveCount(0)
+        await expect(page.locator('.study-card-toolbar')).toContainText('9 von 47')
+        await page.getByRole('button', { name: /^Teilweise gewusst/ }).click()
+        await expect(celebration).toHaveCount(0)
+      }
+      if (i === 20) {
+        await page.setViewportSize({ width: 390, height: 844 })
+        await page.emulateMedia({ reducedMotion: 'reduce' })
+        const celebration = page.getByRole('complementary', { name: 'Lernerfolg', exact: true })
+        await expect(celebration).toContainText('20 Karten bearbeitet')
+        expect(await celebration.locator('img').getAttribute('src')).not.toBe(firstMilestoneImage)
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+        await page.screenshot({ path: '/tmp/wolpi-milestone-mobile.png', fullPage: true })
+        await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; document.documentElement.classList.add('dark') })
+        await page.screenshot({ path: '/tmp/wolpi-milestone-mobile-dark.png', fullPage: true })
+        await scanAccessibility(page, 'study')
+        await expect(celebration).toHaveCount(0, { timeout: 6000 })
+        await page.setViewportSize({ width: 1440, height: 1000 })
+        await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; document.documentElement.classList.remove('dark') })
+      }
+    }
+    await expect(page.locator('.study-card-toolbar')).toContainText('42 von 47')
+    await expect(page.locator('.study-question .markdown-block')).toHaveText(seeded.questions[43])
+    await page.getByRole('button', { name: 'Pause machen' }).focus()
+    await page.keyboard.press('Enter')
+    await expect(page.locator('.study-summary')).toContainText('33 Karten in dieser Lerneinheit')
+    await page.getByRole('button', { name: 'Weiterlernen', exact: true }).click()
+    await page.getByRole('button', { name: 'Bewertung rückgängig machen' }).click()
+    await expect(page.locator('.study-question .markdown-block')).toHaveText(seeded.questions[42])
+    await expect(page.locator('.study-answer')).toBeVisible()
+    await expect(page.locator('.study-card-toolbar')).toContainText('41 von 47')
+    await page.getByRole('button', { name: /^Teilweise gewusst/ }).click()
+    await page.reload()
+    await expect(page.locator('.study-question .markdown-block')).toHaveText(seeded.questions[43])
+    await expect(page.locator('.study-answer')).toHaveCount(0)
+    await page.setViewportSize({ width: 390, height: 844 })
+    for (let i = 43; i < 47; i++) {
+      await page.getByRole('button', { name: 'Antwort zeigen' }).click()
+      if (i === 43) {
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+        await page.screenshot({ path: '/tmp/study-mobile.png', fullPage: true })
+        await page.evaluate(() => {
+          document.documentElement.dataset.theme = 'dark'
+          document.documentElement.style.colorScheme = 'dark'
+          document.documentElement.classList.add('dark')
+        })
+        await expect.poll(() => page.locator('.rating-option.again').evaluate((element) => getComputedStyle(element).backgroundColor)).toBe('rgb(69, 35, 33)')
+        await page.screenshot({ path: '/tmp/study-mobile-dark.png', fullPage: true })
+        await scanAccessibility(page, 'study')
+      }
+      await page.getByRole('button', { name: /^Gewusst/ }).click()
+    }
+    await expect(page.locator('.empty-state')).toContainText('1 Karte noch offen')
+    await page.getByRole('button', { name: 'Offene Karten bearbeiten' }).click()
+    await expect(page.locator('.study-question .markdown-block')).toHaveText(seeded.questions[0])
+    await page.getByRole('button', { name: 'Antwort zeigen' }).click()
+    await page.getByRole('button', { name: /^Gewusst/ }).click()
+    await expect(page.locator('.study-summary')).toContainText('47 von 47')
+    await expect(page.getByRole('complementary', { name: 'Durchgang geschafft' })).toBeVisible()
+    const stats = await page.evaluate(() => (window as unknown as { juraApi: AppApi }).juraApi.getLearningStatistics())
+    expect(stats.reviewedCards).toBe(47)
+    expect(stats.reviewsToday).toBe(47)
+    for (const size of [1, 10, 11]) {
+      const collectionId = await page.evaluate(async (count) => {
+        const api = (window as unknown as { juraApi: AppApi }).juraApi
+        const collection = await api.createLearningCollection({ name: `Abschluss mit ${count} Karten`, subject: 'Zivilrecht' })
+        for (let n = 0; n < count; n++) await api.createLearningCard({ collectionId: collection.id, title: `Karte ${n}`, frontMarkdown: `Frage ${n}`, backMarkdown: 'Antwort', tags: [] })
+        return collection.id
+      }, size)
+      await page.goto(page.url().split('#')[0] + `#/flashcards/review?collection=${collectionId}`)
+      if (size === 11) await page.getByRole('button', { name: 'Für später zurückstellen' }).click()
+      for (let n = 0; n < Math.min(size, 10); n++) {
+        await page.getByRole('button', { name: 'Antwort zeigen' }).click()
+        await page.getByRole('button', { name: /^Gewusst/ }).click()
+      }
+      if (size === 11) {
+        await expect(page.getByRole('complementary', { name: 'Lernerfolg', exact: true })).toContainText('10 Karten bearbeitet')
+        await page.getByRole('button', { name: 'Offene Karten bearbeiten' }).click()
+        await page.getByRole('button', { name: 'Antwort zeigen' }).click()
+        await page.getByRole('button', { name: /^Gewusst/ }).click()
+      }
+      const completion = page.getByRole('complementary', { name: 'Durchgang geschafft' })
+      await expect(completion).toBeVisible()
+      await expect(page.getByRole('complementary', { name: 'Lernerfolg', exact: true })).toHaveCount(0)
+      const image = await completion.locator('img').getAttribute('src')
+      await page.reload()
+      await expect(completion.locator('img')).toHaveAttribute('src', image!)
+    }
+  } finally {
+    await app.close()
+    await rm(userDataDir, { recursive: true, force: true })
+  }
+})
+
 async function launchApp(userDataDir: string): Promise<ElectronApplication> {
   const { ELECTRON_RENDERER_URL: _rendererUrl, ...env } = process.env
   return electron.launch({
@@ -381,7 +665,7 @@ async function selectReadonlyText(page: Page, text: string): Promise<void> {
   }, text)
 }
 
-async function scanAccessibility(page: Page, surface: 'home' | 'collections' | 'library' | 'correction' | 'analytics'): Promise<void> {
+async function scanAccessibility(page: Page, surface: 'home' | 'collections' | 'library' | 'correction' | 'analytics' | 'study'): Promise<void> {
   await page.waitForLoadState('domcontentloaded')
   const results = await new AxeBuilder({ page }).setLegacyMode(true).analyze()
   const blockingImpacts = ['serious', 'critical']
@@ -395,7 +679,11 @@ async function scanAccessibility(page: Page, surface: 'home' | 'collections' | '
       impact: violation.impact,
       help: violation.help,
       helpUrl: violation.helpUrl,
-      targets: violation.nodes.map((node) => node.target)
+      nodes: violation.nodes.map((node) => ({
+        target: node.target,
+        html: node.html,
+        failureSummary: node.failureSummary
+      }))
     })),
     `${surface} has serious or critical Axe violations`
   ).toEqual([])

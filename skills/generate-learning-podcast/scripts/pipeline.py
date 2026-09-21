@@ -157,11 +157,15 @@ def source_slice(source_map: SourceMap, plan: EpisodePlan) -> SourceMap:
     concept_ids = set(plan.concept_ids)
     page_ids = set(plan.source_pages)
     concepts = [concept for concept in source_map.concepts if concept.id in concept_ids]
-    sections = [
-        section
-        for section in source_map.sections
-        if any(anchor.page in page_ids for anchor in section.anchors)
-    ]
+    sections = []
+    for section in source_map.sections:
+        relevant_anchors = [
+            anchor for anchor in section.anchors if anchor.page in page_ids
+        ]
+        if relevant_anchors:
+            sections.append(
+                section.model_copy(update={"anchors": relevant_anchors})
+            )
     terms = sorted({term for concept in concepts for term in concept.pronunciation_terms})
     if {concept.id for concept in concepts} != concept_ids:
         raise ValueError("episode source slice is missing a planned concept")
@@ -178,6 +182,41 @@ def spoken_word_count(draft: EpisodeDraft) -> int:
         len(re.findall(r"\b[\wÄÖÜäöüß]+\b", segment.text, flags=re.UNICODE))
         for segment in draft.segments
         if isinstance(segment, SpeechSegment)
+    )
+
+
+def _has_complete_disclosure(text: str) -> bool:
+    normalized = " ".join(text.lower().split())
+    identifies_ai = bool(re.search(r"\bki\b", normalized))
+    limits_sources = (
+        ("skript" in normalized or "pdf" in normalized)
+        and ("nur" in normalized or "ausschließ" in normalized)
+    )
+    disclaims_updates = (
+        "update-check" in normalized
+        or "updatecheck" in normalized
+        or "aktual" in normalized
+        or bool(
+            re.search(
+                r"(?:externe quellen|spätere entwicklungen).{0,100}"
+                r"(?:nicht|keine).{0,50}(?:geprüft|berücksichtigt)",
+                normalized,
+            )
+        )
+    )
+    disclaims_official_assessment = (
+        "keine offizielle" in normalized
+        or "weder eine offizielle" in normalized
+        or "nicht offiziell" in normalized
+        or "prüfungsbewertung" in normalized
+    )
+    return all(
+        (
+            identifies_ai,
+            limits_sources,
+            disclaims_updates,
+            disclaims_official_assessment,
+        )
     )
 
 
@@ -261,13 +300,8 @@ def validate_episode(plan: EpisodePlan, draft: EpisodeDraft) -> None:
     expected_ids = [f"segment-{index:03d}" for index in range(1, len(ids) + 1)]
     if ids != expected_ids:
         errors.append("segment IDs must be unique and sequential")
-    spoken = " ".join(
-        segment.text
-        for segment in draft.segments
-        if isinstance(segment, SpeechSegment)
-    ).lower()
-    disclosure_terms = ("ki", "skript", "aktual", "prüfung")
-    if not all(term in spoken for term in disclosure_terms):
+    disclosure_text = disclosures[0].text if len(disclosures) == 1 else ""
+    if not _has_complete_disclosure(disclosure_text):
         errors.append("episode must disclose AI generation and source limitations")
     if not 1350 <= spoken_word_count(draft) <= 2025:
         errors.append("episode must contain 1350 to 2025 spoken words")
@@ -374,6 +408,7 @@ def draft_and_ground(
             )
         else:
             draft = repaired
+        validated_phase = "grounding-repair"
         try:
             validate_episode(plan, draft)
         except ValueError as error:
@@ -381,9 +416,33 @@ def draft_and_ground(
                 draft_observer(
                     "grounding-repair", repair_attempt, draft, str(error)
                 )
-            raise
+            if repair_attempt == max_rewrites:
+                raise
+            draft = gateway.generate_structured(
+                result_type=EpisodeDraft,
+                instructions=STRUCTURE_REPAIR_INSTRUCTIONS,
+                input_text=(
+                    source_map_text
+                    + "\nEPISODE\n"
+                    + draft.model_dump_json(indent=2)
+                    + "\nVALIDATION ERROR\n"
+                    + str(error)
+                ),
+            )
+            validated_phase = "post-grounding-structure-repair"
+            try:
+                validate_episode(plan, draft)
+            except ValueError as structure_error:
+                if draft_observer is not None:
+                    draft_observer(
+                        validated_phase,
+                        repair_attempt,
+                        draft,
+                        str(structure_error),
+                    )
+                raise
         if draft_observer is not None:
-            draft_observer("grounding-repair", repair_attempt, draft, None)
+            draft_observer(validated_phase, repair_attempt, draft, None)
         report = gateway.generate_structured(
             result_type=GroundingReport,
             instructions=GROUNDING_INSTRUCTIONS,
@@ -498,6 +557,7 @@ _LEGAL_COMPOUND_SUFFIXES = (
     "geschoss",
     "verfahren",
     "verfügung",
+    "befugnis",
     "pflicht",
     "schutz",
     "fläche",
@@ -508,11 +568,89 @@ _LEGAL_COMPOUND_SUFFIXES = (
 _VERIFIED_PRONUNCIATION_SPELLINGS = {
     "abweichungen": "Ab-weichungen",
     "abschliessen": "Ab-schließen",
+    "ausschnitt": "Aus-Schnitt",
+    "bayversg": "Bayerische Versammlungsgesetz",
     "fehle": "Feh-le",
     "fehlt": "Fählt",
     "gestattungsverfahren": "Ge-Schtattungs-Verfahren",
     "grenzen": "Gren-zen",
+    "leitfragen": "Leit-Fragen",
+    "owig": "O-Wi-G",
+    "pag": "Peh-Ah-Geh",
+    "pog": "Peh-Oh-Geh",
+    "polizeibegriff": "Polizei-Begriff",
+    "repressive": "Re-pressive",
+    "stpo": "S-T-P-O",
+    "trennsystem": "Tränn-System",
+    "vorranglösung": "Vor-Rang-Lösung",
+    "zielrichtung": "Ziel – Richtung",
 }
+
+_VERIFIED_REPAIR_REPHRASINGS = {
+    (
+        "die beiden vorgänge können äusserlich ähnlich aussehen"
+    ): "Die beiden Abläufe können äußerlich ähnlich wirken",
+    "gibt mir das skript eine feste zahl": "Nennt das Skript eine feste Zahl",
+    "schliesslich daten": "schließlich kommen die Daten",
+    "zwei schritte, ein sicherstellungsvorgang.": (
+        "Merke dir: Zwei Schritte bilden zusammen einen Sicherstellungsvorgang."
+    ),
+    (
+        "während das skript den heimlichen zugriff art. 45 zuordnet"
+    ): (
+        "während der bereitgestellte Text den heimlichen Zugriff "
+        "Artikel 45 zuordnet"
+    ),
+    (
+        "den heimlichen zugriff ordnet das skript art. 45 pag zu."
+    ): (
+        "Der bereitgestellte Text ordnet den heimlichen Zugriff "
+        "Artikel 45 PAG zu."
+    ),
+    (
+        "schmidbauer und steiner gehen von höchstens drei stunden aus, "
+        "möstl und schwabenbauer nur von einer stunde."
+    ): (
+        "Nach Schmidbauer, geschrieben S-C-H-M-I-D-B-A-U-E-R, und Steiner "
+        "sind es höchstens drei Stunden. Nach Möstl, geschrieben M-Ö-S-T-L, "
+        "und Schwabenbauer ist es nur eine Stunde."
+    ),
+}
+
+_VERIFIED_CONTEXTUAL_REPHRASINGS = (
+    (
+        ("begründet unser material nicht näher",),
+        (
+            "Welche Auffassung letztlich vorzugswürdig ist, begründet unser "
+            "Material nicht näher."
+        ),
+        "Unser Material entscheidet nicht, welche Auffassung vorzugswürdig ist.",
+    ),
+    (
+        ("einmal die erreichbarkeit des fahrers",),
+        (
+            "Die Zeitfragen bleiben dabei getrennt: Einmal die Erreichbarkeit "
+            "des Fahrers, einmal die drei vollen Tage beim mobilen Halteverbot."
+        ),
+        (
+            "Halte die Zeitfragen auseinander. Erstens: Ist die Person am "
+            "Steuer schnell erreichbar? Zweitens: Sind beim mobilen Halteverbot "
+            "drei volle Tage eingehalten?"
+        ),
+    ),
+    (
+        ("schmidbauer und steiner", "möstl und schwabenbauer"),
+        (
+            "Schmidbauer und Steiner gehen von höchstens drei Stunden aus, "
+            "Möstl und Schwabenbauer nur von einer Stunde."
+        ),
+        (
+            "Nach Schmidbauer, geschrieben S-C-H-M-I-D-B-A-U-E-R, und Steiner "
+            "sind es höchstens drei Stunden. Nach Möstl, geschrieben M-Ö-S-T-L, "
+            "und Schwabenbauer ist es nur eine Stunde."
+        ),
+    ),
+)
 
 _LEGAL_COMPOUND_PREFIXES = ("bau",)
 
@@ -523,7 +661,31 @@ def _pronunciation_repair(
 ) -> tuple[str, str]:
     repaired_text = text
     target_words: list[str] = []
+    reported_phrases = [
+        " ".join(issue.expected.casefold().split()) for issue in issues
+    ]
+    for triggers, original, replacement in _VERIFIED_CONTEXTUAL_REPHRASINGS:
+        if any(
+            trigger in reported
+            for trigger in triggers
+            for reported in reported_phrases
+        ):
+            repaired_text = re.sub(
+                re.escape(original),
+                replacement,
+                repaired_text,
+                flags=re.IGNORECASE,
+            )
     for issue in issues:
+        expected_phrase = " ".join(issue.expected.casefold().split())
+        verified_rephrasing = _VERIFIED_REPAIR_REPHRASINGS.get(expected_phrase)
+        if verified_rephrasing is not None:
+            repaired_text = re.sub(
+                re.escape(issue.expected),
+                verified_rephrasing,
+                repaired_text,
+                flags=re.IGNORECASE,
+            )
         expected_words = re.findall(r"[\wÄÖÜäöüß]+", issue.expected)
         observed_words = re.findall(r"[\wÄÖÜäöüß]+", issue.observed)
         matcher = difflib.SequenceMatcher(
@@ -614,6 +776,11 @@ def _pronunciation_repair(
 
 def _transcription_equivalence_key(text: str) -> str:
     normalized = text.casefold().replace("dt", "t")
+    normalized = re.sub(
+        r"\bschmi(?:d|t|dt|tt)bauer\b",
+        "schmidbauer",
+        normalized,
+    )
     normalized = re.sub(
         r"([bcdfghjklmnpqrstvwxyz])\1+",
         r"\1",
@@ -1126,6 +1293,7 @@ def run_pipeline(
             segment_outputs=segment_outputs,
         )
 
+        repair_text_by_segment: dict[str, str] = {}
         for _ in range(config.max_audio_repairs):
             if audio_check.passed:
                 break
@@ -1155,9 +1323,12 @@ def run_pipeline(
                 )
             for segment_id in affected:
                 repair_text, repair_guidance = _pronunciation_repair(
-                    speech_by_id[segment_id].text,
+                    repair_text_by_segment.get(
+                        segment_id, speech_by_id[segment_id].text
+                    ),
                     issues_by_segment[segment_id],
                 )
+                repair_text_by_segment[segment_id] = repair_text
                 segment_outputs[segment_id] = _segment_audio(
                     config=config,
                     gateway=gateway,

@@ -2,7 +2,7 @@
   <section class="mobile-hub-view">
     <header class="page-header">
       <div>
-        <UBreadcrumb class="app-breadcrumb" :items="withHomeIcon(breadcrumbItems)" />
+        <AppBreadcrumb :items="breadcrumbItems" />
         <p class="eyebrow">Mehr</p>
         <h1>Mehr</h1>
         <p>Einstellungen, Hilfe und Projektinformationen an einem Ort.</p>
@@ -18,7 +18,8 @@
 </template>
 
 <script setup lang="ts">
-import { type AppBreadcrumbItem, withHomeIcon } from '../ui/breadcrumbs'
+import AppBreadcrumb from '../components/ui/AppBreadcrumb.vue'
+import type { AppBreadcrumbItem } from '../ui/breadcrumbs'
 
 const breadcrumbItems: AppBreadcrumbItem[] = [
   { label: 'Home', to: { name: 'home' } },

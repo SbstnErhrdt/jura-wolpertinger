@@ -38,6 +38,7 @@ describe('AppServices', () => {
     expect(Number(row.value)).toBe(DATABASE_SCHEMA_VERSION)
     expect(columns.some((column) => column.name === 'trashed_at')).toBe(true)
     expect(columns.some((column) => column.name === 'user_id')).toBe(true)
+    expect(tableExists(services.db, 'podcast_episode_progress')).toBe(true)
   })
 
   it('repairs legacy databases that already report the current schema without users', async () => {
@@ -376,6 +377,107 @@ describe('AppServices', () => {
     const dashboardAfter = services.getLearningDashboard()
     expect(dashboardAfter.totalCards).toBe(1)
     expect(dashboardAfter.learnedToday).toBe(true)
+  })
+
+  it('aggregates useful flashcard learning statistics from the latest card ratings', () => {
+    const collection = services.createLearningCollection({
+      name: 'Zivilrecht AT',
+      subject: 'Zivilrecht'
+    })
+    const firstCard = services.createLearningCard({
+      collectionId: collection.id,
+      title: 'Anspruch',
+      frontMarkdown: 'Was ist ein Anspruch?',
+      backMarkdown: 'Das Recht, ein Tun oder Unterlassen zu verlangen.',
+      tags: ['bgb']
+    })
+    const secondCard = services.createLearningCard({
+      collectionId: collection.id,
+      title: 'Abtretung',
+      frontMarkdown: 'Was setzt eine Abtretung voraus?',
+      backMarkdown: 'Einen Vertrag nach § 398 BGB.',
+      tags: ['bgb']
+    })
+
+    services.recordReview({ cardId: firstCard.id, rating: 2, elapsedMs: 900 })
+    services.recordReview({ cardId: firstCard.id, rating: 3, elapsedMs: 800 })
+    services.recordReview({ cardId: secondCard.id, rating: 4, elapsedMs: 700 })
+
+    const statistics = services.getLearningStatistics()
+    const today = new Date()
+    const todayKey = [
+      today.getFullYear(),
+      String(today.getMonth() + 1).padStart(2, '0'),
+      String(today.getDate()).padStart(2, '0')
+    ].join('-')
+
+    expect(statistics).toMatchObject({
+      totalCards: 2,
+      reviewedCards: 2,
+      reviewCountTotal: 3,
+      reviewsToday: 3,
+      reviewsLast7Days: 3,
+      streakDays: 1,
+      activeDaysLast14: 1,
+      ratingCounts: [
+        { rating: 1, count: 0 },
+        { rating: 2, count: 0 },
+        { rating: 3, count: 1 },
+        { rating: 4, count: 1 }
+      ]
+    })
+    expect(statistics.activity).toHaveLength(14)
+    expect(statistics.activity.at(-1)).toEqual({ date: todayKey, reviews: 3 })
+    expect(statistics.collections).toEqual([
+      expect.objectContaining({
+        id: collection.id,
+        cardCount: 2,
+        reviewedCards: 2,
+        dueCount: 0,
+        averageRating: 3.5
+      })
+    ])
+  })
+
+  it('stores podcast listening progress separately for every local user', () => {
+    const episodeId = 'ba7b2026-0400-4000-8000-000000000101'
+    const firstUser = services.getCurrentUser()
+
+    expect(services.getPodcastCatalog().legalAreas[0].series[0].episodes[0].progress).toBeNull()
+    const firstProgress = services.savePodcastProgress({
+      episodeId,
+      positionSeconds: 680,
+      durationSeconds: 700,
+      completed: false
+    })
+
+    expect(firstProgress).toEqual(
+      expect.objectContaining({
+        episodeId,
+        positionSeconds: 680,
+        durationSeconds: 700,
+        completed: true,
+        lastPlayedAt: expect.any(String),
+        updatedAt: expect.any(String)
+      })
+    )
+    expect(
+      services.getPodcastCatalog().legalAreas[0].series[0].episodes[0].progress
+    ).toEqual(expect.objectContaining({ episodeId, completed: true }))
+
+    services.createUser('Zweite Person')
+    expect(services.getPodcastCatalog().legalAreas[0].series[0].episodes[0].progress).toBeNull()
+    services.savePodcastProgress({
+      episodeId,
+      positionSeconds: 120,
+      durationSeconds: 700,
+      completed: false
+    })
+
+    services.switchUser(firstUser.id)
+    expect(
+      services.getPodcastCatalog().legalAreas[0].series[0].episodes[0].progress
+    ).toEqual(expect.objectContaining({ positionSeconds: 680, completed: true }))
   })
 
   it('keeps future-suggested cards learnable but sorts currently suggested cards first', () => {

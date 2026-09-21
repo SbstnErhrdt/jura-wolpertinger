@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import type { StudyCommand } from '@shared/flashcardStudy'
 import type {
   AddInlineCommentInput,
   AppApi,
@@ -11,6 +12,7 @@ import type {
   ListLearningCardsInput,
   RateLearningCardQualityInput,
   RecordReviewInput,
+  SavePodcastProgressInput,
   SaveRevisionInput,
   SaveAiSettingsInput,
   SyncAuthInput,
@@ -76,6 +78,7 @@ const api: AppApi = {
   updateLearningTaskStatus: (taskId: string, status: LearningTask['status']) =>
     ipcRenderer.invoke('learningTasks:updateStatus', taskId, status),
   getLearningDashboard: () => ipcRenderer.invoke('learning:dashboard'),
+  getLearningStatistics: () => ipcRenderer.invoke('learning:statistics'),
   exportLearningDecksJson: () => ipcRenderer.invoke('learning:exportDecksJson'),
   importLearningDecksJson: (json: string) => ipcRenderer.invoke('learning:importDecksJson', json),
   listLearningCollections: () => ipcRenderer.invoke('learning:collections'),
@@ -89,8 +92,12 @@ const api: AppApi = {
   deleteLearningCard: (input) => ipcRenderer.invoke('learning:deleteCard', input),
   getReviewBatch: (input?: GetReviewBatchInput) => ipcRenderer.invoke('learning:reviewBatch', input),
   recordReview: (input: RecordReviewInput) => ipcRenderer.invoke('learning:recordReview', input),
+  studyFlashcards: (input: StudyCommand) => ipcRenderer.invoke('learning:study', input),
   rateLearningCardQuality: (input: RateLearningCardQualityInput) =>
     ipcRenderer.invoke('learning:rateCardQuality', input),
+  getPodcastCatalog: () => ipcRenderer.invoke('podcasts:catalog'),
+  savePodcastProgress: (input: SavePodcastProgressInput) =>
+    ipcRenderer.invoke('podcasts:saveProgress', input),
   addAttachment: (examId: string, role?: AttachmentRole) =>
     ipcRenderer.invoke('attachments:add', examId, role),
   openAttachment: (id: string) => ipcRenderer.invoke('attachments:open', id),

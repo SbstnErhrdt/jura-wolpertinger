@@ -32,6 +32,19 @@ Akzeptanz:
 - Das Modal beschreibt konkret, was passiert und ob Inhalte wiederherstellbar sind.
 - Primäre und sekundäre Aktion sind klar unterscheidbar.
 
+### Verlässliche Ladezustände erkennen
+
+Als Nutzer:in möchte ich jederzeit erkennen, ob Daten noch geladen, bereits vorhanden oder nicht verfügbar sind, damit ich vorläufige Anzeigen nicht für echte Ergebnisse halte.
+
+Akzeptanz:
+
+- Während der ersten Ladung bilden ruhige Platzhalter die spätere Seitenstruktur ab; vorläufige Nullwerte und Leerhinweise erscheinen nicht.
+- Nach erfolgreicher Ladung bleibt eine echte Null sichtbar und eine leere Liste zeigt ihren fachlichen, echten Leerzustand.
+- Hintergrundaktualisierungen lassen bereits geladene Inhalte stehen und zeigen dezent, dass die Ansicht aktualisiert wird.
+- Eine bewusst gestartete Aktion zeigt ihren Ladezustand am auslösenden Bedienelement und verhindert eine versehentliche Doppelausführung.
+- Fehler zeigen einen verständlichen Hinweis und, wenn sinnvoll, eine Aktion `Erneut versuchen`; bereits geladene Inhalte gehen durch einen späteren Fehler nicht verloren.
+- Ladeanzeigen besitzen zugängliche Statustexte und bleiben auch bei reduzierter Bewegung verständlich.
+
 ## Home und Motivation
 
 ### Motivierend starten
@@ -57,6 +70,20 @@ Akzeptanz:
 - Die Berechnung nutzt die lokale Zeitzone.
 
 ## Karteikarten
+
+### Bei vielen Sammlungen den nächsten Lernschritt finden
+
+Als Nutzer:in möchte ich Fortschritt, eine Suche und einen begründeten Lernvorschlag sehen, damit mich viele Sammlungen nicht überfordern.
+
+Akzeptanz:
+
+- „Als Nächstes lernen“ empfiehlt aus allen eigenen Sammlungen zuerst fällige Wiederholungen, danach den zuletzt aktualisierten offenen Durchgang und sonst eine Sammlung mit möglichst wenigen neuen Karten. Eine Suche verändert diesen globalen Vorschlag nicht.
+- Der Startknopf öffnet den genannten Lernmodus beziehungsweise genau den begonnenen Durchgang. Bloßes Anzeigen oder Suchen verändert keine Lernstände.
+- Der Balken teilt aktuell lernbare Karten nach ihrer letzten Bewertung in Rot für `Nicht gewusst`, Orange für `Teilweise gewusst`, Grün für `Gewusst` und einen neutralen Rest für `Noch nicht bearbeitet`; pausierte Karten werden separat genannt. Bewertung 4 zählt wie `Gewusst`.
+- Die Lernstatistik verwendet dieselben semantischen Farben. Jeder Sammlungsname verlinkt direkt auf die zugehörige Sammlungsdetailseite.
+- Die Suche findet Namen und Rechtsgebiete im gesamten Bestand, unabhängig von der angezeigten Seite. Je Seite erscheinen höchstens 24 Sammlungen; Trefferzahl, Zurücksetzen und Seitennavigation bleiben klar erkennbar.
+- Leere Ergebnisse, fehlende lernbare Karten und Verbindungsfehler werden unterschieden. Fehlende Daten werden nicht als Nullfortschritt ausgegeben.
+- Die freie Auswahl bleibt erhalten; ohne fällige oder offene Karten wird kein künstlicher Lernbedarf angezeigt.
 
 ### Karteikarten organisieren
 
@@ -88,10 +115,17 @@ Als Nutzer:in möchte ich Karteikarten auf dem Handy und Laptop schnell wiederho
 
 Akzeptanz:
 
-- Der Wiederholen-Flow zeigt Vorderseite und Rückseite.
-- Die Bewertung nutzt die vier Optionen Nochmal, Schwer, Gut und Leicht.
-- Nach der Bewertung erscheint kurz das nächste Intervall und dann automatisch die nächste Karte.
-- Nochmal-Karten erscheinen innerhalb derselben Lerneinheit erneut.
+- Der Einstieg benennt die Sammlung. Große Sammlungen werden vollständig und über beliebig viele Pausen hinweg bearbeitet; die technische Paketgröße begrenzt den Durchgang nicht.
+- Die Frage bleibt nach dem Aufdecken neben der vollständigen Antwort lesbar.
+- Nicht gewusst, Teilweise gewusst und Gewusst bewerten den Abruf vor dem Aufdecken. Jede erfolgreiche Bewertung führt zur nächsten offenen Karte, ohne automatische Wiederholungsschleife.
+- Der Zähler zählt verschiedene bearbeitete Karten im gespeicherten Umfang. Früher bewertete Karten zählen für den ersten Durchgang mit.
+- Zurückgestellte Karten bleiben dauerhaft offen und werden nach den übrigen Karten ausdrücklich angeboten.
+- Pause und späteres Fortsetzen erhalten Bewertungen und Reihenfolge. Fehler beim Speichern bleiben sichtbar und können ohne Doppelzählung erneut versucht werden.
+- Die letzte Bewertung lässt sich samt Lernstand und Fortschritt zurücknehmen.
+- Nach jeweils zehn bestätigten unterschiedlichen Karten eines Durchgangs erscheint für vier Sekunden ein wechselndes Wolpi-Bild; alle Einschätzungen zählen. Frage und Bewertung bleiben bedienbar, die Anzeige ist schließbar. Der Motivationszähler und gezeigte Schwellen bleiben pro Nutzer und Durchgang auf demselben Gerät erhalten. Retry zählt nicht doppelt, Undo korrigiert den Zähler ohne erneute Gratulation beim Überschreiten derselben Schwelle. Beim vollständigen Abschluss erscheint nur das dauerhafte Abschlussbild, auch bei weniger als zehn Karten.
+- Empfohlene Wiederholungen und unsichere Karten sind bewusst startbare Durchgänge. Sie ersetzen keinen offenen ersten Durchgang.
+- Neu hinzugefügte und wegen Qualität ausgeschlossene Karten werden getrennt ausgewiesen.
+- Sprachbewertungen sind Vorschläge, die der Nutzer selbst bestätigt.
 - Der Flow ist mobil mit großen, gut tappbaren Flächen nutzbar.
 
 ### Karten beim Lernen korrigieren
@@ -100,7 +134,7 @@ Als Nutzer:in möchte ich fehlerhafte Karten direkt aus dem Lernfluss heraus kor
 
 Akzeptanz:
 
-- Ein kleines Aktionsmenü bietet Bearbeiten, Schlagwörter ändern und Aus aktueller Lerneinheit entfernen.
+- Ein kleines Aktionsmenü bietet Bearbeiten, Kartenqualität bewerten und Für später zurückstellen.
 - Das Menü unterbricht den Lernfluss nicht prominent.
 - Änderungen werden in der normalen Kartenverwaltung sichtbar.
 
@@ -115,6 +149,31 @@ Akzeptanz:
 - Review-Historie, private Notizen, Mitglieder und Rechte werden nicht übernommen.
 - Der Nutzer wählt einen Zielordner; Default ist Unsortiert.
 - Die Oberfläche spricht von Karteikarten-Dateien auswählen oder sichern, nicht vom technischen Dateiformat.
+
+## Podcasts
+
+### Podcast gezielt finden
+
+Als Nutzer:in möchte ich nach einem Rechtsgebiet, einer Reihe oder einer Folge suchen, damit ich auch in einer großen Audiobibliothek schnell zum passenden Inhalt gelange.
+
+Akzeptanz:
+
+- Die Suche berücksichtigt Rechtsgebiet, Reihentitel, Beschreibung, Ausgabe sowie Titel und Beschreibung einzelner Folgen.
+- Groß- und Kleinschreibung sowie diakritische Zeichen verändern die Treffer nicht.
+- Rechtsgebietsgruppen und Reihen behalten ihre redaktionelle Reihenfolge; eine passende Folge lässt die zugehörige Reihe sichtbar.
+- Trefferzahl, verständlicher Leerzustand und Zurücksetzen sind zugänglich und auch mobil gut bedienbar.
+
+### Hörfortschritt in der Übersicht erkennen
+
+Als Nutzer:in möchte ich auf jeder Podcast-Reihe meinen Hörfortschritt sehen,
+damit ich angefangene und abgeschlossene Inhalte ohne Umweg unterscheiden kann.
+
+Akzeptanz:
+
+- Der Balken zeigt die gehörte Zeit im Verhältnis zur Gesamtdauer der Reihe; angefangene Folgen zählen anteilig.
+- Zusätzlich steht dort, wie viele Folgen vollständig abgeschlossen sind.
+- Prozentwert, Beschriftung und Balken bleiben im hellen und dunklen Modus lesbar und sind für assistive Technik ausgezeichnet.
+- Jede Reihe besitzt ein thematisches Wolpi-Cover. Wenn ein Bild fehlt oder nicht geladen werden kann, bleibt die bisherige Jura-Audio-Kachel sichtbar.
 
 ## Bibliothek und Organisation
 
@@ -137,6 +196,38 @@ Akzeptanz:
 - Ordner können erstellt, umbenannt und archiviert werden.
 - Klausuren können per Drag-and-drop verschoben werden.
 - Archivieren löscht Inhalte nicht endgültig.
+- Der ausgewählte Prüfungsordner steht in der Browseradresse und bleibt beim Neuladen sowie bei Zurück/Vorwärts erhalten. Umbenennen ändert den Ordnerlink nicht.
+- Im Navigationspfad ist nur die aktuelle Ebene hervorgehoben. Von einer Prüfung führt der Ordnerlink zur passenden Auswahl; „Bibliothek“ führt zu allen Einträgen.
+- Links auf nicht verfügbare oder archivierte Ordner zeigen einen Hinweis und öffnen die gesamte Bibliothek.
+
+### Alle Klausuren erreichen
+
+Die Bibliothek zeigt Klausuren in Seiten zu 10, 25, 50 oder 100 Einträgen. Die
+Seitennavigation lädt die entsprechende Liste; ein Ordner- oder Seitenumfangwechsel
+kehrt auf Seite 1 zurück. „Prüfungen“ zählt alle Treffer im gewählten Ordner,
+während Abgegeben, Korrigiert und Schnitt ausdrücklich die aktuelle Seite beschreiben.
+
+### Einheitlicher Navigationspfad
+
+Alle Seiten verwenden dieselbe Breadcrumb-Komponente. Schrift, Symbolgrößen,
+Abstände und Interaktionen bleiben im hellen und dunklen Modus einheitlich.
+Nur die aktuelle Ebene ist hervorgehoben; vorherige Ebenen bleiben als Links
+erreichbar, sofern ein Ziel vorhanden ist.
+
+### Schlagwort aus Vorschlägen auswählen
+
+Ein Klick oder Antippen eines Vorschlags übernimmt das vollständige Schlagwort
+genau einmal. Der eingegebene Suchteil wird dabei nicht zusätzlich als Schlagwort
+oder Filter gespeichert. Eigene Begriffe bleiben mit Enter bestätigbar.
+
+### Monatsverlauf der Bewertungen
+
+Der Bewertungsverlauf aggregiert die gefilterten Bewertungen pro Kalendermonat
+zu einem arithmetischen Mittel. Die Zeitachse zeigt jeden Monat im gewählten
+Zeitraum mit Jahr. Monate ohne Bewertung bleiben leer und unterbrechen die Linie.
+Hover, Tastaturfokus und Antippen zeigen den Monatsdurchschnitt mit bis zu zwei
+Dezimalstellen und die Anzahl der Bewertungen. Lange Zeiträume bleiben mit
+horizontalem Scrollen vollständig lesbar.
 
 ### Rechtsklick-Aktionen
 
@@ -190,6 +281,18 @@ Akzeptanz:
 - Die Bewertung bezieht sich auf die Abgabe, nicht auf spätere Bearbeitungen.
 
 ## Bewertung und Kommentare
+
+### Frühere Rückmeldungen und Originaldateien nachlesen
+
+Als Examenskandidat:in möchte ich frühere Abgaben mit Punkten, Gesamtrückmeldungen,
+Randbemerkungen und Originaldateien bei der passenden Prüfung wiederfinden.
+
+Akzeptanz:
+
+- Ergänzte historische Abgaben sind unveränderliche Fassungen; aktueller Entwurf, eigene Notizen, Schlagwörter und Archivstatus bleiben erhalten.
+- Bereits bearbeitete Bewertungen und Randbemerkungen werden nicht durch eine ältere Sicherung ersetzt.
+- Hinterlegte Originaldateien lassen sich in der Online-Version unter ihrem ursprünglichen Namen herunterladen und bleiben auf das eigene Konto beschränkt.
+- Eine spätere Online-Sicherung erhält die Verweise auf vorhandene Dateien und berücksichtigt eigene Änderungen an Randbemerkungen.
 
 ### Abgaben auswählen
 
@@ -301,6 +404,18 @@ Akzeptanz:
 - Prüfungsdateien enthalten Prüfungsdaten wie Metadaten, Abgaben, Korrekturen und Attachment-Rollen, aber keine KI-Schlüssel, KI-Einstellungen, rohe KI-Entwürfe oder lokale Lernaufgaben.
 
 ## Installation und Updates
+
+### Produkt auf der öffentlichen Website realistisch kennenlernen
+
+Als Interessent:in möchte ich aktuelle, gut lesbare Ansichten der echten App sehen, damit ich ihren Funktionsumfang vor Installation oder Anmeldung einschätzen kann.
+
+Akzeptanz:
+
+- Die Website zeigt aktuelle Demo-Ansichten für Home, Karteikarten, Podcasts, Wiederholen, Prüfungen und Lernstatistik.
+- Screenshots enthalten keine echten Nutzerdaten, sind einheitlich aufgenommen und für schnelle Ladezeiten optimiert.
+- Wolpi-Illustrationen besitzen echte transparente Hintergründe ohne sichtbare weiße Bildfläche.
+- Bilder unterhalb des sichtbaren Einstiegs werden verzögert geladen; die Hauptvorschau wird priorisiert.
+- Desktop- und Mobilansicht bleiben ohne überlagerte Figuren, abgeschnittene Inhalte oder horizontales Scrollen lesbar.
 
 ### Passenden Desktop-Build erhalten
 

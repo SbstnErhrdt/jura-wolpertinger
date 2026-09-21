@@ -9,18 +9,18 @@ describe('Nuxt UI flashcard workflows', () => {
   it.each(files)('%s uses no native standard controls or legacy wrappers', async (file) => {
     const source = await readFile(resolve(viewsRoot, file), 'utf8')
     expect(source).not.toMatch(/<(button|input|select|textarea)\b/)
-    expect(source).not.toMatch(/components\/ui\/(ActionMenu|AppBadge|AppBreadcrumb|AppPagination|ListSkeleton)/)
+    expect(source).not.toMatch(/components\/ui\/(ActionMenu|AppBadge|AppPagination|ListSkeleton)/)
   })
 
-  it('keeps keyboard navigation and card motion while using Nuxt UI', async () => {
+  it('keeps keyboard navigation and three ratings while using Nuxt UI', async () => {
     const review = await readFile(resolve(viewsRoot, 'FlashcardsReviewView.vue'), 'utf8')
     expect(review).toContain('<UButton')
     expect(review).toContain('<UDropdownMenu')
     expect(review).toContain('<UBadge')
-    expect(review).toContain('study-card-motion-flip')
+    expect(review).toContain('study-rating-three')
     expect(review).toContain("event.key === 'ArrowLeft'")
     expect(review).toContain("event.key === 'ArrowRight'")
-    expect(review).toContain("['1', '2', '3', '4']")
+    expect(review).toContain("['1', '2', '3']")
     expect(review).toContain('<kbd class="key-hint">Enter</kbd>')
   })
 

@@ -14,7 +14,8 @@
       {{ with .Description }}<p>{{ . }}</p>{{ end }}
     </div>
     {{ with .Params.heroImage }}
-      <img src="{{ . }}" alt="">
+      {{ $heroImage := resources.Get . | fingerprint }}
+      <img src="{{ $heroImage.RelPermalink }}" alt="">
     {{ end }}
   </section>
 

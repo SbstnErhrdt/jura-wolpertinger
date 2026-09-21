@@ -17,6 +17,7 @@ export const useLibraryStore = defineStore('library', {
     examPageCount: 1,
     examTotal: 0,
     archivedExamTotal: 0,
+    examPageRequestId: 0,
     examFilter: {} as Pick<ListExamsInput, 'folderId'>
   }),
   getters: {
@@ -36,7 +37,9 @@ export const useLibraryStore = defineStore('library', {
     }
   },
   actions: {
-    async load() {
+    async load(input: Pick<ListExamsInput, 'folderId'> = {}) {
+      ++this.examPageRequestId
+      if (Object.prototype.hasOwnProperty.call(input, 'folderId')) this.examFilter = { folderId: input.folderId }
       this.loading = true
       this.error = null
       try {
@@ -51,6 +54,7 @@ export const useLibraryStore = defineStore('library', {
       }
     },
     async loadExamPage(input: Partial<ListExamsInput> = {}) {
+      const requestId = ++this.examPageRequestId
       const api = getApi()
       const nextPage = input.page ?? this.examPage
       const nextPageSize = input.pageSize ?? this.examPageSize
@@ -65,20 +69,22 @@ export const useLibraryStore = defineStore('library', {
         pageSize: nextPageSize,
         ...nextFilter
       }
+      this.examFilter = nextFilter
       this.refreshing = !this.loading
       this.error = null
       try {
         const page = await api.listExamsPage(request)
+        if (requestId !== this.examPageRequestId) return
         this.exams = page.items
         this.examTotal = page.total
         this.examPage = page.page
         this.examPageSize = page.pageSize
         this.examPageCount = page.pageCount
-        this.examFilter = nextFilter
       } catch (error) {
+        if (requestId !== this.examPageRequestId) return
         this.error = error instanceof Error ? error.message : 'Einträge konnten nicht geladen werden.'
       } finally {
-        this.refreshing = false
+        if (requestId === this.examPageRequestId) this.refreshing = false
       }
     },
     async loadArchivedExams() {

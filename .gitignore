@@ -18,6 +18,8 @@ build/icon.png
 build/icon.iconset
 .DS_Store
 *.log
+__pycache__/
+*.py[cod]
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal

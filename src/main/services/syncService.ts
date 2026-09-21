@@ -5,6 +5,7 @@ import type { SyncRunAction, SyncRunResult } from '@shared/schemas'
 import { syncRunResultSchema } from '@shared/schemas'
 import type { SqliteDatabase } from './database'
 import { nowIso } from './utils'
+import type { StoredStudyRun } from '@shared/flashcardStudyEngine'
 
 type Row = Record<string, unknown>
 
@@ -43,10 +44,12 @@ const USER_SYNC_TABLES = [
   'learning_card_tags',
   'learning_review_events',
   'learning_card_schedules',
-  'learning_card_quality_events'
+  'learning_card_quality_events',
+  'learning_study_runs'
 ] as const
 
 const RESTORE_DELETE_ORDER = [
+  'learning_study_runs',
   'learning_card_quality_events',
   'learning_card_schedules',
   'learning_review_events',
@@ -188,6 +191,17 @@ function remapSnapshotRow(row: Row, targetUserId: string): Row {
     return { ...row, id: targetUserId }
   }
   if (!('user_id' in row)) return row
+  if ('run_json' in row) {
+    const run = JSON.parse(String(row.run_json)) as StoredStudyRun
+    run.userId = targetUserId
+    for (const action of run.actions) {
+      action.review.event.userId = targetUserId
+      if (action.previous && typeof action.previous === 'object') {
+        action.previous = { ...action.previous, user_id: targetUserId }
+      }
+    }
+    return { ...row, user_id: targetUserId, run_json: JSON.stringify(run) }
+  }
   return { ...row, user_id: targetUserId }
 }
 

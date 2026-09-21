@@ -2,9 +2,9 @@
   <section class="dashboard">
     <header class="page-header">
       <div>
-        <UBreadcrumb class="app-breadcrumb" :items="withHomeIcon(breadcrumbItems)" />
-        <p class="eyebrow">Lokale Bibliothek</p>
-        <h1>Bibliothek</h1>
+        <AppBreadcrumb :items="breadcrumbItems" />
+        <p class="eyebrow">Prüfungsbibliothek</p>
+        <h1>{{ selectedFolderLabel ?? 'Bibliothek' }}</h1>
       </div>
       <div class="header-actions">
         <UButton color="neutral" variant="outline" @click="importPackage">
@@ -14,21 +14,23 @@
       </div>
     </header>
 
+    <p v-if="folderNotice" class="action-notice folder-notice" role="status">{{ folderNotice }}</p>
+
     <section class="metric-row">
       <div class="metric">
         <span>Prüfungen</span>
         <strong>{{ store.examTotal }}</strong>
       </div>
       <div class="metric">
-        <span>Abgegeben</span>
+        <span>Abgegeben auf dieser Seite</span>
         <strong>{{ store.submittedCount }}</strong>
       </div>
       <div class="metric">
-        <span>Korrigiert</span>
+        <span>Korrigiert auf dieser Seite</span>
         <strong>{{ store.correctedCount }}</strong>
       </div>
       <div class="metric">
-        <span>Schnitt</span>
+        <span>Schnitt auf dieser Seite</span>
         <strong>{{ store.averageScore ?? '—' }}</strong>
       </div>
     </section>
@@ -126,9 +128,11 @@
           </UButton>
         </div>
 
-        <div v-if="store.loading" class="skeleton-list" aria-hidden="true">
-          <UCard v-for="index in 5" :key="index" class="skeleton-tile"><USkeleton class="h-5 w-2/5" /><USkeleton class="mt-3 h-4 w-full" /></UCard>
-        </div>
+        <AppLoadingState v-if="store.loading" label="Prüfungsbibliothek wird geladen">
+          <div class="skeleton-list">
+            <UCard v-for="index in 5" :key="index" class="skeleton-tile"><USkeleton class="h-5 w-2/5" /><USkeleton class="mt-3 h-4 w-full" /></UCard>
+          </div>
+        </AppLoadingState>
         <p v-else-if="store.error" class="action-notice error">
           <span>{{ store.error }}</span>
           <UButton type="button" color="neutral" variant="outline" @click="reloadExams">Erneut versuchen</UButton>
@@ -172,7 +176,7 @@
           label="Klausurseiten"
         >
           <span>{{ (store.examPage - 1) * store.examPageSize + 1 }}-{{ Math.min(store.examTotal, store.examPage * store.examPageSize) }} von {{ store.examTotal }}</span>
-          <UPagination :model-value="store.examPage" :total="store.examTotal" :items-per-page="store.examPageSize" :disabled="store.refreshing" @update:model-value="setExamPage" />
+          <UPagination :page="store.examPage" :total="store.examTotal" :items-per-page="store.examPageSize" :disabled="store.refreshing" @update:page="setExamPage" />
           <USelect
             :model-value="store.examPageSize"
             :items="pageSizeOptions"
@@ -329,23 +333,27 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { Download, FileText, FolderPlus, Pencil, Plus, RotateCcw, Trash2, Upload } from 'lucide-vue-next'
 import type { ExamStatus } from '@shared/schemas'
 import TagInput from '../components/TagInput.vue'
-import { type AppBreadcrumbItem, withHomeIcon } from '../ui/breadcrumbs'
+import AppBreadcrumb from '../components/ui/AppBreadcrumb.vue'
+import AppLoadingState from '../components/ui/AppLoadingState.vue'
+import type { AppBreadcrumbItem } from '../ui/breadcrumbs'
+import { examLibraryLocation, folderFromQuery, UNASSIGNED_FOLDER_ID } from '../ui/examNavigation'
 import { useLibraryStore } from '../stores/library'
 
 const store = useLibraryStore()
 const router = useRouter()
+const route = useRoute()
 const folderName = ref('')
 const examTitle = ref('')
 const tagValues = ref<string[]>([])
 const examFolderId = ref<string | null>(null)
 const showCreateFolderDialog = ref(false)
 const showCreateExamDialog = ref(false)
-const UNASSIGNED_FOLDER_ID = '__unassigned__'
-const selectedFolderId = ref<string | null>(null)
+const selectedFolderId = computed(() => folderFromQuery(route.query.folder))
+const folderNotice = ref('')
 const draggedExamId = ref<string | null>(null)
 const dropFolderId = ref<string | null | undefined>(undefined)
 const dropTrashActive = ref(false)
@@ -359,7 +367,13 @@ const trashFolderId = ref<string | null>(null)
 const trashMoveTargetId = ref<string | null>(null)
 const pageSizeOptions = [10, 25, 50, 100]
 
-onMounted(() => store.load())
+onMounted(() => store.load({ folderId: selectedFolderFilter() }))
+
+watch(() => route.query.folder, () => {
+  if (route.name !== 'dashboard') return
+  folderNotice.value = ''
+  void store.loadExamPage({ page: 1, folderId: selectedFolderFilter() })
+})
 
 const activeFolders = computed(() => store.folders.filter((folder) => !folder.trashedAt))
 const trashedFolders = computed(() => store.folders.filter((folder) => folder.trashedAt))
@@ -400,7 +414,7 @@ const selectedFolderLabel = computed(() => {
 const breadcrumbItems = computed<AppBreadcrumbItem[]>(() => [
   { label: 'Home', to: { name: 'home' } },
   { label: 'Prüfungen', to: { name: 'exams' } },
-  { label: 'Bibliothek' },
+  { label: 'Bibliothek', ...(selectedFolderLabel.value ? { to: examLibraryLocation() } : {}) },
   ...(selectedFolderLabel.value ? [{ label: selectedFolderLabel.value }] : [])
 ])
 
@@ -412,13 +426,17 @@ const tagSuggestions = computed(() =>
   )
 )
 
-watch(activeFolders, (folders) => {
+watch([activeFolders, () => store.loading, selectedFolderId], async ([folders, loading]) => {
+  if (loading || store.error || route.name !== 'dashboard') return
   if (
     selectedFolderId.value &&
     selectedFolderId.value !== UNASSIGNED_FOLDER_ID &&
     !folders.some((folder) => folder.id === selectedFolderId.value)
   ) {
-    selectedFolderId.value = null
+    await router.replace(examLibraryLocation(null, route.query))
+    if (route.name === 'dashboard' && !selectedFolderId.value) {
+      folderNotice.value = 'Dieser Ordner ist nicht verfügbar. Du siehst alle Prüfungen.'
+    }
   }
   if (examFolderId.value && !folders.some((folder) => folder.id === examFolderId.value)) {
     examFolderId.value = null
@@ -432,8 +450,8 @@ function selectedFolderFilter(): string | null | undefined {
 }
 
 async function selectFolder(folderId: string | null): Promise<void> {
-  selectedFolderId.value = folderId
-  await store.loadExamPage({ page: 1, folderId: selectedFolderFilter() })
+  folderNotice.value = ''
+  await router.push(examLibraryLocation(folderId, route.query))
 }
 
 async function setExamPage(page: number): Promise<void> {
@@ -576,7 +594,6 @@ async function submitTrashFolder(): Promise<void> {
   if (!trashFolderId.value) return
   const folderId = trashFolderId.value
   await store.trashFolder(folderId, trashMoveTargetId.value)
-  if (selectedFolderId.value === folderId) selectedFolderId.value = null
   if (examFolderId.value === folderId) examFolderId.value = null
   cancelTrashFolder()
 }

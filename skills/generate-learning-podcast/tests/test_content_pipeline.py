@@ -208,6 +208,29 @@ class SourceAnalysisTests(unittest.TestCase):
         self.assertEqual([concept.id for concept in sliced.concepts], ["concept-wirksamkeit"])
         self.assertEqual(sliced.pronunciation_terms, ["Art. 43 BayVwVfG"])
 
+    def test_source_slice_removes_section_anchors_outside_planned_pages(self) -> None:
+        spillover_anchor = SourceAnchor(
+            page=4,
+            section="Wirksamkeit",
+            excerpt="Dieser Anker gehört in eine andere Folge.",
+        )
+        source_map = SOURCE_MAP.model_copy(
+            update={
+                "sections": [
+                    SECTION.model_copy(
+                        update={"anchors": [ANCHOR, spillover_anchor]}
+                    )
+                ]
+            }
+        )
+
+        sliced = source_slice(source_map, PLAN)
+
+        self.assertEqual(
+            [anchor.page for anchor in sliced.sections[0].anchors],
+            [3],
+        )
+
 
 class ContentPipelineTests(unittest.TestCase):
     def test_validation_reports_all_independent_structure_errors_together(self) -> None:
@@ -321,6 +344,28 @@ class ContentPipelineTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "retrieval pauses"):
             validate_episode(PLAN, broken)
 
+    def test_validate_episode_accepts_equivalent_update_limitation_wording(self) -> None:
+        draft = valid_draft().model_copy(deep=True)
+        draft.segments[0].text = (
+            "Hinweis vorab: Diese Folge ist KI-generiert. Sie stützt sich "
+            "ausschließlich auf das hochgeladene PDF und den bereitgestellten "
+            "Quellenplan. Externe Quellen und spätere Entwicklungen wurden "
+            "nicht geprüft. Die Folge ist keine offizielle rechtliche Bewertung."
+        )
+
+        validate_episode(PLAN, draft)
+
+    def test_validate_episode_accepts_weder_official_assessment_wording(self) -> None:
+        draft = valid_draft().model_copy(deep=True)
+        draft.segments[0].text = (
+            "Hinweis vorab: Diese Folge ist KI-generiert. Sie verwendet "
+            "ausschließlich das hochgeladene Skript. Es wurde keine "
+            "Aktualitätsprüfung vorgenommen. Die Folge ist weder eine "
+            "offizielle Bewertung noch eine verbindliche rechtliche Einschätzung."
+        )
+
+        validate_episode(PLAN, draft)
+
     def test_validate_episode_requires_unique_sequential_segment_ids(self) -> None:
         broken = valid_draft().model_copy(deep=True)
         broken.segments[1].id = "segment-001"
@@ -368,6 +413,42 @@ class ContentPipelineTests(unittest.TestCase):
         self.assertTrue(
             all("use only" in call["instructions"].lower() for call in gateway.calls)
         )
+
+    def test_invalid_grounding_repair_gets_structure_repair_and_recheck(self) -> None:
+        draft = valid_draft("Ungedeckte Behauptung")
+        too_short = valid_draft("Reparierte Aussage").model_copy(deep=True)
+        too_short.segments[1].text = "Zu kurz nach der Quellenkorrektur."
+        repaired = valid_draft("Reparierte und ausreichend ausführliche Aussage")
+        gateway = RoutingGateway(
+            [
+                draft,
+                GroundingReport(
+                    approved=False,
+                    issues=[
+                        GroundingIssue(
+                            segment_id="segment-002",
+                            reason="Nicht im Skript belegt",
+                        )
+                    ],
+                ),
+                too_short,
+                repaired,
+                GroundingReport(approved=True, issues=[]),
+            ]
+        )
+
+        result, report = draft_and_ground(
+            gateway,
+            PLAN,
+            SOURCE_MAP.model_dump_json(indent=2),
+            max_rewrites=2,
+        )
+
+        self.assertEqual(result, repaired)
+        self.assertTrue(report.approved)
+        self.assertEqual(len(gateway.calls), 5)
+        self.assertIn("complete corrected episode", gateway.calls[3]["instructions"])
+        self.assertIn("1350 to 2025", gateway.calls[3]["input_text"])
 
     def test_transcript_has_page_anchors_and_series_plan_is_readable(self) -> None:
         transcript = render_transcript(valid_draft())

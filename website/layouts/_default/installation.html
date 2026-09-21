@@ -1,4 +1,6 @@
 {{ define "main" }}
+{{ $desktopWolpi := resources.Get "images/wolpi/desktop.png" | fingerprint }}
+{{ $linuxIcon := resources.Get "images/platforms/linux.svg" | fingerprint }}
 {{ partial "site-header.html" . }}
 
 <main>
@@ -13,7 +15,7 @@
     <h1>Desktop-App installieren</h1>
     <p>Wähle die passende Datei für dein System und installiere Jura Wolpertinger wie eine normale Desktop-App.</p>
     </div>
-    <img src="/assets/wolpi/desktop.png" alt="">
+    <img src="{{ $desktopWolpi.RelPermalink }}" alt="">
   </section>
 
   <section class="doc-section download-section compact-download">
@@ -46,7 +48,7 @@
         <small>Download noch nicht bereit</small>
       </a>
       <a class="download-card" data-os="linux" href="#download" aria-disabled="true">
-        <span class="download-icon">◆</span>
+        <span class="download-icon"><img src="{{ $linuxIcon.RelPermalink }}" alt="" aria-hidden="true" width="30" height="30"></span>
         <strong>Linux</strong>
         <span>AppImage</span>
         <small>Download noch nicht bereit</small>

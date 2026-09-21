@@ -35,6 +35,8 @@ export function initializeDatabase(db: SqliteDatabase): void {
     migrateV2ToV3(db)
     if (DATABASE_SCHEMA_VERSION >= 4) migrateV3ToV4(db)
     if (DATABASE_SCHEMA_VERSION >= 5) migrateV4ToV5(db)
+    if (DATABASE_SCHEMA_VERSION >= 6) migrateV5ToV6(db)
+    if (DATABASE_SCHEMA_VERSION >= 7) migrateV6ToV7(db)
     return
   }
 
@@ -42,17 +44,34 @@ export function initializeDatabase(db: SqliteDatabase): void {
     migrateV2ToV3(db)
     if (DATABASE_SCHEMA_VERSION >= 4) migrateV3ToV4(db)
     if (DATABASE_SCHEMA_VERSION >= 5) migrateV4ToV5(db)
+    if (DATABASE_SCHEMA_VERSION >= 6) migrateV5ToV6(db)
+    if (DATABASE_SCHEMA_VERSION >= 7) migrateV6ToV7(db)
     return
   }
 
   if (version === 3 && DATABASE_SCHEMA_VERSION >= 4) {
     migrateV3ToV4(db)
     if (DATABASE_SCHEMA_VERSION >= 5) migrateV4ToV5(db)
+    if (DATABASE_SCHEMA_VERSION >= 6) migrateV5ToV6(db)
+    if (DATABASE_SCHEMA_VERSION >= 7) migrateV6ToV7(db)
     return
   }
 
   if (version === 4 && DATABASE_SCHEMA_VERSION >= 5) {
     migrateV4ToV5(db)
+    if (DATABASE_SCHEMA_VERSION >= 6) migrateV5ToV6(db)
+    if (DATABASE_SCHEMA_VERSION >= 7) migrateV6ToV7(db)
+    return
+  }
+
+  if (version === 5 && DATABASE_SCHEMA_VERSION >= 6) {
+    migrateV5ToV6(db)
+    if (DATABASE_SCHEMA_VERSION >= 7) migrateV6ToV7(db)
+    return
+  }
+
+  if (version === 6 && DATABASE_SCHEMA_VERSION >= 7) {
+    migrateV6ToV7(db)
     return
   }
 
@@ -61,6 +80,8 @@ export function initializeDatabase(db: SqliteDatabase): void {
     repairMissingV3Schema(db)
     repairMissingV4Schema(db)
     repairMissingV5Schema(db)
+    repairMissingV6Schema(db)
+    createStudySchema(db)
     updateAppVersion(db)
     return
   }
@@ -254,6 +275,8 @@ function createSchema(db: SqliteDatabase): void {
     `)
 
     createLearningSchema(db)
+    createPodcastProgressSchema(db)
+    createStudySchema(db)
 
     db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)').run(
       'schema_version',
@@ -353,6 +376,36 @@ function migrateV4ToV5(db: SqliteDatabase): void {
   })()
 }
 
+function migrateV5ToV6(db: SqliteDatabase): void {
+  const migratedAt = nowIso()
+  db.transaction(() => {
+    createPodcastProgressSchema(db)
+    db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run('schema_version', '6')
+    db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run('last_migrated_at', migratedAt)
+    updateAppVersion(db)
+  })()
+}
+
+function migrateV6ToV7(db: SqliteDatabase): void {
+  db.transaction(() => {
+    createStudySchema(db)
+    db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run('schema_version', '7')
+    db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run('last_migrated_at', nowIso())
+    updateAppVersion(db)
+  })()
+}
+
+function createStudySchema(db: SqliteDatabase): void {
+  addColumnIfMissing(db, 'learning_review_events', 'voided_at TEXT')
+  db.exec(`CREATE TABLE IF NOT EXISTS learning_study_runs (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    collection_id TEXT NOT NULL REFERENCES learning_collections(id) ON DELETE CASCADE,
+    run_json TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_learning_study_runs_user ON learning_study_runs(user_id);`)
+}
+
 function createLearningSchema(db: SqliteDatabase): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS learning_collections (
@@ -429,6 +482,24 @@ function createLearningSchema(db: SqliteDatabase): void {
   `)
 }
 
+function createPodcastProgressSchema(db: SqliteDatabase): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS podcast_episode_progress (
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      episode_id TEXT NOT NULL,
+      position_seconds REAL NOT NULL DEFAULT 0,
+      duration_seconds REAL NOT NULL DEFAULT 0,
+      completed INTEGER NOT NULL DEFAULT 0,
+      last_played_at TEXT,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY(user_id, episode_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_podcast_progress_user_updated
+      ON podcast_episode_progress(user_id, updated_at DESC);
+  `)
+}
+
 function repairMissingUserScope(db: SqliteDatabase): void {
   const hasCompleteUserScope =
     tableExists(db, 'users') &&
@@ -469,6 +540,10 @@ function repairMissingV4Schema(db: SqliteDatabase): void {
 
 function repairMissingV5Schema(db: SqliteDatabase): void {
   if (!tableExists(db, 'learning_card_quality_events')) migrateV4ToV5(db)
+}
+
+function repairMissingV6Schema(db: SqliteDatabase): void {
+  if (!tableExists(db, 'podcast_episode_progress')) migrateV5ToV6(db)
 }
 
 function addUserScopeToLegacySchema(db: SqliteDatabase, targetSchemaVersion: number): void {
@@ -531,6 +606,8 @@ const USER_SCOPED_TABLES = [
   'learning_review_events',
   'learning_card_schedules',
   'learning_card_quality_events',
+  'learning_study_runs',
+  'podcast_episode_progress',
   'ai_settings',
   'tags',
   'exam_tags'

@@ -285,6 +285,41 @@ class EmptySegmentTranscriptGateway(TrailingOmissionGateway):
         return "Vollständiger verständlicher Dialog über Wirksamkeit und Bekanntgabe."
 
 
+class CumulativeRepairGateway(FakeGateway):
+    def _draft(self) -> EpisodeDraft:
+        draft = super()._draft()
+        draft.segments[4].text = "schließlich Daten. Standardbefugnis."
+        return draft
+
+    def compare_audio(self, draft: EpisodeDraft, transcript: str) -> AudioCheck:
+        self.call_counts["audio_check"] += 1
+        if self.call_counts["audio_check"] <= 2:
+            return AudioCheck(
+                passed=False,
+                issues=[
+                    AudioIssue(
+                        segment_id="segment-005",
+                        expected="schließlich Daten",
+                        observed="omitted",
+                        reason="Der letzte Listenpunkt fehlt.",
+                    )
+                ],
+            )
+        if self.call_counts["audio_check"] <= 4:
+            return AudioCheck(
+                passed=False,
+                issues=[
+                    AudioIssue(
+                        segment_id="segment-005",
+                        expected="Standardbefugnis",
+                        observed="Standardgefugnis",
+                        reason="Der Rechtsbegriff ist unverständlich.",
+                    )
+                ],
+            )
+        return AudioCheck(passed=True, issues=[])
+
+
 class PipelineResumeTests(unittest.TestCase):
     def test_audio_filter_ignores_homophonic_transcription_spelling_only(self) -> None:
         check = AudioCheck(
@@ -295,6 +330,12 @@ class PipelineResumeTests(unittest.TestCase):
                     expected="Statthaft ist die einstweilige Anordnung",
                     observed="Stadthaft ist die einstweilige Anordnung",
                     reason="Fachbegriff falsch transkribiert",
+                ),
+                AudioIssue(
+                    segment_id="segment-009",
+                    expected="Schmidbauer",
+                    observed="Schmidtbauer",
+                    reason="Autorenname falsch transkribiert",
                 ),
                 AudioIssue(
                     segment_id="segment-015",
@@ -449,6 +490,315 @@ class PipelineResumeTests(unittest.TestCase):
             ),
         )
 
+    def test_pronunciation_repair_enunciates_police_law_terms(self) -> None:
+        text = (
+            "PAG und POG stehen neben StPO und OWiG. Zielrichtung, "
+            "Trennsystem, Polizeibegriff und repressive Verfolgung."
+        )
+        issues = [
+            AudioIssue(
+                segment_id="segment-005",
+                expected="PAG und POG",
+                observed="PEG und Pock",
+                reason="Gesetzesabkürzungen verfälscht",
+            ),
+            AudioIssue(
+                segment_id="segment-012",
+                expected="StPO und OWiG",
+                observed="SPO und OWG",
+                reason="Gesetzesabkürzungen verfälscht",
+            ),
+            AudioIssue(
+                segment_id="segment-023",
+                expected=(
+                    "Zielrichtung, Trennsystem, Polizeibegriff und "
+                    "repressive Verfolgung"
+                ),
+                observed=(
+                    "Zieldichtung, Trendsystem, Polizeibedrift und "
+                    "Rechtsprechungsverfolgung"
+                ),
+                reason="Rechtsbegriffe verfälscht",
+            ),
+        ]
+
+        repaired_text, _ = _pronunciation_repair(text, issues)
+
+        self.assertIn("Peh-Ah-Geh", repaired_text)
+        self.assertIn("Peh-Oh-Geh", repaired_text)
+        self.assertIn("S-T-P-O", repaired_text)
+        self.assertIn("O-Wi-G", repaired_text)
+        self.assertIn("Ziel – Richtung", repaired_text)
+        self.assertIn("Tränn-System", repaired_text)
+        self.assertIn("Polizei-Begriff", repaired_text)
+        self.assertIn("re-pressive Verfolgung", repaired_text)
+
+    def test_pronunciation_repair_avoids_towing_minimal_pairs(self) -> None:
+        text = (
+            "Die beiden Vorgänge können äußerlich ähnlich aussehen. "
+            "Die Zeitfragen bleiben dabei getrennt: Einmal die Erreichbarkeit "
+            "des Fahrers, einmal die drei vollen Tage beim mobilen Halteverbot."
+        )
+        issues = [
+            AudioIssue(
+                segment_id="segment-003",
+                expected="Die beiden Vorgänge können äußerlich ähnlich aussehen",
+                observed="Die beiden Vorgänger können äußerlich ähnlich aussehen",
+                reason="Vorgänge werden als Vorgänger verstanden.",
+            ),
+            AudioIssue(
+                segment_id="segment-030",
+                expected="einmal die Erreichbarkeit des Fahrers",
+                observed="einmal die Erreichbarkeit des Vaters",
+                reason="Fahrer wird als Vater verstanden.",
+            ),
+        ]
+
+        repaired_text, _ = _pronunciation_repair(text, issues)
+
+        self.assertIn("Die beiden Abläufe können äußerlich ähnlich wirken", repaired_text)
+        self.assertIn(
+            "Erstens: Ist die Person am Steuer schnell erreichbar?",
+            repaired_text,
+        )
+        self.assertIn(
+            "Zweitens: Sind beim mobilen Halteverbot drei volle Tage eingehalten?",
+            repaired_text,
+        )
+
+    def test_pronunciation_repair_avoids_naeher_mehr_minimal_pair(self) -> None:
+        text = (
+            "Welche Auffassung letztlich vorzugswürdig ist, begründet unser "
+            "Material nicht näher. Mehr sollten wir deshalb nicht hineinlesen."
+        )
+        issues = [
+            AudioIssue(
+                segment_id="segment-019",
+                expected="begründet unser Material nicht näher",
+                observed="begründet unser Material nicht mehr",
+                reason="Die Aussage über den Quellenumfang verändert sich.",
+            )
+        ]
+
+        repaired_text, _ = _pronunciation_repair(text, issues)
+
+        self.assertIn(
+            "Unser Material entscheidet nicht, welche Auffassung vorzugswürdig ist.",
+            repaired_text,
+        )
+        self.assertNotIn("nicht näher", repaired_text)
+
+    def test_pronunciation_repair_preserves_omitted_final_list_item(self) -> None:
+        text = (
+            "Informationserhebung; besondere Anordnungen; Gewahrsam; "
+            "Durchsuchung; schließlich Daten. Danach suche ich die "
+            "Standardbefugnis."
+        )
+        issues = [
+            AudioIssue(
+                segment_id="segment-016",
+                expected="schließlich Daten",
+                observed="omitted",
+                reason="Der letzte Listenpunkt fehlt.",
+            ),
+            AudioIssue(
+                segment_id="segment-016",
+                expected="Standardbefugnis",
+                observed="Standardgefugnis",
+                reason="Der Rechtsbegriff ist unverständlich.",
+            ),
+        ]
+
+        repaired_text, _ = _pronunciation_repair(text, issues)
+
+        self.assertIn("schließlich kommen die Daten", repaired_text)
+        self.assertIn("Standard-Befugnis", repaired_text)
+
+    def test_pronunciation_repair_enunciates_source_excerpt(self) -> None:
+        text = "Der Ausschnitt liefert daher kein vollständiges Ergebnis."
+        issues = [
+            AudioIssue(
+                segment_id="segment-023",
+                expected="Der Ausschnitt liefert",
+                observed="Der Ausmit liefert",
+                reason="Die Quellenbegrenzung ist unverständlich.",
+            )
+        ]
+
+        repaired_text, _ = _pronunciation_repair(text, issues)
+
+        self.assertIn("Aus-Schnitt", repaired_text)
+
+    def test_pronunciation_repair_avoids_gibt_gib_minimal_pair(self) -> None:
+        text = "Gibt mir das Skript eine feste Zahl für die Klausur?"
+        issues = [
+            AudioIssue(
+                segment_id="segment-008",
+                expected="Gibt mir das Skript eine feste Zahl",
+                observed="Gib mir das Skript eine feste Zahl",
+                reason="Die Frage klingt wie ein Imperativ.",
+            )
+        ]
+
+        repaired_text, _ = _pronunciation_repair(text, issues)
+
+        self.assertEqual(
+            repaired_text,
+            "Nennt das Skript eine feste Zahl für die Klausur?",
+        )
+
+    def test_pronunciation_repair_enunciates_vorrangloesung(self) -> None:
+        text = "Das klingt nach einer Vorranglösung."
+        issues = [
+            AudioIssue(
+                segment_id="segment-013",
+                expected="Vorranglösung",
+                observed="hervorragenden Lösung",
+                reason="Die rechtliche Einordnung ist verändert.",
+            )
+        ]
+
+        repaired_text, _ = _pronunciation_repair(text, issues)
+
+        self.assertIn("Vor-Rang-Lösung", repaired_text)
+
+    def test_pronunciation_repair_expands_bayversg(self) -> None:
+        text = "In dieser Lage gilt ausschließlich das BayVersG."
+        issues = [
+            AudioIssue(
+                segment_id="segment-014",
+                expected="BayVersG",
+                observed="Beifers-G",
+                reason="Die Gesetzesabkürzung ist unverständlich.",
+            )
+        ]
+
+        repaired_text, _ = _pronunciation_repair(text, issues)
+
+        self.assertEqual(
+            repaired_text,
+            "In dieser Lage gilt ausschließlich das Bayerische Versammlungsgesetz.",
+        )
+
+    def test_pronunciation_repair_preserves_sicherstellung_recap(self) -> None:
+        text = (
+            "Zwei Schritte, ein Sicherstellungsvorgang. Nimm vier Leitfragen mit. "
+            "Die offene Herausgabe ist zu trennen, während das Skript den "
+            "heimlichen Zugriff Art. 45 zuordnet."
+        )
+        issues = [
+            AudioIssue(
+                segment_id="segment-003",
+                expected="Zwei Schritte, ein Sicherstellungsvorgang.",
+                observed="Passage fehlt.",
+                reason="Der Merksatz fehlt.",
+            ),
+            AudioIssue(
+                segment_id="segment-026",
+                expected="Leitfragen",
+                observed="Neitragen",
+                reason="Der Lernbegriff ist unverständlich.",
+            ),
+            AudioIssue(
+                segment_id="segment-026",
+                expected=(
+                    "während das Skript den heimlichen Zugriff Art. 45 zuordnet"
+                ),
+                observed=(
+                    "während das Krypt den heimlichen Zugriff Artikel 45 zuordnet"
+                ),
+                reason="Der Quellenbezug ist unverständlich.",
+            ),
+        ]
+
+        repaired_text, _ = _pronunciation_repair(text, issues)
+
+        self.assertIn(
+            "Merke dir: Zwei Schritte bilden zusammen einen Sicherstellungsvorgang.",
+            repaired_text,
+        )
+        self.assertIn("Leit-Fragen", repaired_text)
+        self.assertIn(
+            "während der bereitgestellte Text den heimlichen Zugriff Artikel 45 zuordnet",
+            repaired_text,
+        )
+
+    def test_pronunciation_repair_unglues_skript_article_reference(self) -> None:
+        text = "Den heimlichen Zugriff ordnet das Skript Art. 45 PAG zu."
+        issues = [
+            AudioIssue(
+                segment_id="segment-017",
+                expected=text,
+                observed=(
+                    "Den heimlichen Zugriff ordnet das Kryptoartikel 45 PAG zu."
+                ),
+                reason="Quellenbezug und Artikelangabe sind verschmolzen.",
+            )
+        ]
+
+        repaired_text, _ = _pronunciation_repair(text, issues)
+
+        self.assertEqual(
+            repaired_text,
+            (
+                "Der bereitgestellte Text ordnet den heimlichen Zugriff "
+                "Artikel 45 PAG zu."
+            ),
+        )
+
+    def test_pronunciation_repair_separates_competing_author_attributions(self) -> None:
+        text = (
+            "Schmidbauer und Steiner gehen von höchstens drei Stunden aus, "
+            "Möstl und Schwabenbauer nur von einer Stunde."
+        )
+        issues = [
+            AudioIssue(
+                segment_id="segment-009",
+                expected=text,
+                observed=(
+                    "Schmidtbauer und Steiner gehen von höchstens drei Stunden aus, "
+                    "Nästle und Schwabenbauer nur von einer Stunde."
+                ),
+                reason="Die Autorenzuordnung ist verfälscht.",
+            )
+        ]
+
+        repaired_text, _ = _pronunciation_repair(text, issues)
+
+        self.assertEqual(
+            repaired_text,
+            (
+                "Nach Schmidbauer, geschrieben S-C-H-M-I-D-B-A-U-E-R, und "
+                "Steiner sind es höchstens drei Stunden. Nach Möstl, geschrieben "
+                "M-Ö-S-T-L, und Schwabenbauer ist es nur eine Stunde."
+            ),
+        )
+
+    def test_pronunciation_repair_restores_author_rephrasing_from_partial_issue(self) -> None:
+        text = (
+            "Schmidbauer und Steiner gehen von höchstens drei Stunden aus, "
+            "Möstl und Schwabenbauer nur von einer Stunde."
+        )
+        issues = [
+            AudioIssue(
+                segment_id="segment-009",
+                expected="Möstl und Schwabenbauer",
+                observed="Möstel und Schwabenbauer",
+                reason="Die Autorenzuordnung ist verfälscht.",
+            )
+        ]
+
+        repaired_text, _ = _pronunciation_repair(text, issues)
+
+        self.assertEqual(
+            repaired_text,
+            (
+                "Nach Schmidbauer, geschrieben S-C-H-M-I-D-B-A-U-E-R, und "
+                "Steiner sind es höchstens drei Stunden. Nach Möstl, geschrieben "
+                "M-Ö-S-T-L, und Schwabenbauer ist es nur eine Stunde."
+            ),
+        )
+
     def test_segment_adjudication_avoids_false_positive_tts_repair(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -515,6 +865,26 @@ class PipelineResumeTests(unittest.TestCase):
                 "Die Bekanntgabe ist maßgeblich.",
                 "Was folgt daraus?",
             ])
+
+    def test_consecutive_audio_repairs_keep_prior_text_repair(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "skript.pdf"
+            create_pdf(source)
+            config = PipelineConfig(input_pdf=source, output_base=root / "out")
+            gateway = CumulativeRepairGateway()
+
+            run_pipeline(
+                config,
+                gateway,
+                resolve_ffmpeg(None),
+                minimum_duration_seconds=1.0,
+            )
+
+            self.assertEqual(
+                gateway.tts_texts[-1],
+                "schließlich kommen die Daten. Standard-Befugnis.",
+            )
 
     def test_empty_segment_transcript_is_treated_as_an_omission(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

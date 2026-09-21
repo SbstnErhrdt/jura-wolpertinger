@@ -38,7 +38,9 @@ import type {
   LearningDashboard,
   LearningImportResult,
   LearningReviewEvent,
+  LearningStatistics,
   LearningTask,
+  PodcastProgress,
   UserProfile,
   LegalArea,
   ReviewCard,
@@ -55,6 +57,9 @@ import {
   examTypeSchema,
   learningExportFileSchema,
   learningImportResultSchema,
+  learningStatisticsSchema,
+  podcastCatalogSchema,
+  podcastProgressSchema,
   learningCardQualityReasonSchema,
   learningCardQualityStatusSchema,
   learningTaskStatusSchema,
@@ -62,6 +67,8 @@ import {
   reviewRatingSchema
 } from '@shared/schemas'
 import { selectExamRevisionIdsForDeletion } from '@shared/revisionRetention'
+import { BAYBO_PODCAST_CATALOG } from '@shared/podcasts/baybo-april-2026'
+import { executeStudyCommand, type StoredStudyRun } from '@shared/flashcardStudyEngine'
 
 const BROWSER_STORE_KEY = 'jura-wolpertinger-browser-dev-v1'
 const AI_CORRECTION_NOT_IMPLEMENTED_MESSAGE = 'Diese Funktion ist derzeit nicht freigeschaltet.'
@@ -87,6 +94,7 @@ type BrowserStore = {
   learningCards: LearningCard[]
   learningCardQualityEvents: LearningCardQualityEvent[]
   learningReviewEvents: LearningReviewEvent[]
+  studyRuns: StoredStudyRun[]
   learningSchedules: Array<{
     userId: string
     cardId: string
@@ -96,11 +104,13 @@ type BrowserStore = {
     lastRating: ReviewRating | null
     lastReviewedAt: string | null
   }>
+  podcastProgress: Array<PodcastProgress & { userId: string }>
   userProfiles: UserProfile[]
 }
 
 let browserDevApi: AppApi | null = null
 let cloudLearningApi: AppApi | null = null
+let browserDevFallbackReported = false
 
 export const isElectronApiAvailable = Boolean(window.juraApi)
 export const api: AppApi = getApi()
@@ -112,14 +122,16 @@ export function getApi(): AppApi {
     cloudLearningApi ??= createCloudLearningApi(browserDevApi)
     return cloudLearningApi
   }
+  if (!browserDevFallbackReported) {
+    console.warn(
+      'Electron API bridge is not available. Using browser-only localStorage fallback for development.'
+    )
+    browserDevFallbackReported = true
+  }
   return browserDevApi
 }
 
 function createBrowserDevApi(): AppApi {
-  console.warn(
-    'Electron API bridge is not available. Using browser-only localStorage fallback for development.'
-  )
-
   return {
     async getAppVersion() {
       return packageJson.version
@@ -639,7 +651,7 @@ function createBrowserDevApi(): AppApi {
       const activityDays = new Set(
         [
           ...store.learningReviewEvents
-            .filter((event) => event.userId === user.id)
+            .filter((event) => event.userId === user.id && !event.voidedAt)
             .map((event) => localDateKey(new Date(event.reviewedAt))),
           ...store.submissions
             .filter((submission) => submission.userId === user.id)
@@ -654,6 +666,66 @@ function createBrowserDevApi(): AppApi {
         freeDaysRemainingThisWeek: Math.max(0, 2 - countBrowserMissedDaysThisWeek(activityDays)),
         learnedToday: activityDays.has(localDateKey(new Date()))
       } satisfies LearningDashboard
+    },
+    async getLearningStatistics(): Promise<LearningStatistics> {
+      const store = readStore()
+      const user = ensureBrowserUser(store)
+      const cards = store.learningCards.filter(
+        (card) => card.userId === user.id && !card.isArchived
+      )
+      const reviews = store.learningReviewEvents.filter((event) => event.userId === user.id && !event.voidedAt)
+      const latestByCard = new Map<string, LearningReviewEvent>()
+      for (const review of reviews) {
+        const current = latestByCard.get(review.cardId)
+        if (!current || current.reviewedAt <= review.reviewedAt) latestByCard.set(review.cardId, review)
+      }
+      const activeCardIds = new Set(cards.map((card) => card.id))
+      const activityKeys = lastLocalDateKeys(14)
+      const activityCounts = new Map(activityKeys.map((date) => [date, 0]))
+      for (const review of reviews) {
+        const date = localDateKey(new Date(review.reviewedAt))
+        if (activityCounts.has(date)) activityCounts.set(date, (activityCounts.get(date) ?? 0) + 1)
+      }
+      const reviewDays = new Set(reviews.map((review) => localDateKey(new Date(review.reviewedAt))))
+      const last7Days = new Set(activityKeys.slice(-7))
+
+      return learningStatisticsSchema.parse({
+        totalCards: cards.length,
+        reviewedCards: [...latestByCard.keys()].filter((cardId) => activeCardIds.has(cardId)).length,
+        reviewCountTotal: reviews.length,
+        reviewsToday: activityCounts.get(activityKeys.at(-1) ?? '') ?? 0,
+        reviewsLast7Days: reviews.filter((review) =>
+          last7Days.has(localDateKey(new Date(review.reviewedAt)))
+        ).length,
+        streakDays: calculateBrowserStreakDays(reviewDays),
+        activeDaysLast14: [...activityCounts.values()].filter((count) => count > 0).length,
+        activity: activityKeys.map((date) => ({ date, reviews: activityCounts.get(date) ?? 0 })),
+        ratingCounts: ([1, 2, 3, 4] as const).map((rating) => ({
+          rating,
+          count: cards.filter((card) => latestByCard.get(card.id)?.rating === rating).length
+        })),
+        collections: store.learningCollections
+          .filter((collection) => collection.userId === user.id)
+          .map((collection) => {
+            const collectionCards = cards.filter((card) => card.collectionId === collection.id)
+            const ratings = collectionCards
+              .map((card) => latestByCard.get(card.id)?.rating)
+              .filter((rating): rating is ReviewRating => rating !== undefined)
+            return {
+              id: collection.id,
+              name: collection.name,
+              cardCount: collectionCards.length,
+              reviewedCards: ratings.length,
+              dueCount: collectionCards.filter(
+                (card) => browserScheduleFor(store, user.id, card.id).dueAt <= nowIso()
+              ).length,
+              averageRating: ratings.length
+                ? Math.round((ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length) * 100) /
+                  100
+                : null
+            }
+          })
+      })
     },
     async exportLearningDecksJson() {
       const store = readStore()
@@ -881,30 +953,30 @@ function createBrowserDevApi(): AppApi {
     async recordReview(input: RecordReviewInput): Promise<RecordReviewResult> {
       const store = readStore()
       const user = ensureBrowserUser(store)
-      const rating = reviewRatingSchema.parse(input.rating)
-      const card = store.learningCards.find((candidate) => candidate.id === input.cardId && candidate.userId === user.id)
-      if (!card) throw new Error(`Learning card not found: ${input.cardId}`)
-      const schedule = browserScheduleFor(store, user.id, card.id)
-      const reps = schedule.reps + 1
-      const lapses = schedule.lapses + (rating === 1 ? 1 : 0)
-      const { nextDueAt, intervalLabel } = scheduleBrowserNextReview(rating, reps)
-      const event: LearningReviewEvent = {
-        schemaVersion: 1,
-        id: newId(),
-        userId: user.id,
-        cardId: card.id,
-        rating,
-        reviewedAt: nowIso(),
-        elapsedMs: input.elapsedMs ?? null
-      }
-      store.learningReviewEvents.push(event)
-      schedule.dueAt = nextDueAt
-      schedule.reps = reps
-      schedule.lapses = lapses
-      schedule.lastRating = rating
-      schedule.lastReviewedAt = event.reviewedAt
+      const result = recordBrowserReview(store, user.id, input)
       writeStore(store)
-      return { event, nextDueAt, intervalLabel }
+      return result
+    },
+    async studyFlashcards(input) {
+      const store = readStore()
+      const user = ensureBrowserUser(store)
+      const result = executeStudyCommand(input, {
+        userId: user.id, runs: store.studyRuns, now: nowIso, newId,
+        collectionIds: () => store.learningCollections.filter((collection) => collection.userId === user.id).map((collection) => collection.id),
+        collections: () => store.learningCollections.filter((collection) => collection.userId === user.id),
+        cards: (collectionId) => store.learningCards.filter((card) => card.userId === user.id && card.collectionId === collectionId).map((card) => ({ ...card, ...browserScheduleFor(store, user.id, card.id), ...browserCardQualityFor(store, user.id, card.id) })),
+        capture: (cardId) => ({ ...browserScheduleFor(store, user.id, cardId) }),
+        record: (review) => recordBrowserReview(store, user.id, review),
+        undo: (review, previous) => {
+          const events = store.learningReviewEvents.filter((event) => event.userId === user.id && event.cardId === review.event.cardId && !event.voidedAt)
+          const latest = events.at(-1)
+          if (latest?.id !== review.event.id) throw new Error('Die Karte wurde inzwischen erneut bewertet. Diese Bewertung lässt sich nicht mehr zurücknehmen.')
+          latest.voidedAt = nowIso()
+          Object.assign(browserScheduleFor(store, user.id, review.event.cardId), previous)
+        }
+      })
+      if (input.action !== 'catalog') writeStore(store)
+      return result
     },
     async rateLearningCardQuality(input: RateLearningCardQualityInput) {
       const store = readStore()
@@ -930,6 +1002,61 @@ function createBrowserDevApi(): AppApi {
         ...card,
         ...browserCardQualityFor(store, user.id, card.id)
       }
+    },
+    async getPodcastCatalog() {
+      const store = readStore()
+      const user = ensureBrowserUser(store)
+      const progressByEpisode = new Map(
+        store.podcastProgress
+          .filter((progress) => progress.userId === user.id)
+          .map((progress) => [progress.episodeId, progress])
+      )
+      return podcastCatalogSchema.parse({
+        legalAreas: BAYBO_PODCAST_CATALOG.legalAreas.map((area) => ({
+          ...area,
+          series: area.series.map((series) => ({
+            ...series,
+            episodes: series.episodes.map((episode) => ({
+              ...episode,
+              progress: progressByEpisode.get(episode.id) ?? null
+            }))
+          }))
+        }))
+      })
+    },
+    async savePodcastProgress(input) {
+      const store = readStore()
+      const user = ensureBrowserUser(store)
+      const durationSeconds = Math.max(0, input.durationSeconds)
+      const positionSeconds = Math.min(
+        Math.max(0, input.positionSeconds),
+        durationSeconds || Infinity
+      )
+      const existing = store.podcastProgress.find(
+        (progress) => progress.userId === user.id && progress.episodeId === input.episodeId
+      )
+      const completed =
+        Boolean(existing?.completed) ||
+        input.completed ||
+        (durationSeconds > 0 &&
+          (positionSeconds / durationSeconds >= 0.95 || durationSeconds - positionSeconds <= 30))
+      const updatedAt = nowIso()
+      const progress = {
+        userId: user.id,
+        episodeId: input.episodeId,
+        positionSeconds,
+        durationSeconds,
+        completed,
+        lastPlayedAt: updatedAt,
+        updatedAt
+      }
+      if (existing) {
+        Object.assign(existing, progress)
+      } else {
+        store.podcastProgress.push(progress)
+      }
+      writeStore(store)
+      return podcastProgressSchema.parse(progress)
     },
     async addAttachment() {
       console.warn('Attachments are only available in the Electron app window.')
@@ -1211,7 +1338,9 @@ function emptyStore(): BrowserStore {
     learningCards: [],
     learningCardQualityEvents: [],
     learningReviewEvents: [],
+    studyRuns: [],
     learningSchedules: [],
+    podcastProgress: [],
     userProfiles: []
   }
 }
@@ -1582,6 +1711,24 @@ function browserCollectionsForCurrentUser(store: BrowserStore): LearningCollecti
     })
 }
 
+function recordBrowserReview(store: BrowserStore, userId: string, input: RecordReviewInput): RecordReviewResult {
+  const rating = reviewRatingSchema.parse(input.rating)
+  const card = store.learningCards.find((candidate) => candidate.id === input.cardId && candidate.userId === userId)
+  if (!card) throw new Error('Diese Karte ist nicht verfügbar.')
+  const schedule = browserScheduleFor(store, userId, card.id)
+  const existing = input.clientEventId ? store.learningReviewEvents.find((event) => event.id === input.clientEventId) : null
+  if (existing) {
+    if (existing.userId !== userId || existing.cardId !== card.id || existing.rating !== rating || existing.voidedAt) throw new Error('Diese Bewertung wurde bereits anders verwendet.')
+    return { event: existing, nextDueAt: schedule.dueAt, intervalLabel: 'Gespeichert' }
+  }
+  const reps = schedule.reps + 1
+  const { nextDueAt, intervalLabel } = scheduleBrowserNextReview(rating, reps)
+  const event: LearningReviewEvent = { schemaVersion: 1, id: input.clientEventId ?? newId(), userId, cardId: card.id, rating, reviewedAt: nowIso(), elapsedMs: input.elapsedMs ?? null }
+  store.learningReviewEvents.push(event)
+  Object.assign(schedule, { dueAt: nextDueAt, reps, lapses: schedule.lapses + (rating === 1 ? 1 : 0), lastRating: rating, lastReviewedAt: event.reviewedAt })
+  return { event, nextDueAt, intervalLabel }
+}
+
 function scheduleBrowserNextReview(
   rating: ReviewRating,
   reps: number
@@ -1620,6 +1767,16 @@ function localDateKey(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
+}
+
+function lastLocalDateKeys(count: number): string[] {
+  const today = new Date()
+  return Array.from({ length: count }, (_, index) => {
+    const date = new Date(today)
+    date.setHours(12, 0, 0, 0)
+    date.setDate(today.getDate() - (count - index - 1))
+    return localDateKey(date)
+  })
 }
 
 function countBrowserMissedDaysThisWeek(activityDays: Set<string>): number {

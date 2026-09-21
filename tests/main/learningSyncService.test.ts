@@ -34,11 +34,21 @@ describe('learning table sync', () => {
       tags: ['lokal']
     })
     services.recordReview({ cardId: localCard.id, rating: 3, elapsedMs: 1000 })
+    const podcastEpisodeId = 'ba7b2026-0400-4000-8000-000000000101'
+    services.savePodcastProgress({
+      episodeId: podcastEpisodeId,
+      positionSeconds: 100,
+      durationSeconds: 700,
+      completed: false
+    })
 
     const oldDate = '2026-01-01T00:00:00.000Z'
     services.db.prepare('UPDATE learning_collections SET updated_at = ? WHERE id = ?').run(oldDate, collection.id)
     services.db.prepare('UPDATE learning_cards SET updated_at = ? WHERE id = ?').run(oldDate, localCard.id)
     services.db.prepare('UPDATE learning_card_schedules SET updated_at = ? WHERE card_id = ?').run(oldDate, localCard.id)
+    services.db
+      .prepare('UPDATE podcast_episode_progress SET updated_at = ?, last_played_at = ? WHERE episode_id = ?')
+      .run('2026-02-01T00:00:00.000Z', '2026-02-01T00:00:00.000Z', podcastEpisodeId)
 
     const cloudState: CloudLearningSyncState = {
       collections: [
@@ -118,6 +128,17 @@ describe('learning table sync', () => {
           createdAt: '2026-02-01T00:00:00.000Z',
           updatedAt: '2026-02-01T00:00:00.000Z'
         }
+      ],
+      podcastProgress: [
+        {
+          userId: '00000000-0000-4000-8000-0000000000a1',
+          episodeId: podcastEpisodeId,
+          positionSeconds: 180,
+          durationSeconds: 700,
+          completed: false,
+          lastPlayedAt: '2026-02-01T00:00:00.000Z',
+          updatedAt: '2026-02-01T00:00:00.000Z'
+        }
       ]
     }
 
@@ -128,6 +149,7 @@ describe('learning table sync', () => {
     })
 
     expect(result.cardsImportedOrUpdated).toBe(2)
+    expect(result.podcastProgressImportedOrUpdated).toBe(1)
     expect(services.listLearningCollections().find((candidate) => candidate.id === collection.id)?.name).toBe('BGB Allgemeiner Teil')
     expect(services.listLearningCards().find((candidate) => candidate.id === localCard.id)).toEqual(
       expect.objectContaining({
@@ -145,6 +167,9 @@ describe('learning table sync', () => {
     expect(services.listLearningCards(collection.id)).toEqual(
       expect.arrayContaining([expect.objectContaining({ title: 'Nur online', tags: ['neu'] })])
     )
+    expect(
+      services.getPodcastCatalog().legalAreas[0].series[0].episodes[0].progress
+    ).toEqual(expect.objectContaining({ positionSeconds: 180 }))
 
     const payload = buildCloudLearningStateFromLocal({
       db: services.db,
@@ -174,5 +199,12 @@ describe('learning table sync', () => {
         })
       ])
     )
+    expect(payload.podcastProgress).toEqual([
+      expect.objectContaining({
+        userId: '00000000-0000-4000-8000-0000000000a1',
+        episodeId: podcastEpisodeId,
+        positionSeconds: 180
+      })
+    ])
   })
 })

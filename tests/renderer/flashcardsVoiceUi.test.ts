@@ -17,12 +17,12 @@ describe('flashcards voice UI contract', () => {
   it('renders voice status and assessment result copy', () => {
     expect(source).toContain('Hört zu')
     expect(source).toContain('Bewertet')
-    expect(source).toContain('Antwort konnte nicht sicher bewertet werden')
+    expect(source).toContain('bestätige deine eigene Einschätzung unten')
+    expect(source).toContain('record_review: false')
   })
 
   it('locks review controls and disposes late voice starts while a conversation is active', () => {
-    expect(source).toContain(':disabled="!canGoPrevious || ratingBusy || voiceInProgress"')
-    expect(source).toContain(':disabled="ratingBusy || voiceInProgress"')
+    expect(source).toContain(':disabled="ratingBusy || voiceInProgress || Boolean(pendingStudy)"')
     expect(source).toContain(':disabled="voiceInProgress"')
     expect(source).toContain('if (voiceInProgress.value) return')
     expect(source).toContain('voiceRequestGeneration')
