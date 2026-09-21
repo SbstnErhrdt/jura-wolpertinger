@@ -27,6 +27,7 @@
 }
 
 html {
+  overflow-x: clip;
   scroll-behavior: smooth;
 }
 
@@ -35,6 +36,7 @@ body {
     radial-gradient(circle at top left, rgba(0, 90, 132, 0.12), transparent 34rem),
     linear-gradient(180deg, #edf6fa 0%, #f8fbfd 42%, #eef6fa 100%);
   margin: 0;
+  overflow-x: clip;
 }
 
 a {
