@@ -313,6 +313,7 @@ describe('validateMacReleaseArtifacts', () => {
         inputDirectory: outputDirectory,
         platform: 'mac-arm64',
         expectedArch: 'arm64',
+        hostArch: 'arm64',
         env: {},
         runCommand,
         pathExists: async () => true

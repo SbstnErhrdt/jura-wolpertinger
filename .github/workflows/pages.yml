@@ -34,7 +34,7 @@ jobs:
           extended: true
 
       - name: Build site
-        run: hugo --source website --destination public --minify
+        run: hugo --source website --destination "$GITHUB_WORKSPACE/public" --minify
 
       - name: Configure Pages
         uses: actions/configure-pages@v6

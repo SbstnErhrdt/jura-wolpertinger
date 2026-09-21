@@ -39,6 +39,9 @@ jobs:
       - name: Install dependencies
         run: corepack pnpm install --frozen-lockfile
 
+      - name: Install Chromium for browser-based unit tests
+        run: corepack pnpm exec playwright install --with-deps chromium
+
       - name: Typecheck
         run: corepack pnpm run typecheck
 
