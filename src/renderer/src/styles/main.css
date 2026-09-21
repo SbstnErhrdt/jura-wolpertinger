@@ -15,6 +15,12 @@
   --color-wolpi-950: #003750;
 }
 
+.app-loading-state,
+.app-loading-state-content {
+  min-width: 0;
+  width: 100%;
+}
+
 /* Learning statistics, podcast library and persistent audio player */
 .sidebar-account-trigger {
   align-items: center;
