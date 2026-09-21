@@ -8,6 +8,25 @@
       </div>
     </header>
 
+    <AppLoadingState v-if="loading" label="Auswertung wird geladen">
+      <div class="analytics-loading-skeleton">
+        <USkeleton class="analytics-loading-filters" />
+        <div class="analytics-loading-metrics">
+          <USkeleton v-for="index in 4" :key="index" />
+        </div>
+        <div class="analytics-loading-charts">
+          <USkeleton v-for="index in 2" :key="index" />
+        </div>
+      </div>
+    </AppLoadingState>
+    <UAlert v-else-if="loadError" color="error" :description="loadError">
+      <template #actions>
+        <UButton type="button" color="neutral" variant="outline" @click="load">Erneut versuchen</UButton>
+      </template>
+    </UAlert>
+
+    <template v-else>
+
     <section class="analytics-filters">
       <div class="analytics-filter-grid">
         <label class="analytics-field">
@@ -186,7 +205,7 @@
             <h3>{{ task.title }}</h3>
             <p v-if="task.detail">{{ task.detail }}</p>
           </div>
-          <UButton color="neutral" variant="outline" type="button" @click="() => void markTaskDone(task.id)">Erledigt</UButton>
+          <UButton color="neutral" variant="outline" type="button" :loading="taskBusyId === task.id" @click="() => void markTaskDone(task.id)">Erledigt</UButton>
         </article>
       </div>
       <p v-if="hiddenLearningTaskCount > 0" class="analytics-learning-more">
@@ -221,6 +240,7 @@
       </div>
       <p v-else class="empty-state">Keine Daten für die aktuelle Auswahl.</p>
     </section>
+    </template>
   </section>
 </template>
 
@@ -231,6 +251,7 @@ import type { LearningTask } from '@shared/schemas'
 import { api } from '../api'
 import TagInput from '../components/TagInput.vue'
 import AppBreadcrumb from '../components/ui/AppBreadcrumb.vue'
+import AppLoadingState from '../components/ui/AppLoadingState.vue'
 import type { AppBreadcrumbItem } from '../ui/breadcrumbs'
 
 type RangePresetId = '3m' | '6m' | '12m'
@@ -269,6 +290,9 @@ const rangePresets: Array<{ id: RangePresetId; label: string; months: number }> 
 const entries = ref<AnalyticsEntry[]>([])
 const learningTasks = ref<LearningTask[]>([])
 const learningTasksError = ref('')
+const loading = ref(true)
+const loadError = ref('')
+const taskBusyId = ref<string | null>(null)
 const filters = ref<AnalyticsFilters>(loadFilters())
 const breadcrumbItems: AppBreadcrumbItem[] = [
   { label: 'Home', to: { name: 'home' } },
@@ -513,32 +537,43 @@ const monthlyBars = computed(() => {
 })
 
 async function load(): Promise<void> {
-  const [entriesResult, tasksResult] = await Promise.allSettled([
-    api.listAnalyticsEntries(),
-    api.listLearningTasks()
-  ])
-  if (entriesResult.status === 'fulfilled') {
-    entries.value = entriesResult.value
-  } else {
-    throw entriesResult.reason
-  }
+  loading.value = entries.value.length === 0
+  loadError.value = ''
+  try {
+    const [entriesResult, tasksResult] = await Promise.allSettled([
+      api.listAnalyticsEntries(),
+      api.listLearningTasks()
+    ])
+    if (entriesResult.status === 'fulfilled') {
+      entries.value = entriesResult.value
+    } else {
+      throw entriesResult.reason
+    }
 
-  if (tasksResult.status === 'fulfilled') {
-    learningTasks.value = tasksResult.value
-    learningTasksError.value = ''
-  } else {
-    learningTasks.value = []
-    learningTasksError.value = 'Lernaufgaben konnten nicht geladen werden.'
+    if (tasksResult.status === 'fulfilled') {
+      learningTasks.value = tasksResult.value
+      learningTasksError.value = ''
+    } else {
+      learningTasks.value = []
+      learningTasksError.value = 'Lernaufgaben konnten nicht geladen werden.'
+    }
+  } catch (error) {
+    loadError.value = error instanceof Error ? error.message : 'Die Auswertung konnte nicht geladen werden.'
+  } finally {
+    loading.value = false
   }
 }
 
 async function markTaskDone(taskId: string): Promise<void> {
+  taskBusyId.value = taskId
   try {
     await api.updateLearningTaskStatus(taskId, 'done')
     learningTasks.value = await api.listLearningTasks()
     learningTasksError.value = ''
   } catch {
     learningTasksError.value = 'Lernaufgabe konnte nicht aktualisiert werden.'
+  } finally {
+    taskBusyId.value = null
   }
 }
 

@@ -2,7 +2,18 @@
   <section class="correction-page">
     <AppBreadcrumb :items="activeBreadcrumbItems" />
 
-    <section class="correction-view">
+    <AppLoadingState v-if="loading" label="Bewertungen werden geladen">
+      <div class="correction-loading-skeleton">
+        <USkeleton class="correction-loading-list" />
+        <USkeleton class="correction-loading-detail" />
+      </div>
+    </AppLoadingState>
+    <UAlert v-else-if="loadError" color="error" :description="loadError">
+      <template #actions>
+        <UButton type="button" color="neutral" variant="outline" @click="load">Erneut versuchen</UButton>
+      </template>
+    </UAlert>
+    <section v-else class="correction-view">
       <aside class="correction-list-panel">
       <div class="correction-list-header">
         <p class="eyebrow">Bewertung</p>
@@ -46,7 +57,7 @@
             <UButton color="neutral" variant="outline" :to="{ name: 'exam', params: { id: submission.examId } }">
               Zur Prüfung
             </UButton>
-            <UButton @click="saveCorrection">Speichern</UButton>
+            <UButton :loading="saveBusy" @click="saveCorrection">Speichern</UButton>
           </div>
         </header>
 
@@ -109,7 +120,7 @@
                   <UButton type="button" color="neutral" variant="outline" @click="clearSelectedText">
                     Abbrechen
                   </UButton>
-                  <UButton type="button" :disabled="!canAddComment" @click="addComment">
+                  <UButton type="button" :loading="commentBusy" :disabled="!canAddComment" @click="addComment">
                     Kommentar setzen
                   </UButton>
                 </div>
@@ -178,6 +189,7 @@ import type { SubmissionDetails } from '@shared/ipc'
 import type { Correction, InlineComment } from '@shared/schemas'
 import { api } from '../api'
 import AppBreadcrumb from '../components/ui/AppBreadcrumb.vue'
+import AppLoadingState from '../components/ui/AppLoadingState.vue'
 import type { AppBreadcrumbItem } from '../ui/breadcrumbs'
 import { renderTiptapHtml } from '../utils/renderTiptap'
 
@@ -194,6 +206,11 @@ const route = useRoute()
 const submission = ref<SubmissionDetails | null>(null)
 const correction = ref<Correction | null>(null)
 const submittedItems = ref<SubmittedItem[]>([])
+const loading = ref(true)
+const loadError = ref('')
+const loaded = ref(false)
+const saveBusy = ref(false)
+const commentBusy = ref(false)
 const scoreInput = ref('')
 const gradingComment = ref('')
 const selectedText = ref('')
@@ -248,23 +265,33 @@ watch(
 )
 
 async function load(): Promise<void> {
-  await loadSubmittedItems()
-  const submissionId = typeof route.params.id === 'string' ? route.params.id : null
-  if (!submissionId) {
-    submission.value = null
-    correction.value = null
-    scoreInput.value = ''
-    gradingComment.value = ''
-    return
-  }
+  loading.value = !loaded.value
+  loadError.value = ''
+  try {
+    await loadSubmittedItems()
+    const submissionId = typeof route.params.id === 'string' ? route.params.id : null
+    if (!submissionId) {
+      submission.value = null
+      correction.value = null
+      scoreInput.value = ''
+      gradingComment.value = ''
+      loaded.value = true
+      return
+    }
 
-  submission.value = await api.getSubmission(submissionId)
-  correction.value =
-    submission.value.corrections[0] ?? (await api.createCorrection(submission.value.id))
-  scoreInput.value = formatScoreInput(correction.value.score.points)
-  gradingComment.value = correction.value.gradingComment
-  await nextTick()
-  updateCommentPositions()
+    submission.value = await api.getSubmission(submissionId)
+    correction.value =
+      submission.value.corrections[0] ?? (await api.createCorrection(submission.value.id))
+    scoreInput.value = formatScoreInput(correction.value.score.points)
+    gradingComment.value = correction.value.gradingComment
+    loaded.value = true
+    await nextTick()
+    updateCommentPositions()
+  } catch (error) {
+    loadError.value = error instanceof Error ? error.message : 'Die Bewertungen konnten nicht geladen werden.'
+  } finally {
+    loading.value = false
+  }
 }
 
 async function loadSubmittedItems(): Promise<void> {
@@ -302,6 +329,7 @@ async function loadSubmittedItems(): Promise<void> {
 async function saveCorrection(): Promise<void> {
   if (!correction.value) return
   actionError.value = ''
+  saveBusy.value = true
   try {
     correction.value = await api.updateCorrection({
       correctionId: correction.value.id,
@@ -313,6 +341,8 @@ async function saveCorrection(): Promise<void> {
     await loadSubmittedItems()
   } catch (error) {
     actionError.value = error instanceof Error ? error.message : String(error)
+  } finally {
+    saveBusy.value = false
   }
 }
 
@@ -336,28 +366,36 @@ async function addComment(): Promise<void> {
   if (!submission.value || !correction.value || !canAddComment.value) {
     return
   }
-  const fullText = paperRef.value?.innerText ?? ''
-  const from = Math.max(0, fullText.indexOf(selectedText.value))
-  const to = from + selectedText.value.length
-  await api.addInlineComment({
-    correctionId: correction.value.id,
-    submissionId: submission.value.id,
-    body: commentBody.value,
-    tags: [],
-    anchor: {
-      type: 'prosemirror-selection',
-      editorSchemaVersion: EDITOR_SCHEMA_VERSION,
-      from,
-      to,
-      selectedText: selectedText.value,
-      prefix: fullText.slice(Math.max(0, from - 40), from),
-      suffix: fullText.slice(to, to + 40),
-      contentHash: submission.value.contentHash
-    }
-  })
-  commentBody.value = ''
-  selectedText.value = ''
-  await load()
+  commentBusy.value = true
+  actionError.value = ''
+  try {
+    const fullText = paperRef.value?.innerText ?? ''
+    const from = Math.max(0, fullText.indexOf(selectedText.value))
+    const to = from + selectedText.value.length
+    await api.addInlineComment({
+      correctionId: correction.value.id,
+      submissionId: submission.value.id,
+      body: commentBody.value,
+      tags: [],
+      anchor: {
+        type: 'prosemirror-selection',
+        editorSchemaVersion: EDITOR_SCHEMA_VERSION,
+        from,
+        to,
+        selectedText: selectedText.value,
+        prefix: fullText.slice(Math.max(0, from - 40), from),
+        suffix: fullText.slice(to, to + 40),
+        contentHash: submission.value.contentHash
+      }
+    })
+    commentBody.value = ''
+    selectedText.value = ''
+    await load()
+  } catch (error) {
+    actionError.value = error instanceof Error ? error.message : 'Der Kommentar konnte nicht gespeichert werden.'
+  } finally {
+    commentBusy.value = false
+  }
 }
 
 function updateSelectionPopover(selection: Selection): void {

@@ -21,6 +21,23 @@
   width: 100%;
 }
 
+.app-skeleton-block {
+  animation: app-skeleton-pulse 1.5s ease-in-out infinite;
+  background: var(--color-surface-muted);
+  border-radius: 12px;
+}
+
+@keyframes app-skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
 .app-bootstrap-screen {
   align-items: center;
   background: var(--color-bg);
@@ -85,6 +102,84 @@
 .home-metric-copy-skeleton {
   height: 14px;
   width: 75%;
+}
+
+.page-load-error {
+  margin: 32px auto;
+  max-width: 760px;
+  padding: 0 24px;
+  width: 100%;
+}
+
+.exam-loading-skeleton,
+.analytics-loading-skeleton {
+  display: grid;
+  gap: 18px;
+  padding: 24px;
+}
+
+.exam-loading-header,
+.analytics-loading-filters {
+  height: 120px;
+}
+
+.exam-loading-layout,
+.analytics-loading-charts,
+.correction-loading-skeleton {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) 300px;
+}
+
+.exam-loading-editor,
+.correction-loading-detail {
+  height: 620px;
+}
+
+.exam-loading-sidebar,
+.correction-loading-list {
+  height: 620px;
+}
+
+.correction-loading-skeleton {
+  grid-template-columns: 300px minmax(0, 1fr);
+}
+
+.analytics-loading-metrics,
+.settings-loading-skeleton {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.analytics-loading-metrics > *,
+.settings-loading-skeleton > * {
+  height: 118px;
+}
+
+.analytics-loading-charts {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.analytics-loading-charts > * {
+  height: 320px;
+}
+
+.settings-loading-skeleton {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.settings-loading-skeleton > * {
+  height: 220px;
+}
+
+@media (max-width: 900px) {
+  .exam-loading-layout,
+  .correction-loading-skeleton,
+  .analytics-loading-charts,
+  .settings-loading-skeleton {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* Learning statistics, podcast library and persistent audio player */

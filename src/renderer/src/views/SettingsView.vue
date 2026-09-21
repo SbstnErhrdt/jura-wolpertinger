@@ -11,7 +11,18 @@
     <UAlert v-if="actionError" class="action-error" color="error" :description="actionError" />
     <UAlert v-if="actionNotice" class="action-notice" color="success" :description="actionNotice" />
 
-    <div class="settings-grid">
+    <AppLoadingState v-if="loading" label="Einstellungen werden geladen">
+      <div class="settings-loading-skeleton">
+        <USkeleton v-for="index in 6" :key="index" />
+      </div>
+    </AppLoadingState>
+    <UAlert v-else-if="loadError" color="error" :description="loadError">
+      <template #actions>
+        <UButton type="button" color="neutral" variant="outline" @click="load">Erneut versuchen</UButton>
+      </template>
+    </UAlert>
+
+    <div v-else class="settings-grid">
       <section class="settings-panel">
         <div class="panel-header">
           <div>
@@ -21,19 +32,19 @@
         </div>
 
         <UFormField class="settings-field" label="Aktueller Nutzer">
-          <USelect :model-value="currentUser?.id" :items="userOptions" value-key="value" @update:model-value="switchUser" />
+          <USelect :model-value="currentUser?.id" :items="userOptions" value-key="value" :disabled="Boolean(userActionBusy)" @update:model-value="switchUser" />
         </UFormField>
 
         <UFormField class="settings-field" label="Nutzername">
           <div class="settings-inline-control">
             <UInput v-model="currentUserName" placeholder="Name" @keyup.enter="saveCurrentUserName" />
-            <UButton type="button" :disabled="!currentUser" @click="saveCurrentUserName">Speichern</UButton>
+            <UButton type="button" :loading="userActionBusy === 'rename'" :disabled="!currentUser" @click="saveCurrentUserName">Speichern</UButton>
           </div>
         </UFormField>
 
         <div class="settings-actions">
           <UButton type="button" color="neutral" variant="outline" @click="startTour">Tour starten</UButton>
-          <UButton type="button" color="neutral" variant="outline" :disabled="!currentUser" @click="resetTour">
+          <UButton type="button" color="neutral" variant="outline" :loading="userActionBusy === 'tour'" :disabled="!currentUser" @click="resetTour">
             Tour zurücksetzen
           </UButton>
         </div>
@@ -73,7 +84,7 @@
         <UFormField class="settings-field" label="Name">
           <div class="settings-inline-control">
             <UInput v-model="newUserName" placeholder="z. B. Sebastian" @keyup.enter="createUser" />
-            <UButton type="button" :disabled="!newUserName.trim()" @click="createUser">Anlegen</UButton>
+            <UButton type="button" :loading="userActionBusy === 'create'" :disabled="!newUserName.trim()" @click="createUser">Anlegen</UButton>
           </div>
         </UFormField>
       </section>
@@ -237,6 +248,7 @@ import type { SyncRunAction, SyncStatus, UserProfile } from '@shared/schemas'
 import { api, isElectronApiAvailable } from '../api'
 import { getSyncStatusView, getWorkspaceSyncAction, getWorkspaceSyncActions } from '../syncWorkspaceUx'
 import AppBreadcrumb from '../components/ui/AppBreadcrumb.vue'
+import AppLoadingState from '../components/ui/AppLoadingState.vue'
 import type { AppBreadcrumbItem } from '../ui/breadcrumbs'
 import { useTheme } from '../theme'
 
@@ -250,6 +262,9 @@ const { isDark, toggleTheme, applyTheme } = useTheme()
 const route = useRoute()
 const router = useRouter()
 const users = ref<AppUser[]>([])
+const loading = ref(true)
+const loadError = ref('')
+const userActionBusy = ref<'create' | 'rename' | 'switch' | 'tour' | null>(null)
 const currentUser = ref<AppUser | null>(null)
 const profile = ref<UserProfile | null>(null)
 const currentUserName = ref('')
@@ -333,21 +348,29 @@ function formatDateTime(value: string): string {
 onMounted(load)
 
 async function load(): Promise<void> {
-  applyTheme()
-  currentUser.value = await api.getCurrentUser()
-  users.value = await api.listUsers()
-  profile.value = await api.getUserProfile().catch(() => null)
-  profileFirstName.value = profile.value?.firstName ?? ''
-  profileLastName.value = profile.value?.lastName ?? ''
-  currentUserName.value = currentUser.value.displayName
-  syncStatus.value = await api.getSyncStatus()
-  if (route.query.connectOnline === '1' && isElectronApiAvailable) {
-    await router.replace({ name: 'settings' })
-    if (syncStatus.value.connected) {
-      syncConfirmAction.value = 'merge'
-    } else {
-      openSyncConnectModal()
+  loading.value = true
+  loadError.value = ''
+  try {
+    applyTheme()
+    currentUser.value = await api.getCurrentUser()
+    users.value = await api.listUsers()
+    profile.value = await api.getUserProfile().catch(() => null)
+    profileFirstName.value = profile.value?.firstName ?? ''
+    profileLastName.value = profile.value?.lastName ?? ''
+    currentUserName.value = currentUser.value.displayName
+    syncStatus.value = await api.getSyncStatus()
+    if (route.query.connectOnline === '1' && isElectronApiAvailable) {
+      await router.replace({ name: 'settings' })
+      if (syncStatus.value.connected) {
+        syncConfirmAction.value = 'merge'
+      } else {
+        openSyncConnectModal()
+      }
     }
+  } catch (error) {
+    loadError.value = error instanceof Error ? error.message : 'Die Einstellungen konnten nicht geladen werden.'
+  } finally {
+    loading.value = false
   }
 }
 
@@ -455,21 +478,36 @@ async function runSyncAction(): Promise<void> {
 
 async function switchUser(userId: string | undefined): Promise<void> {
   if (!userId) return
-  await api.switchUser(userId)
-  window.location.reload()
+  userActionBusy.value = 'switch'
+  try {
+    await api.switchUser(userId)
+    window.location.reload()
+  } catch (error) {
+    actionError.value = error instanceof Error ? error.message : String(error)
+  } finally {
+    userActionBusy.value = null
+  }
 }
 
 async function createUser(): Promise<void> {
   const name = newUserName.value.trim()
   if (!name) return
-  await api.createUser(name)
-  window.location.reload()
+  userActionBusy.value = 'create'
+  try {
+    await api.createUser(name)
+    window.location.reload()
+  } catch (error) {
+    actionError.value = error instanceof Error ? error.message : String(error)
+  } finally {
+    userActionBusy.value = null
+  }
 }
 
 async function saveCurrentUserName(): Promise<void> {
   if (!currentUser.value) return
   actionError.value = ''
   actionNotice.value = ''
+  userActionBusy.value = 'rename'
   try {
     currentUser.value = await api.updateUser({
       id: currentUser.value.id,
@@ -481,13 +519,22 @@ async function saveCurrentUserName(): Promise<void> {
     actionNotice.value = 'Nutzername gespeichert.'
   } catch (error) {
     actionError.value = error instanceof Error ? error.message : String(error)
+  } finally {
+    userActionBusy.value = null
   }
 }
 
 async function resetTour(): Promise<void> {
   if (!currentUser.value) return
-  currentUser.value = await api.resetTour(currentUser.value.id)
-  actionNotice.value = 'Tour zurückgesetzt.'
+  userActionBusy.value = 'tour'
+  try {
+    currentUser.value = await api.resetTour(currentUser.value.id)
+    actionNotice.value = 'Tour zurückgesetzt.'
+  } catch (error) {
+    actionError.value = error instanceof Error ? error.message : String(error)
+  } finally {
+    userActionBusy.value = null
+  }
 }
 
 function startTour(): void {

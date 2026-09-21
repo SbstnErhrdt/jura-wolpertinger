@@ -42,4 +42,25 @@ describe('app loading states', () => {
     expect(source).not.toContain('dashboard?.dueCount ?? 0')
     expect(source).not.toContain('dashboard?.collectionCount ?? 0')
   })
+
+  it('covers exam, correction, analytics and settings first loads and retries', async () => {
+    const files = ['ExamView.vue', 'CorrectionView.vue', 'AnalyticsView.vue', 'SettingsView.vue']
+    for (const file of files) {
+      const source = await rendererFile(`views/${file}`)
+      expect(source, file).toContain('<AppLoadingState')
+      expect(source, file).toContain('loadError')
+      expect(source, file).toContain('Erneut versuchen')
+    }
+  })
+
+  it('shows busy feedback for correction, analytics and settings mutations', async () => {
+    const correction = await rendererFile('views/CorrectionView.vue')
+    const analytics = await rendererFile('views/AnalyticsView.vue')
+    const settings = await rendererFile('views/SettingsView.vue')
+
+    expect(correction).toContain(':loading="saveBusy"')
+    expect(correction).toContain(':loading="commentBusy"')
+    expect(analytics).toContain(':loading="taskBusyId === task.id"')
+    expect(settings).toContain('userActionBusy')
+  })
 })

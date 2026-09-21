@@ -1,5 +1,20 @@
 <template>
-  <section v-if="exam" class="exam-view" :class="{ 'focus-view': focusMode }">
+  <AppLoadingState v-if="loading" label="Prüfung wird geladen">
+    <div class="exam-loading-skeleton">
+      <div class="app-skeleton-block exam-loading-header" />
+      <div class="exam-loading-layout">
+        <div class="app-skeleton-block exam-loading-editor" />
+        <div class="app-skeleton-block exam-loading-sidebar" />
+      </div>
+    </div>
+  </AppLoadingState>
+  <section v-else-if="loadError && !exam" class="page-load-error">
+    <div class="action-notice error" role="alert">
+      <span>{{ loadError }}</span>
+      <button type="button" class="secondary" @click="load">Erneut versuchen</button>
+    </div>
+  </section>
+  <section v-else-if="exam" class="exam-view" :class="{ 'focus-view': focusMode }">
     <header v-if="!focusMode" class="page-header">
       <div>
         <AppBreadcrumb :items="breadcrumbItems" />
@@ -59,7 +74,7 @@
       </div>
     </header>
 
-    <p v-if="actionError" class="action-error">{{ actionError }}</p>
+    <p v-if="loadError || actionError" class="action-error">{{ loadError || actionError }}</p>
 
     <div class="exam-layout">
       <main class="writing-pane">
@@ -273,6 +288,7 @@ import { EMPTY_TIPTAP_DOCUMENT } from '@shared/constants'
 import { api } from '../api'
 import ExamEditor from '../components/ExamEditor.vue'
 import TagInput from '../components/TagInput.vue'
+import AppLoadingState from '../components/ui/AppLoadingState.vue'
 import AppBreadcrumb, { type BreadcrumbItem } from '../components/ui/AppBreadcrumb.vue'
 import { useTheme } from '../theme'
 
@@ -281,6 +297,8 @@ defineProps<{ focusMode?: boolean }>()
 const route = useRoute()
 const router = useRouter()
 const exam = ref<ExamDetails | null>(null)
+const loading = ref(true)
+const loadError = ref('')
 const folders = ref<FolderDto[]>([])
 const tagSuggestions = ref<string[]>([])
 const title = ref('')
@@ -331,28 +349,38 @@ watch(
 )
 
 async function load(): Promise<void> {
-  const [nextFolders, exams, nextExam] = await Promise.all([
-    api.listFolders(),
-    api.listExams(),
-    api.getExam(String(route.params.id))
-  ])
-  folders.value = nextFolders
-  tagSuggestions.value = [...new Set(exams.flatMap((entry) => entry.tags))].sort((left, right) =>
-    left.localeCompare(right, 'de-DE')
-  )
-  exam.value = nextExam
-  title.value = exam.value.title
-  folderId.value = exam.value.folderId
-  tags.value = [...exam.value.tags]
-  notes.value = exam.value.notes
-  legalArea.value = exam.value.legalArea
-  examType.value = exam.value.examType
-  sourceName.value = exam.value.sourceName ?? ''
-  sourceUrl.value = exam.value.sourceUrl ?? ''
-  content.value =
-    exam.value.currentRevision?.content ??
-    (structuredClone(EMPTY_TIPTAP_DOCUMENT) as unknown as Record<string, unknown>)
-  autosaveLabel.value = 'Entwurf gespeichert'
+  loading.value = exam.value === null
+  loadError.value = ''
+  try {
+    const requestedExamId = String(route.params.id)
+    const [nextFolders, exams, nextExam] = await Promise.all([
+      api.listFolders(),
+      api.listExams(),
+      api.getExam(requestedExamId)
+    ])
+    if (String(route.params.id) !== requestedExamId) return
+    folders.value = nextFolders
+    tagSuggestions.value = [...new Set(exams.flatMap((entry) => entry.tags))].sort((left, right) =>
+      left.localeCompare(right, 'de-DE')
+    )
+    exam.value = nextExam
+    title.value = exam.value.title
+    folderId.value = exam.value.folderId
+    tags.value = [...exam.value.tags]
+    notes.value = exam.value.notes
+    legalArea.value = exam.value.legalArea
+    examType.value = exam.value.examType
+    sourceName.value = exam.value.sourceName ?? ''
+    sourceUrl.value = exam.value.sourceUrl ?? ''
+    content.value =
+      exam.value.currentRevision?.content ??
+      (structuredClone(EMPTY_TIPTAP_DOCUMENT) as unknown as Record<string, unknown>)
+    autosaveLabel.value = 'Entwurf gespeichert'
+  } catch (error) {
+    loadError.value = error instanceof Error ? error.message : 'Die Prüfung konnte nicht geladen werden.'
+  } finally {
+    loading.value = false
+  }
 }
 
 async function saveRevision(nextContent: Record<string, unknown>): Promise<void> {
