@@ -18,5 +18,5 @@ Daten ein. Tests prüfen Transparenzanteil, Template-Verwendung und UI-Layout.
 - [x] Den Browser-Testserver auf die neuen Asset-Pfade anpassen.
 - [x] Fokussierte Website-Tests, Hugo-Build, visuellen Browsercheck,
       Gesamttests und Typecheck ausführen.
-- [ ] Den verfolgten `docs/`-Website-Build aktualisieren, committen, pushen,
+- [x] Den verfolgten `docs/`-Website-Build aktualisieren, committen, pushen,
       deployen und die öffentliche Auslieferung kontrollieren.
