@@ -26,7 +26,7 @@ beforeAll(async () => {
     if (pathname === '/') {
       response.setHeader('content-type', 'text/html; charset=utf-8')
       response.end(
-        `<!doctype html><html lang="de"><head><title>Jura Wolpertinger</title><style>${stylesheet}</style></head><body>${main}</body></html>`
+        `<!doctype html><html lang="de"><head><meta name="viewport" content="width=device-width, initial-scale=1"><title>Jura Wolpertinger</title><style>${stylesheet}</style></head><body>${main}</body></html>`
       )
       return
     }
