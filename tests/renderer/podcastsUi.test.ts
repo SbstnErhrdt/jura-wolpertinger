@@ -73,4 +73,16 @@ describe('podcast UI', () => {
       /:root\[data-theme='dark'\] \.podcast-series-progress-track > span\s*\{[^}]*background:/
     )
   })
+
+  it('offers grouped podcast search with count, reset and a distinct empty state', async () => {
+    const library = await readFile(resolve(rendererRoot, 'views/PodcastsView.vue'), 'utf8')
+
+    expect(library).toContain('filterPodcastCatalog')
+    expect(library).toContain('Podcasts durchsuchen')
+    expect(library).toContain('Rechtsgebiet, Reihe oder Folge')
+    expect(library).toContain('Suche zurücksetzen')
+    expect(library).toContain('Keine passenden Podcasts gefunden.')
+    expect(library).toContain('podcastResultCount')
+    expect(library).toContain('aria-live="polite"')
+  })
 })

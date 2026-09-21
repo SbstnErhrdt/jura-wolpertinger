@@ -55,6 +55,8 @@ import {
 } from '@shared/schemas'
 import { getSupabaseAuthClient } from './cloudAuth'
 import { studyCatalogQuerySchema, studyResponseSchema } from '@shared/flashcardStudy'
+import type { StudyCollection, StudyResponse } from '@shared/flashcardStudy'
+import { learningStatusCountsSchema, type LearningStatusCounts } from '@shared/learningStatus'
 import { mergeCloudExamCorrectionImports } from './cloudExamCorrectionImports'
 import { mergeCloudExamDateImports } from './cloudExamDateImports'
 
@@ -443,11 +445,27 @@ export function createCloudLearningApi(localApi: AppApi): AppApi {
       const { client } = await requireCloudContext()
       if (input.action === 'catalog') {
         const query = studyCatalogQuerySchema.parse(input)
-        const { data, error } = await client.rpc('get_study_collection_catalog', { p_search: query.search, p_page: query.page })
+        const [{ data, error }, statusResult] = await Promise.all([
+          client.rpc('get_study_collection_catalog', { p_search: query.search, p_page: query.page }),
+          client.rpc('get_learning_status_counts', {})
+        ])
         if (error) throw error
-        const response = studyResponseSchema.parse(data)
+        if (statusResult.error) throw statusResult.error
+        const response = applyCloudLearningStatusCounts(
+          studyResponseSchema.parse(data),
+          statusResult.data
+        )
         if (!response.catalog) throw new Error('Die Sammlungsübersicht konnte nicht geladen werden.')
         return response
+      }
+      if (input.action === 'overview') {
+        const [{ data, error }, statusResult] = await Promise.all([
+          client.rpc('study_flashcards', { p_command: input }),
+          client.rpc('get_learning_status_counts', {})
+        ])
+        if (error) throw error
+        if (statusResult.error) throw statusResult.error
+        return applyCloudLearningStatusCounts(studyResponseSchema.parse(data), statusResult.data)
       }
       const { data, error } = await client.rpc('study_flashcards', { p_command: input })
       if (error) throw error
@@ -510,6 +528,39 @@ export function createCloudLearningApi(localApi: AppApi): AppApi {
       return saveCloudPodcastProgress(input)
     }
   }
+}
+
+function applyCloudLearningStatusCounts(response: StudyResponse, payload: unknown): StudyResponse {
+  const parsed = z.array(z.object({
+    collectionId: z.string().uuid(),
+    statusCounts: learningStatusCountsSchema
+  })).parse(payload)
+  const countsByCollection = new Map<string, LearningStatusCounts>(
+    parsed.map((entry) => [entry.collectionId, entry.statusCounts])
+  )
+  const withCounts = (collection: StudyCollection): StudyCollection => ({
+    ...collection,
+    overview: {
+      ...collection.overview,
+      statusCounts: countsByCollection.get(collection.id) ?? collection.overview.statusCounts
+    }
+  })
+  return studyResponseSchema.parse({
+    ...response,
+    overviews: response.overviews.map((overview) => ({
+      ...overview,
+      statusCounts: countsByCollection.get(overview.collectionId) ?? overview.statusCounts
+    })),
+    catalog: response.catalog
+      ? {
+          ...response.catalog,
+          items: response.catalog.items.map(withCounts),
+          recommendation: response.catalog.recommendation
+            ? { ...response.catalog.recommendation, collection: withCounts(response.catalog.recommendation.collection) }
+            : null
+        }
+      : undefined
+  })
 }
 
 async function requireCloudContext(): Promise<{

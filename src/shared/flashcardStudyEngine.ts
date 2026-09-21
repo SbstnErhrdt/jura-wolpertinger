@@ -2,6 +2,7 @@ import type { RecordReviewInput, RecordReviewResult } from './ipc'
 import type { ReviewCard } from './schemas'
 import { STUDY_BATCH_SIZE, type StudyCommand, type StudyMode, type StudyOverview, type StudyResponse, type StudyRun } from './flashcardStudy'
 import { buildStudyCatalog } from './studyCatalog'
+import { countLearningStatuses } from './learningStatus'
 
 export type StoredStudyRun = {
   id: string
@@ -85,7 +86,9 @@ export function executeStudyCommand(command: StudyCommand, context: StudyContext
       newCards: cards.filter((card) => !card.reps).length,
       dueCards: cards.filter((card) => card.reps > 0 && card.dueAt <= context.now()).length,
       weakCards: cards.filter((card) => card.lastRating === 1 || card.lastRating === 2).length,
-      pausedCards: allCards.length - cards.length, activeRun: active[0] ?? null
+      pausedCards: allCards.length - cards.length,
+      statusCounts: countLearningStatuses(cards),
+      activeRun: active[0] ?? null
     }
   }
 

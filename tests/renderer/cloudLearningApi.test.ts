@@ -24,6 +24,7 @@ let queryCalls: QueryCall[] = []
 let rpcCalls: RpcCall[] = []
 let tableData: Record<string, unknown[]> = {}
 let studyRpcResult: { data: unknown; error: unknown } = { data: null, error: null }
+let statusCountsRpcResult: { data: unknown; error: unknown } = { data: [], error: null }
 let upsertCalls: Array<{ table: string; value: Record<string, unknown>; options?: Record<string, unknown> }> = []
 let sessionUserId = userId
 let beforeSnapshotResponse: (() => void) | null = null
@@ -39,6 +40,7 @@ describe('cloud learning API', () => {
     rpcCalls = []
     tableData = {}
     studyRpcResult = { data: null, error: null }
+    statusCountsRpcResult = { data: [], error: null }
     upsertCalls = []
     sessionUserId = userId
     beforeSnapshotResponse = null
@@ -81,12 +83,46 @@ describe('cloud learning API', () => {
     const catalog = { items: [], total: 0, collectionCount: 0, eligibleCollectionCount: 0, recommendation: null }
     studyRpcResult = { data: { overviews: [], run: null, cards: [], review: null, catalog }, error: null }
     expect((await api.studyFlashcards({ action: 'catalog', search: ' Bau% ', page: 2 })).catalog).toEqual(catalog)
-    expect(rpcCalls).toEqual([{ name: 'get_study_collection_catalog', args: { p_search: 'Bau%', p_page: 2 } }])
+    expect(rpcCalls).toEqual([
+      { name: 'get_study_collection_catalog', args: { p_search: 'Bau%', p_page: 2 } },
+      { name: 'get_learning_status_counts', args: {} }
+    ])
     expect(queryCalls).toEqual([])
     studyRpcResult = { data: { overviews: [], run: null, cards: [], review: null }, error: null }
     await expect(api.studyFlashcards({ action: 'catalog' })).rejects.toThrow()
     studyRpcResult = { data: null, error: new Error('Verbindung unterbrochen') }
     await expect(api.studyFlashcards({ action: 'catalog' })).rejects.toThrow('Verbindung unterbrochen')
+  })
+
+  it('adds grouped learning status counts to cloud collection overviews', async () => {
+    vi.doMock('../../src/renderer/src/cloudAuth', () => ({ getSupabaseAuthClient: () => createSupabaseClientMock() }))
+    const apiModulePath = '../../src/renderer/src/cloudLearningApi'
+    const { createCloudLearningApi } = await import(/* @vite-ignore */ apiModulePath)
+    const api: AppApi = createCloudLearningApi(createLocalApiStub())
+    const overview = {
+      collectionId,
+      totalCards: 5,
+      eligibleCards: 5,
+      reviewedCards: 4,
+      newCards: 1,
+      dueCards: 0,
+      weakCards: 2,
+      pausedCards: 0,
+      activeRun: null
+    }
+    studyRpcResult = { data: { overviews: [overview], run: null, cards: [], review: null }, error: null }
+    statusCountsRpcResult = {
+      data: [{ collectionId, statusCounts: { notKnown: 1, partiallyKnown: 1, known: 2 } }],
+      error: null
+    }
+
+    await expect(api.studyFlashcards({ action: 'overview', collectionId })).resolves.toMatchObject({
+      overviews: [{ statusCounts: { notKnown: 1, partiallyKnown: 1, known: 2 } }]
+    })
+    expect(rpcCalls).toEqual([
+      { name: 'study_flashcards', args: { p_command: { action: 'overview', collectionId } } },
+      { name: 'get_learning_status_counts', args: {} }
+    ])
   })
 
   it('loads cloud review batches through RPC and chunks follow-up ID queries', async () => {
@@ -946,6 +982,7 @@ function createSupabaseClientMock() {
     async rpc(name: string, args: Record<string, unknown>) {
       rpcCalls.push({ name, args })
       if (name === 'study_flashcards' || name === 'get_study_collection_catalog') return studyRpcResult
+      if (name === 'get_learning_status_counts') return statusCountsRpcResult
       if (name === 'get_review_batch') {
         return {
           data: tableData.learning_items.map((item, index) => ({

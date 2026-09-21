@@ -2,6 +2,7 @@ import type { ReviewCard, ReviewRating } from './schemas'
 import type { RecordReviewResult } from './ipc'
 import { z } from 'zod'
 import { reviewCardSchema, learningReviewEventSchema, isoDateSchema, uuidSchema } from './schemas'
+import { learningStatusCountsSchema, type LearningStatusCounts } from './learningStatus'
 
 export type StudyMode = 'first_pass' | 'review' | 'weak' | 'all'
 export type StudyCommand =
@@ -37,6 +38,7 @@ export type StudyOverview = {
   dueCards: number
   weakCards: number
   pausedCards: number
+  statusCounts: LearningStatusCounts
   activeRun: StudyRun | null
 }
 
@@ -76,7 +78,9 @@ export const studyRunSchema = z.object({
 export const studyOverviewSchema = z.object({
     collectionId: uuidSchema, totalCards: z.number().int().nonnegative(), eligibleCards: z.number().int().nonnegative(),
     reviewedCards: z.number().int().nonnegative(), newCards: z.number().int().nonnegative(), dueCards: z.number().int().nonnegative(),
-    weakCards: z.number().int().nonnegative(), pausedCards: z.number().int().nonnegative(), activeRun: studyRunSchema.nullable()
+    weakCards: z.number().int().nonnegative(), pausedCards: z.number().int().nonnegative(),
+    statusCounts: learningStatusCountsSchema.default({ notKnown: 0, partiallyKnown: 0, known: 0 }),
+    activeRun: studyRunSchema.nullable()
   })
 export const studyCollectionSchema = z.object({
   id: uuidSchema, name: z.string(), subject: z.string().nullable(), overview: studyOverviewSchema, defaultRun: studyRunSchema.nullable()

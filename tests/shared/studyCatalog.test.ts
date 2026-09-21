@@ -89,6 +89,21 @@ describe('collection catalog', () => {
     expect(JSON.stringify(result)).not.toContain('frontMarkdown')
   })
 
+  it('reports status colors from eligible cards only', () => {
+    const f = fixture(); f.deck('a', 6)
+    f.cards[0].reps = 1; f.cards[0].lastRating = 1
+    f.cards[1].reps = 1; f.cards[1].lastRating = 2
+    f.cards[2].reps = 1; f.cards[2].lastRating = 3
+    f.cards[3].reps = 1; f.cards[3].lastRating = 4
+    f.cards[4].qualityStatus = 'needs_work'; f.cards[4].reps = 1; f.cards[4].lastRating = 1
+
+    expect(f.catalog().items[0].overview).toMatchObject({
+      eligibleCards: 5,
+      reviewedCards: 4,
+      statusCounts: { notKnown: 1, partiallyKnown: 1, known: 2 }
+    })
+  })
+
   it('rejects invalid pages instead of returning unbounded results', () => {
     const f = fixture()
     for (const page of [0, -1, 1.5, NaN, Infinity]) expect(() => f.catalog('', page)).toThrow()

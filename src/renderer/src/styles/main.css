@@ -178,20 +178,100 @@
   font-size: 13px;
 }
 
-.rating-track,
-.collection-progress-bar {
+.rating-track {
   background: var(--color-surface-muted);
   border-radius: 999px;
   height: 8px;
   overflow: hidden;
 }
 
-.rating-track > span,
-.collection-progress-bar > span {
+.rating-track > span {
   background: var(--wolpi-nav-blue);
   border-radius: inherit;
   display: block;
   height: 100%;
+}
+
+.rating-status-not-known .rating-track > span {
+  background: var(--learning-status-not-known);
+}
+
+.rating-status-partially-known .rating-track > span {
+  background: var(--learning-status-partially-known);
+}
+
+.rating-status-known .rating-track > span {
+  background: var(--learning-status-known);
+}
+
+.learning-status-bar {
+  background: var(--learning-status-unreviewed);
+  border-radius: 999px;
+  display: flex;
+  height: 8px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.learning-status-bar > span {
+  display: block;
+  height: 100%;
+  transition: width 220ms ease;
+}
+
+.learning-status-segment-not-known {
+  background: var(--learning-status-not-known);
+}
+
+.learning-status-segment-partially-known {
+  background: var(--learning-status-partially-known);
+}
+
+.learning-status-segment-known {
+  background: var(--learning-status-known);
+}
+
+.learning-status-segment-unreviewed {
+  background: var(--learning-status-unreviewed);
+}
+
+.learning-status-legend {
+  align-items: center;
+  color: var(--color-text-muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12px;
+  gap: 8px 16px;
+  margin: -4px 0 16px;
+}
+
+.learning-status-legend span {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.learning-status-legend i {
+  border-radius: 999px;
+  display: inline-block;
+  height: 8px;
+  width: 18px;
+}
+
+.learning-status-legend-not-known {
+  background: var(--learning-status-not-known);
+}
+
+.learning-status-legend-partially-known {
+  background: var(--learning-status-partially-known);
+}
+
+.learning-status-legend-known {
+  background: var(--learning-status-known);
+}
+
+.learning-status-legend-unreviewed {
+  background: var(--learning-status-unreviewed);
 }
 
 .collection-progress-list {
@@ -218,6 +298,22 @@
   min-width: 0;
 }
 
+.collection-progress-link {
+  align-items: center;
+  color: var(--color-text);
+  display: inline-flex;
+  gap: 4px;
+  justify-self: start;
+  min-width: 0;
+  text-decoration: none;
+}
+
+.collection-progress-link:hover,
+.collection-progress-link:focus-visible {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+
 .collection-progress-row strong,
 .collection-progress-row span {
   overflow: hidden;
@@ -241,6 +337,39 @@
 .podcast-episode-skeleton {
   display: grid;
   gap: 14px;
+}
+
+.podcast-search {
+  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+}
+
+.podcast-search-field {
+  flex: 1 1 300px;
+  max-width: 620px;
+}
+
+.podcast-search-field [data-slot='root'] {
+  width: 100%;
+}
+
+.podcast-result-count {
+  color: var(--color-text);
+  font-size: 14px;
+  margin: 0 0 8px auto;
+}
+
+.podcast-search-empty {
+  color: var(--color-text-muted);
+  padding: 40px 16px;
+  text-align: center;
+}
+
+.podcast-search-empty h2 {
+  color: var(--color-text);
+  font-size: 19px;
 }
 
 .podcast-skeleton-title {
@@ -770,7 +899,7 @@
     padding: 14px 0;
   }
 
-  .collection-progress-bar {
+  .collection-progress-row > .learning-status-bar {
     grid-column: 1 / -1;
     grid-row: 2;
   }
@@ -881,6 +1010,10 @@
 
 :root {
   --wolpi-nav-blue: #005a84;
+  --learning-status-not-known: #c2413a;
+  --learning-status-partially-known: #d97706;
+  --learning-status-known: #15805f;
+  --learning-status-unreviewed: #d8e5eb;
   --wolpi-blue-tint: #e2ebf3;
   --wolpi-blue-tint-border: #b8c9da;
   --wolpi-blue-tint-text: var(--wolpi-nav-blue);
@@ -890,7 +1023,7 @@
   --color-border: #c8e0eb;
   --color-border-strong: #bdd9e6;
   --color-text: #1e3440;
-  --color-text-muted: #647985;
+  --color-text-muted: #5b707b;
   --color-primary: var(--wolpi-nav-blue);
   --color-primary-strong: var(--wolpi-nav-blue);
   --color-danger: #a72d2d;
@@ -1627,7 +1760,7 @@ body {
 
 .home-metrics small,
 .collection-card-title p {
-  color: #647985;
+  color: #5b707b;
   margin-top: 6px;
 }
 
@@ -4898,6 +5031,10 @@ button:active .key-hint,
 }
 
 :root[data-theme='dark'] {
+  --learning-status-not-known: #fb7185;
+  --learning-status-partially-known: #fbbf24;
+  --learning-status-known: #34d399;
+  --learning-status-unreviewed: #334155;
   --color-bg: #07151c;
   --color-surface: #152126;
   --color-surface-muted: #10202a;

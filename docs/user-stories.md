@@ -66,7 +66,8 @@ Akzeptanz:
 
 - „Als Nächstes lernen“ empfiehlt aus allen eigenen Sammlungen zuerst fällige Wiederholungen, danach den zuletzt aktualisierten offenen Durchgang und sonst eine Sammlung mit möglichst wenigen neuen Karten. Eine Suche verändert diesen globalen Vorschlag nicht.
 - Der Startknopf öffnet den genannten Lernmodus beziehungsweise genau den begonnenen Durchgang. Bloßes Anzeigen oder Suchen verändert keine Lernstände.
-- Der Balken zeigt einmal bewertete von aktuell lernbaren Karten; pausierte Karten werden separat genannt. Bearbeitung ist keine Aussage über Beherrschung.
+- Der Balken teilt aktuell lernbare Karten nach ihrer letzten Bewertung in Rot für `Nicht gewusst`, Orange für `Teilweise gewusst`, Grün für `Gewusst` und einen neutralen Rest für `Noch nicht bearbeitet`; pausierte Karten werden separat genannt. Bewertung 4 zählt wie `Gewusst`.
+- Die Lernstatistik verwendet dieselben semantischen Farben. Jeder Sammlungsname verlinkt direkt auf die zugehörige Sammlungsdetailseite.
 - Die Suche findet Namen und Rechtsgebiete im gesamten Bestand, unabhängig von der angezeigten Seite. Je Seite erscheinen höchstens 24 Sammlungen; Trefferzahl, Zurücksetzen und Seitennavigation bleiben klar erkennbar.
 - Leere Ergebnisse, fehlende lernbare Karten und Verbindungsfehler werden unterschieden. Fehlende Daten werden nicht als Nullfortschritt ausgegeben.
 - Die freie Auswahl bleibt erhalten; ohne fällige oder offene Karten wird kein künstlicher Lernbedarf angezeigt.
@@ -137,6 +138,17 @@ Akzeptanz:
 - Die Oberfläche spricht von Karteikarten-Dateien auswählen oder sichern, nicht vom technischen Dateiformat.
 
 ## Podcasts
+
+### Podcast gezielt finden
+
+Als Nutzer:in möchte ich nach einem Rechtsgebiet, einer Reihe oder einer Folge suchen, damit ich auch in einer großen Audiobibliothek schnell zum passenden Inhalt gelange.
+
+Akzeptanz:
+
+- Die Suche berücksichtigt Rechtsgebiet, Reihentitel, Beschreibung, Ausgabe sowie Titel und Beschreibung einzelner Folgen.
+- Groß- und Kleinschreibung sowie diakritische Zeichen verändern die Treffer nicht.
+- Rechtsgebietsgruppen und Reihen behalten ihre redaktionelle Reihenfolge; eine passende Folge lässt die zugehörige Reihe sichtbar.
+- Trefferzahl, verständlicher Leerzustand und Zurücksetzen sind zugänglich und auch mobil gut bedienbar.
 
 ### Hörfortschritt in der Übersicht erkennen
 
@@ -379,6 +391,18 @@ Akzeptanz:
 - Prüfungsdateien enthalten Prüfungsdaten wie Metadaten, Abgaben, Korrekturen und Attachment-Rollen, aber keine KI-Schlüssel, KI-Einstellungen, rohe KI-Entwürfe oder lokale Lernaufgaben.
 
 ## Installation und Updates
+
+### Produkt auf der öffentlichen Website realistisch kennenlernen
+
+Als Interessent:in möchte ich aktuelle, gut lesbare Ansichten der echten App sehen, damit ich ihren Funktionsumfang vor Installation oder Anmeldung einschätzen kann.
+
+Akzeptanz:
+
+- Die Website zeigt aktuelle Demo-Ansichten für Home, Karteikarten, Podcasts, Wiederholen, Prüfungen und Lernstatistik.
+- Screenshots enthalten keine echten Nutzerdaten, sind einheitlich aufgenommen und für schnelle Ladezeiten optimiert.
+- Wolpi-Illustrationen besitzen echte transparente Hintergründe ohne sichtbare weiße Bildfläche.
+- Bilder unterhalb des sichtbaren Einstiegs werden verzögert geladen; die Hauptvorschau wird priorisiert.
+- Desktop- und Mobilansicht bleiben ohne überlagerte Figuren, abgeschnittene Inhalte oder horizontales Scrollen lesbar.
 
 ### Passenden Desktop-Build erhalten
 

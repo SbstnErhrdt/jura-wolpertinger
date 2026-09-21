@@ -9,6 +9,7 @@ const { createStudyCatalogLoader } = await import(/* @vite-ignore */ loaderPath)
 const collection: StudyCollection = {
   id: 'c', name: 'Baurecht', subject: null, defaultRun: null,
   overview: { collectionId: 'c', totalCards: 10, eligibleCards: 10, reviewedCards: 4, newCards: 6, dueCards: 3, weakCards: 0, pausedCards: 0,
+    statusCounts: { notKnown: 1, partiallyKnown: 1, known: 2 },
     activeRun: { id: 'run', collectionId: 'c', mode: 'first_pass', total: 10, completed: 4, remaining: 6, deferred: 6, excluded: 0, added: 0, status: 'active', createdAt: 'now', updatedAt: 'now' } }
 }
 const catalog: StudyCatalog = { items: [collection], total: 1, collectionCount: 1, eligibleCollectionCount: 1, recommendation: { kind: 'review', collection } }

@@ -66,7 +66,11 @@ const faq = [
   },
   {
     question: 'Was zeigt der Fortschrittsbalken einer Sammlung?',
-    answer: 'Der Balken zeigt, wie viele der aktuell lernbaren Karten du mindestens einmal bewertet hast. Einmal bearbeitet heißt nicht sicher beherrscht. Wegen ihrer Qualität pausierte Karten zählen nicht mit und werden gesondert genannt. Wiederholungen können auch bei 100 Prozent Bearbeitung fällig sein.'
+    answer: 'Der Balken zeigt den letzten Lernstand deiner aktuell lernbaren Karten: Rot steht für Nicht gewusst, Orange für Teilweise gewusst, Grün für Gewusst und der helle Rest für noch nicht bearbeitete Karten. Wegen ihrer Qualität pausierte Karten zählen nicht mit. Wiederholungen können auch bei vollständig bearbeiteten Sammlungen fällig sein.'
+  },
+  {
+    question: 'Wie finde ich einen bestimmten Podcast?',
+    answer: 'Die Suche in der Podcast-Übersicht findet Rechtsgebiete, Reihen, Ausgaben und einzelne Folgen. Auch Begriffe aus der Beschreibung und Schreibweisen ohne Akzente werden berücksichtigt. Mit Suche zurücksetzen siehst du wieder alle Reihen.'
   },
   {
     question: 'Was zeigt der Fortschrittsbalken eines Podcasts?',

@@ -11,12 +11,12 @@
     <section class="about-hero">
       <div class="about-hero-copy">
         <p class="about-kicker">Ein kleines Freizeitprojekt</p>
-        <h2>Prüfungsnah schreiben, Karteikarten wiederholen und den eigenen Lernstand behalten.</h2>
+        <h2>Prüfungsnah schreiben, Karteikarten wiederholen, Podcasts hören und den eigenen Lernstand behalten.</h2>
         <p>
           Der Wolpertinger ist hier einfach Wolpi: die inoffizielle Begleitfigur dieser App. In
           der kleinen Geschichte hinter dem Projekt hilft er Jura-Studierenden in Bayern dabei,
-          regelmäßig zu lernen, Karteikarten wiederzuholen und Prüfungen möglichst prüfungsnah zu
-          schreiben.
+          regelmäßig zu lernen, Karteikarten wiederzuholen, juristische Podcasts zu hören und
+          Prüfungen möglichst prüfungsnah zu schreiben.
         </p>
         <p>
           Die App ist kein offizielles Angebot, sondern ein privates Freizeitprojekt. Sie soll
@@ -44,8 +44,9 @@
         <h3>Was die App können soll</h3>
         <p>
           Karteikarten in Sammlungen organisieren, Schlagwörter vergeben, Wiederholungen bewerten,
-          Kartenqualität prüfen, Prüfungen verwalten, Kommentare und Bewertungen festhalten und
-          Fortschritt sichtbar machen. Alles klar, ruhig und ohne unnötigen Ballast.
+          Kartenqualität prüfen, juristische Podcasts durchsuchen, Prüfungen verwalten, Kommentare
+          und Bewertungen festhalten und Fortschritt sichtbar machen. Alles klar, ruhig und ohne
+          unnötigen Ballast.
           Frühere Abgaben und Rückmeldungen lassen sich bei der passenden Prüfung nachlesen;
           hinterlegte Originaldateien kannst du in der Online-Version herunterladen.
           Der Bewertungsverlauf zeigt deine Monatsdurchschnitte; an den Punkten
@@ -71,7 +72,8 @@
           Empfohlene und unsichere Karten wiederholst du bewusst zusätzlich.
           In der Übersicht helfen dir die Suche nach Name oder Rechtsgebiet, Bearbeitungsbalken
           und ein begründeter nächster Lernschritt: Wiederholen, Fortsetzen oder neue Karten beginnen.
-          Der Balken zeigt einmal bearbeitete Karten, nicht sichere Beherrschung.
+          Rot, Orange und Grün zeigen den letzten Lernstand; ein heller Rest steht für noch nicht
+          bearbeitete Karten. Die Statistik verwendet dieselben Farben und führt direkt zur Sammlung.
           Wolpi freut sich nach jeweils zehn bearbeiteten Karten und am Abschluss mit dir.
           Wenn eine Karte unklar, zu lang oder fachlich fraglich ist,
           kann sie zur Überarbeitung markiert werden und pausiert dann in der Wiederholung.

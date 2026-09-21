@@ -60,6 +60,12 @@
         {{ loading ? 'Sammlungen werden geladen …' : loadError ? '' : `${catalog?.total ?? 0} ${catalog?.total === 1 ? 'Sammlung' : 'Sammlungen'}${search.trim() ? ' gefunden' : ''}` }}
       </p>
     </div>
+    <div v-if="catalog?.eligibleCollectionCount" class="learning-status-legend" aria-label="Farben der Lernstände">
+      <span><i class="learning-status-legend-not-known" aria-hidden="true" />Nicht gewusst</span>
+      <span><i class="learning-status-legend-partially-known" aria-hidden="true" />Teilweise gewusst</span>
+      <span><i class="learning-status-legend-known" aria-hidden="true" />Gewusst</span>
+      <span><i class="learning-status-legend-unreviewed" aria-hidden="true" />Noch nicht bearbeitet</span>
+    </div>
     <UAlert v-if="loadError" color="error" :description="loadError">
       <template #actions><UButton type="button" color="neutral" variant="outline" @click="load">Erneut versuchen</UButton></template>
     </UAlert>
@@ -112,9 +118,11 @@
               <span>{{ collection.overview.reviewedCards }} von {{ collection.overview.eligibleCards }} Karten einmal bearbeitet</span>
               <strong>{{ studyProgress(collection.overview) }} %</strong>
             </div>
-            <div class="collection-progress-track" role="progressbar" :aria-label="`Bearbeitungsfortschritt: ${collection.name}`" :aria-valuenow="studyProgress(collection.overview) ?? 0" :aria-valuemin="0" :aria-valuemax="100" :aria-valuetext="`${collection.overview.reviewedCards} von ${collection.overview.eligibleCards} lernbaren Karten einmal bearbeitet`">
-              <span :style="{ width: `${studyProgress(collection.overview)}%` }" />
-            </div>
+            <LearningStatusBar
+              :total="collection.overview.eligibleCards"
+              :counts="collection.overview.statusCounts"
+              :label="`Lernstand ${collection.name}`"
+            />
           </template>
           <p v-else>Keine lernbaren Karten</p>
         </div>
@@ -152,6 +160,7 @@ import { Clock3, Download, FolderKanban, FolderOpen, Layers, Play, Plus, Upload 
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '../api'
 import AppBreadcrumb from '../components/ui/AppBreadcrumb.vue'
+import LearningStatusBar from '../components/LearningStatusBar.vue'
 import type { AppBreadcrumbItem } from '../ui/breadcrumbs'
 import { STUDY_CATALOG_PAGE_SIZE } from '@shared/flashcardStudy'
 import { studyProgress } from '@shared/studyCatalog'
@@ -296,9 +305,7 @@ async function createCollection(): Promise<void> {
 .collection-progress { border-top: 1px solid var(--color-border); padding-top: 14px; }
 .collection-progress-caption { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 12px; line-height: 1.4; }
 .collection-progress-caption strong { white-space: nowrap; color: var(--color-text); }
-.collection-progress-track { margin-top: 8px; height: 7px; border-radius: 99px; overflow: hidden; background: var(--color-border-strong); }
-.collection-progress-track > span { display: block; height: 100%; border-radius: inherit; background: var(--color-primary); }
-:global(:root[data-theme='dark'] .collection-progress-track > span) { background: #7dd3fc; }
+.collection-progress :deep(.learning-status-bar) { margin-top: 8px; }
 .collection-progress p { margin: 0; font-size: 13px; color: var(--color-text-muted); }
 .collection-loading, .collection-empty { padding: 32px 16px; text-align: center; color: var(--color-text); }
 .collection-empty h2 { font-size: 18px; color: var(--color-text); }
