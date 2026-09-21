@@ -1,4 +1,40 @@
-import type { PodcastCatalog } from './schemas'
+import type { PodcastCatalog, PodcastEpisode } from './schemas'
+
+export type PodcastSeriesProgress = {
+  completedEpisodes: number
+  totalEpisodes: number
+  listenedSeconds: number
+  durationSeconds: number
+  percentage: number
+}
+
+export function calculatePodcastSeriesProgress(
+  episodes: PodcastEpisode[]
+): PodcastSeriesProgress {
+  const totals = episodes.reduce(
+    (result, episode) => {
+      const duration = Math.max(0, episode.durationSeconds)
+      const position = episode.progress?.completed
+        ? duration
+        : Math.min(duration, Math.max(0, episode.progress?.positionSeconds ?? 0))
+
+      result.durationSeconds += duration
+      result.listenedSeconds += position
+      if (episode.progress?.completed) result.completedEpisodes += 1
+      return result
+    },
+    { completedEpisodes: 0, listenedSeconds: 0, durationSeconds: 0 }
+  )
+
+  return {
+    ...totals,
+    totalEpisodes: episodes.length,
+    percentage:
+      totals.durationSeconds > 0
+        ? Math.round((totals.listenedSeconds / totals.durationSeconds) * 100)
+        : 0
+  }
+}
 
 export function isPodcastEpisodeComplete(
   positionSeconds: number,

@@ -1,6 +1,6 @@
 # Karteikarten: Fortschritt, Suche und nächster Lernschritt
 
-Stand: 20. September 2026. Die Funktionsauswahl und die Reihenfolge „Wiederholen → Fortsetzen → Neu anfangen“ wurden im Gespräch freigegeben. Diese schriftliche Spezifikation steht zur abschließenden Durchsicht bereit; die Implementierung hat noch nicht begonnen.
+Stand: 20. September 2026. Die Funktionsauswahl und die Reihenfolge „Wiederholen → Fortsetzen → Neu anfangen“ wurden im Gespräch freigegeben, implementiert und nach gesondertem Auftrag veröffentlicht. Prüfergebnisse und der separate Bibliotheks-Testbefund stehen im Implementierungsplan; der anschließende Rollout ist im [Veröffentlichungsbericht](../2026-09-20-flashcard-collection-deployment.md) dokumentiert.
 
 ## Ziel und Umfang
 

@@ -2,7 +2,7 @@
   <section class="settings-view">
     <header class="page-header">
       <div>
-        <UBreadcrumb class="app-breadcrumb" :items="withHomeIcon(breadcrumbItems)" />
+        <AppBreadcrumb :items="breadcrumbItems" />
         <p class="eyebrow">Einstellungen</p>
         <h1>App einrichten</h1>
       </div>
@@ -236,7 +236,8 @@ import type { AppUser } from '@shared/ipc'
 import type { SyncRunAction, SyncStatus, UserProfile } from '@shared/schemas'
 import { api, isElectronApiAvailable } from '../api'
 import { getSyncStatusView, getWorkspaceSyncAction, getWorkspaceSyncActions } from '../syncWorkspaceUx'
-import { type AppBreadcrumbItem, withHomeIcon } from '../ui/breadcrumbs'
+import AppBreadcrumb from '../components/ui/AppBreadcrumb.vue'
+import type { AppBreadcrumbItem } from '../ui/breadcrumbs'
 import { useTheme } from '../theme'
 
 const breadcrumbItems: AppBreadcrumbItem[] = [

@@ -19,8 +19,8 @@
           Kleine, echte Lerneinheiten zählen: Karteikarten wiederholen oder eine Prüfung schreiben.
         </p>
         <div class="home-actions">
-          <UButton class="primary-action" size="lg" :to="{ name: 'flashcards-review' }">
-            Karteikarten wiederholen
+          <UButton class="primary-action" size="lg" :to="continueTarget">
+            {{ continueLabel }}
           </UButton>
           <UButton color="neutral" variant="outline" size="lg" :to="{ name: 'dashboard' }">
             Prüfung schreiben
@@ -38,7 +38,7 @@
       </UCard>
       <UCard>
         <span>{{ dashboard?.dueCount ?? 0 }}</span>
-        <strong>Karten empfohlen</strong>
+        <strong>Wiederholungen empfohlen</strong>
         <small>{{ dashboard?.totalCards ?? 0 }} Karten insgesamt</small>
       </UCard>
       <UCard>
@@ -79,8 +79,15 @@ import { computed, onMounted, ref } from 'vue'
 import type { LearningDashboard, UserProfile } from '@shared/schemas'
 import { api } from '../api'
 import { requiresCloudAuth } from '../cloudAuth'
+import type { StudyOverview } from '@shared/flashcardStudy'
+import { studyEntry } from '../ui/studyNavigation'
 
 const dashboard = ref<LearningDashboard | null>(null)
+const studyOverviews = ref<StudyOverview[]>([])
+const collectionNames = ref<Record<string, string>>({})
+const lastStudy = computed(() => studyOverviews.value.filter((entry) => entry.activeRun).sort((a, b) => b.activeRun!.updatedAt.localeCompare(a.activeRun!.updatedAt))[0])
+const continueTarget = computed(() => lastStudy.value ? { name: 'flashcards-review', query: studyEntry(lastStudy.value).query } : { name: 'flashcards-collections' })
+const continueLabel = computed(() => lastStudy.value ? `${collectionNames.value[lastStudy.value.collectionId] ?? 'Sammlung'} · Durchgang fortsetzen` : 'Sammlung zum Lernen wählen')
 const profile = ref<UserProfile | null>(null)
 const showProfileModal = ref(false)
 const profileFirstName = ref('')
@@ -100,6 +107,13 @@ onMounted(async () => {
   ])
   dashboard.value = nextDashboard
   profile.value = nextProfile
+  const [studyResult, collections] = await Promise.all([
+    api.studyFlashcards({ action: 'overview' }).catch(() => ({ overviews: [] })),
+    api.listLearningCollections().catch(() => [])
+  ])
+  studyOverviews.value = studyResult.overviews
+  collectionNames.value = Object.fromEntries(collections.map((collection) => [collection.id, collection.name]))
+  if (dashboard.value && studyResult.overviews.length) dashboard.value.dueCount = studyResult.overviews.reduce((total, entry) => total + entry.dueCards, 0)
   profileFirstName.value = nextProfile?.firstName ?? ''
   profileLastName.value = nextProfile?.lastName ?? ''
 })

@@ -2,7 +2,7 @@
   <section class="page flashcards-page learning-statistics-view">
     <header class="page-header">
       <div>
-        <UBreadcrumb class="app-breadcrumb" :items="withHomeIcon(breadcrumbItems)" />
+        <AppBreadcrumb :items="breadcrumbItems" />
         <p class="eyebrow">Karteikarten</p>
         <h1>Lernstatistik</h1>
         <p>Dein Fortschritt über alle Karten und Sammlungen.</p>
@@ -22,7 +22,7 @@
     <template v-else-if="statistics">
       <div class="statistics-metrics">
         <UCard>
-          <span>Gelernt</span>
+          <span>Einmal bearbeitet</span>
           <strong>{{ statistics.reviewedCards }} / {{ statistics.totalCards }}</strong>
           <small>{{ coveragePercent }} % deiner Karten</small>
         </UCard>
@@ -71,7 +71,7 @@
             </div>
           </div>
           <div class="rating-distribution">
-            <div v-for="rating in statistics.ratingCounts" :key="rating.rating">
+            <div v-for="rating in displayedRatings" :key="rating.rating">
               <span>{{ ratingLabels[rating.rating] }}</span>
               <div class="rating-track">
                 <span :style="{ width: `${ratingWidth(rating.count)}%` }" />
@@ -93,7 +93,7 @@
           <div v-for="collection in statistics.collections" :key="collection.id" class="collection-progress-row">
             <div>
               <strong>{{ collection.name }}</strong>
-              <span>{{ collection.reviewedCards }} von {{ collection.cardCount }} Karten gelernt</span>
+              <span>{{ collection.reviewedCards }} von {{ collection.cardCount }} Karten einmal bearbeitet</span>
             </div>
             <div class="collection-progress-bar" aria-hidden="true">
               <span :style="{ width: `${collectionPercent(collection)}%` }" />
@@ -118,7 +118,8 @@ import { computed, onMounted, ref } from 'vue'
 import { Play } from 'lucide-vue-next'
 import type { LearningCollectionProgress, LearningStatistics, ReviewRating } from '@shared/schemas'
 import { api } from '../api'
-import { type AppBreadcrumbItem, withHomeIcon } from '../ui/breadcrumbs'
+import AppBreadcrumb from '../components/ui/AppBreadcrumb.vue'
+import type { AppBreadcrumbItem } from '../ui/breadcrumbs'
 
 const statistics = ref<LearningStatistics | null>(null)
 const loading = ref(true)
@@ -129,26 +130,31 @@ const breadcrumbItems: AppBreadcrumbItem[] = [
   { label: 'Statistik' }
 ]
 const ratingLabels: Record<ReviewRating, string> = {
-  1: 'Nochmal',
-  2: 'Schwer',
-  3: 'Gut',
-  4: 'Leicht'
+  1: 'Nicht gewusst',
+  2: 'Teilweise gewusst',
+  3: 'Gewusst',
+  4: 'Früher leicht'
 }
 const coveragePercent = computed(() =>
   statistics.value?.totalCards
     ? Math.round((statistics.value.reviewedCards / statistics.value.totalCards) * 100)
     : 0
 )
+const displayedRatings = computed(() => [1, 2, 3].map((rating) => ({
+  rating: rating as ReviewRating,
+  count: (statistics.value?.ratingCounts ?? []).filter((item) => rating === 3 ? item.rating >= 3 : item.rating === rating).reduce((sum, item) => sum + item.count, 0)
+})))
 const maximumActivity = computed(() =>
   Math.max(1, ...(statistics.value?.activity.map((day) => day.reviews) ?? [1]))
 )
 const maximumRating = computed(() =>
-  Math.max(1, ...(statistics.value?.ratingCounts.map((rating) => rating.count) ?? [1]))
+  Math.max(1, ...displayedRatings.value.map((rating) => rating.count))
 )
 
 onMounted(async () => {
   try {
-    statistics.value = await api.getLearningStatistics()
+    const [result, study] = await Promise.all([api.getLearningStatistics(), api.studyFlashcards({ action: 'overview' })])
+    statistics.value = { ...result, collections: result.collections.map((collection) => ({ ...collection, dueCount: study.overviews.find((overview) => overview.collectionId === collection.id)?.dueCards ?? 0 })) }
   } catch {
     error.value = 'Deine Lernstatistik konnte nicht geladen werden.'
   } finally {

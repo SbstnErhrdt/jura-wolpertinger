@@ -63,9 +63,8 @@ describe('mobile hub navigation', () => {
     const moreHub = await readFile(resolve(rendererRoot, 'views/MoreHubView.vue'), 'utf8')
     const styles = await readFile(resolve(rendererRoot, 'styles/main.css'), 'utf8')
 
-    expect(flashcardsHub).toContain('Karteikarten')
-    expect(flashcardsHub).toContain("name: 'flashcards-review'")
-    expect(flashcardsHub).toContain("name: 'flashcards-collections'")
+    expect(flashcardsHub).toContain('<FlashcardsCollectionsView')
+    expect(flashcardsHub).toContain("name: 'flashcards-statistics'")
 
     expect(examsHub).toContain('Prüfungen')
     expect(examsHub).toContain("name: 'dashboard'")
@@ -111,8 +110,8 @@ describe('mobile hub navigation', () => {
     const listHeaderEnd = correction.indexOf('<div v-if="submittedItems.length"', listHeaderStart)
     const listHeader = correction.slice(listHeaderStart, listHeaderEnd)
 
-    expect(listHeader).not.toContain('UBreadcrumb')
-    expect(correction).toContain(':items="withHomeIcon(activeBreadcrumbItems)"')
+    expect(listHeader).not.toContain('AppBreadcrumb')
+    expect(correction).toContain(':items="activeBreadcrumbItems"')
     expect(correction).toContain('submission.value && correction.value ? detailBreadcrumbItems.value : listBreadcrumbItems')
   })
 })

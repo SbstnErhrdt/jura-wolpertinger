@@ -160,6 +160,7 @@ describe('workspace sync snapshots', () => {
 
     const uploadedLearningStates: CloudLearningSyncState[] = []
     const fakeClient = {
+      async downloadStudyRuns() { return [] },
       async downloadLatestSnapshot() {
         return null
       },
@@ -202,6 +203,7 @@ describe('workspace sync snapshots', () => {
       async uploadLearningState(state: CloudLearningSyncState) {
         uploadedLearningStates.push(state)
       },
+      async uploadStudyProgress() { return [] },
       async uploadSnapshot() {},
       async uploadFile() {}
     }
@@ -230,6 +232,7 @@ describe('workspace sync snapshots', () => {
       .run('sync_remote_user_id', '00000000-0000-4000-8000-0000000000a1')
 
     const fakeClient = {
+      async downloadStudyRuns() { return [] },
       async downloadLatestSnapshot() {
         return null
       },
@@ -316,6 +319,7 @@ describe('workspace sync snapshots', () => {
 
       const requestedLocalUserIds: Array<string | undefined> = []
       const fakeClient = {
+        async downloadStudyRuns() { return [] },
         async downloadLatestSnapshot(localUserId?: string) {
           requestedLocalUserIds.push(localUserId)
           return localUserId ? null : snapshot

@@ -2,6 +2,9 @@ import { existsSync, readFileSync } from 'node:fs'
 import { copyFile, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, extname, join, relative } from 'node:path'
 import JSZip from 'jszip'
+import type { StudyCommand, StudyResponse } from '@shared/flashcardStudy'
+import { studyFlashcardsInDatabase } from './flashcardStudyService'
+import { acknowledgeStudyUpload, applyStudyDownloads, loadStudyRuns, planStudySync } from './flashcardStudySyncService'
 import {
   APP_VERSION,
   DEFAULT_AI_MODEL,
@@ -239,16 +242,20 @@ export class AppServices {
     if (!remoteUserId) throw new Error('Bitte verbinde dich zuerst mit der Online-Version.')
     const localUserId = this.getCurrentUserId()
 
+    const remoteStudyRuns = await this.syncClient.downloadStudyRuns()
+    let studyPlan = planStudySync(loadStudyRuns(this.db, localUserId), remoteStudyRuns, input.action === 'download')
+
     if (input.action === 'download') {
       const remoteSnapshot =
         (await this.syncClient.downloadLatestSnapshot(localUserId)) ??
         (await this.syncClient.downloadLatestSnapshot())
       const cloudLearningState = await this.syncClient.downloadLearningState()
-      if (!remoteSnapshot && !hasCloudLearningState(cloudLearningState)) {
+      if (!remoteSnapshot && !hasCloudLearningState(cloudLearningState) && !remoteStudyRuns.length) {
         throw new Error('Online wurden noch keine Daten für diesen Arbeitsbereich gefunden.')
       }
       if (!remoteSnapshot) {
-        mergeCloudLearningStateIntoLocal({ db: this.db, localUserId, cloudState: cloudLearningState })
+        mergeCloudLearningStateIntoLocal({ db: this.db, localUserId, cloudState: cloudLearningState, authoritativeProgress: true })
+        applyStudyDownloads(this.db, localUserId, studyPlan, true)
         const result = createLearningDownloadOnlyResult(cloudLearningState)
         this.rememberSyncResult(result)
         return result
@@ -256,14 +263,28 @@ export class AppServices {
       const filePayloads = await this.downloadSnapshotFiles(remoteSnapshot)
       await writeSnapshotFiles({ filesDir: this.filesDir, snapshot: remoteSnapshot, filePayloads })
       const result = restoreWorkspaceSnapshot({ db: this.db, snapshot: remoteSnapshot, targetUserId: localUserId })
-      mergeCloudLearningStateIntoLocal({ db: this.db, localUserId, cloudState: cloudLearningState })
+      mergeCloudLearningStateIntoLocal({ db: this.db, localUserId, cloudState: cloudLearningState, authoritativeProgress: true })
+      applyStudyDownloads(this.db, localUserId, studyPlan, true)
       this.rememberSyncResult(result)
       return result
     }
 
+    const cloudLearningState = await this.syncClient.downloadLearningState()
+    // Learning can continue during the network request; protect the current dirty members.
+    studyPlan = planStudySync(loadStudyRuns(this.db, localUserId), remoteStudyRuns)
+    const pendingCardIds = new Set(studyPlan.uploads.flatMap((run) => run.items.map((item) => item.cardId)))
+    const localLearningState = buildCloudLearningStateFromLocal({ db: this.db, localUserId, remoteUserId })
+    const knownEvents = new Map(localLearningState.reviewEvents.map((event) => [event.id, event]))
+    if (cloudLearningState.reviewEvents.some((event) => pendingCardIds.has(event.cardId)
+      && (!knownEvents.has(event.id) || (event.voidedAt && event.voidedAt !== knownEvents.get(event.id)?.voidedAt)))) {
+      throw new Error('Der Lernstand wurde lokal und auf einem anderen Gerät geändert. Deine lokalen Änderungen bleiben erhalten. Lade die Online-Daten ausdrücklich neu, um den dortigen Stand zu übernehmen.')
+    }
+    // Undo restores the earlier schedule timestamp; do not overwrite this pending local restoration.
+    mergeCloudLearningStateIntoLocal({ db: this.db, localUserId, cloudState: cloudLearningState,
+      authoritativeProgress: true, protectedProgressCardIds: pendingCardIds })
+    applyStudyDownloads(this.db, localUserId, studyPlan)
+    studyPlan = planStudySync(loadStudyRuns(this.db, localUserId), remoteStudyRuns)
     if (input.action === 'merge') {
-      const cloudLearningState = await this.syncClient.downloadLearningState()
-      mergeCloudLearningStateIntoLocal({ db: this.db, localUserId, cloudState: cloudLearningState })
       const remoteSnapshot = await this.syncClient.downloadLatestSnapshot(localUserId)
       if (remoteSnapshot) {
         const localSnapshot = this.createSnapshot(remoteUserId)
@@ -271,13 +292,10 @@ export class AppServices {
       }
     }
 
-    await this.syncClient.uploadLearningState(
-      buildCloudLearningStateFromLocal({
-        db: this.db,
-        localUserId,
-        remoteUserId
-      })
-    )
+    const learningState = buildCloudLearningStateFromLocal({ db: this.db, localUserId, remoteUserId })
+    await this.syncClient.uploadLearningState(learningState)
+    const savedRuns = await this.syncClient.uploadStudyProgress(learningState, studyPlan.uploads, cloudLearningState.schedules)
+    studyPlan.uploads.forEach((run, index) => acknowledgeStudyUpload(this.db, localUserId, run, savedRuns[index]))
     const snapshot = this.createSnapshot(remoteUserId)
     const filePayloads = await readExistingSnapshotFiles(snapshot)
     for (const payload of filePayloads) {
@@ -1293,7 +1311,7 @@ export class AppServices {
     const userId = this.getCurrentUserId()
     const now = nowIso()
     const reviewRows = this.db
-      .prepare('SELECT card_id, reviewed_at FROM learning_review_events WHERE user_id = ?')
+      .prepare('SELECT card_id, reviewed_at FROM learning_review_events WHERE user_id = ? AND voided_at IS NULL')
       .all(userId) as Array<{ card_id: string; reviewed_at: string }>
     const latestRatingRows = this.db
       .prepare(
@@ -1306,7 +1324,7 @@ export class AppServices {
           AND event.rowid = (
             SELECT latest.rowid
             FROM learning_review_events latest
-            WHERE latest.user_id = event.user_id AND latest.card_id = event.card_id
+            WHERE latest.user_id = event.user_id AND latest.card_id = event.card_id AND latest.voided_at IS NULL
             ORDER BY latest.reviewed_at DESC, latest.rowid DESC
             LIMIT 1
           )
@@ -1339,7 +1357,7 @@ export class AppServices {
         LEFT JOIN learning_review_events latest ON latest.rowid = (
           SELECT event.rowid
           FROM learning_review_events event
-          WHERE event.user_id = card.user_id AND event.card_id = card.id
+          WHERE event.user_id = card.user_id AND event.card_id = card.id AND event.voided_at IS NULL
           ORDER BY event.reviewed_at DESC, event.rowid DESC
           LIMIT 1
         )
@@ -1920,6 +1938,16 @@ export class AppServices {
       .slice(0, limit)
   }
 
+  studyFlashcards(input: StudyCommand): StudyResponse {
+    return studyFlashcardsInDatabase(this.db, input, {
+      userId: this.getCurrentUserId(),
+      collectionIds: () => this.listLearningCollections().map(collection => collection.id),
+      collections: () => this.listLearningCollections(),
+      cards: collectionId => this.listLearningCards(collectionId).map(card => reviewCardSchema.parse(card)),
+      record: review => this.recordReview(review)
+    })
+  }
+
   recordReview(input: RecordReviewInput): RecordReviewResult {
     const rating = reviewRatingSchema.parse(input.rating)
     const card = this.getLearningCard(input.cardId)
@@ -1929,7 +1957,7 @@ export class AppServices {
     const reps = schedule.reps + 1
     const lapses = schedule.lapses + (rating === 1 ? 1 : 0)
     const { nextDueAt, intervalLabel } = scheduleNextReview(rating, reps)
-    const eventId = newId()
+    const eventId = input.clientEventId ?? newId()
     this.db.transaction(() => {
       this.db
         .prepare(
@@ -2552,7 +2580,7 @@ export class AppServices {
     const rows = this.db
       .prepare(
         `
-        SELECT reviewed_at AS activity_at FROM learning_review_events WHERE user_id = ?
+        SELECT reviewed_at AS activity_at FROM learning_review_events WHERE user_id = ? AND voided_at IS NULL
         UNION ALL
         SELECT submitted_at AS activity_at FROM submissions WHERE user_id = ?
       `
@@ -2714,10 +2742,18 @@ export class AppServices {
 }
 
 function assertSnapshotsCanMerge(localSnapshot: WorkspaceSnapshot, remoteSnapshot: WorkspaceSnapshot): void {
+  const compositeKeys: Record<string, string[]> = {
+    exam_tags: ['user_id', 'exam_id', 'tag_id'],
+    learning_card_tags: ['user_id', 'card_id', 'tag'],
+    learning_card_schedules: ['user_id', 'card_id']
+  }
   for (const [table, localRows] of Object.entries(localSnapshot.tables)) {
-    const remoteById = new Map((remoteSnapshot.tables[table] ?? []).map((row) => [String(row.id), row]))
+    // Traversals have their own per-run server CAS instead of a whole-snapshot hash.
+    if (table === 'learning_study_runs') continue
+    const key = (row: Row) => JSON.stringify((compositeKeys[table] ?? ['id']).map(column => row[column]))
+    const remoteById = new Map((remoteSnapshot.tables[table] ?? []).map((row) => [key(row), row]))
     for (const localRow of localRows) {
-      const remoteRow = remoteById.get(String(localRow.id))
+      const remoteRow = remoteById.get(key(localRow))
       if (!remoteRow) continue
       if (hashJson(localRow) !== hashJson(remoteRow)) {
         throw new Error('Einige Daten wurden lokal und online unterschiedlich geändert. Bitte wähle eine Richtung für die Übertragung.')

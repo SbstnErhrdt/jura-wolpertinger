@@ -1,9 +1,8 @@
-import { readdir, readFile, stat } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const rendererRoot = resolve(process.cwd(), 'src/renderer/src')
-const publicRoot = resolve(process.cwd(), 'src/renderer/public')
 
 describe('flashcards UI affordances', () => {
   it('presents collections as structured cards with icons, status chips and spaced actions', async () => {
@@ -75,7 +74,7 @@ describe('flashcards UI affordances', () => {
 
     expect(source).not.toContain('<details>')
     expect(source).toContain('UDropdownMenu')
-    expect(source).toContain('Aus Session entfernen')
+    expect(source).toContain('Für später zurückstellen')
   })
 
   it('supports keyboard-driven review with visible key hints and skip navigation', async () => {
@@ -93,23 +92,20 @@ describe('flashcards UI affordances', () => {
     expect(source).toContain('1')
     expect(source).toContain('2')
     expect(source).toContain('3')
-    expect(source).toContain('4')
-    expect(source).toContain('Überspringen')
+    expect(source).toContain('Für später zurückstellen')
+    expect(source).toContain('Bewertung rückgängig machen')
     expect(styles).toContain('.key-hint')
     expect(styles).toContain('.review-navigation')
   })
 
-  it('styles review shortcuts as keycaps and animates card flips', async () => {
+  it('keeps question and answer readable together with keyboard hints', async () => {
     const source = await readFile(resolve(rendererRoot, 'views/FlashcardsReviewView.vue'), 'utf8')
     const styles = await readFile(resolve(rendererRoot, 'styles/main.css'), 'utf8')
 
-    expect(source).toContain('study-card-face-back')
-    expect(source).toContain('study-card-face-front')
-    expect(source).toContain('study-card-motion-next')
-    expect(source).toContain('study-card-motion-previous')
-    expect(source).toContain('cardMotion')
-    expect(source).toContain('<kbd class="key-hint" aria-hidden="true">←</kbd>')
-    expect(source).toContain('<kbd class="key-hint" aria-hidden="true">→</kbd>')
+    expect(source).toContain('class="study-question" aria-label="Frage"')
+    expect(source).toContain('v-if="showBack" class="study-answer"')
+    expect(source).toContain('<kbd class="key-hint">Enter</kbd>')
+    expect(source).not.toContain('study-card-face')
     expect(styles).toContain('--keycap-bg')
     expect(styles).toContain('--keycap-shadow')
     expect(styles).toContain('.key-hint::after')
@@ -124,24 +120,13 @@ describe('flashcards UI affordances', () => {
     expect(styles).toContain(":root[data-theme='dark'] .key-hint")
   })
 
-  it('celebrates every tenth reviewed card with rotating optimized Wolpi artwork', async () => {
+  it('keeps complete-run progress and voluntary pauses alongside Wolpi encouragement', async () => {
     const source = await readFile(resolve(rendererRoot, 'views/FlashcardsReviewView.vue'), 'utf8')
-    const styles = await readFile(resolve(rendererRoot, 'styles/main.css'), 'utf8')
-    const wolpiAssets = await readdir(resolve(publicRoot, 'assets/wolpi'))
-    const firstAsset = await stat(resolve(publicRoot, 'assets/wolpi/wolpi-01.webp'))
-
-    expect(source).toContain('reviewedCardsInSession.value % 10')
-    expect(source).toContain('showWolpiMilestone')
-    expect(source).toContain('assets/wolpi/wolpi-')
-    expect(source).toContain('WOLPI_MILESTONE_IMAGE_COUNT = 39')
-    expect(source).toContain('<Transition name="wolpi-milestone">')
-    expect(source).toContain('aria-live="polite"')
-    expect(source).toContain('Motivation ausblenden')
-    expect(styles).toContain('.wolpi-milestone')
-    expect(styles).toContain('@keyframes wolpi-milestone-pop')
-    expect(styles).toContain('.wolpi-milestone-enter-active')
-    expect(styles).toContain(":root[data-theme='dark'] .wolpi-milestone")
-    expect(wolpiAssets.filter((file) => file.endsWith('.webp'))).toHaveLength(39)
-    expect(firstAsset.size).toBeLessThan(80_000)
+    expect(source).toContain(':aria-valuenow="run.completed"')
+    expect(source).toContain('Pause machen')
+    expect(source).toContain('Für heute pausiert')
+    expect(source).toContain('Sammlung einmal vollständig bearbeitet')
+    expect(source).toContain('<StudyCelebration')
+    expect(source).not.toContain('againQueue')
   })
 })

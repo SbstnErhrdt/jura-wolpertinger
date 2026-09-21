@@ -48,6 +48,7 @@ export type CloudLearningReviewEvent = {
   rating: ReviewRating
   reviewedAt: string
   elapsedMs: number | null
+  voidedAt?: string | null
 }
 
 export type CloudLearningCardQualityEvent = {
@@ -96,6 +97,8 @@ export function mergeCloudLearningStateIntoLocal(input: {
   db: SqliteDatabase
   localUserId: string
   cloudState: CloudLearningSyncState
+  authoritativeProgress?: boolean
+  protectedProgressCardIds?: ReadonlySet<string>
 }): LearningSyncMergeResult {
   const result: LearningSyncMergeResult = {
     collectionsImportedOrUpdated: 0,
@@ -182,10 +185,13 @@ export function mergeCloudLearningStateIntoLocal(input: {
     }
 
     for (const schedule of input.cloudState.schedules) {
+      if (input.protectedProgressCardIds?.has(schedule.cardId)) continue
       const existing = input.db
-        .prepare('SELECT updated_at FROM learning_card_schedules WHERE user_id = ? AND card_id = ?')
+        .prepare(`SELECT MAX(updated_at, COALESCE((SELECT MAX(voided_at) FROM learning_review_events
+          WHERE user_id = learning_card_schedules.user_id AND card_id = learning_card_schedules.card_id), updated_at)) AS updated_at
+          FROM learning_card_schedules WHERE user_id = ? AND card_id = ?`)
         .get(input.localUserId, schedule.cardId) as { updated_at: string } | undefined
-      if (existing && existing.updated_at >= schedule.updatedAt) continue
+      if (!input.authoritativeProgress && existing && existing.updated_at >= schedule.updatedAt) continue
       input.db
         .prepare(
           `
@@ -214,16 +220,31 @@ export function mergeCloudLearningStateIntoLocal(input: {
       result.schedulesImportedOrUpdated += 1
     }
 
+    if (input.authoritativeProgress) {
+      const scheduledCardIds = new Set(input.cloudState.schedules.map(schedule => schedule.cardId))
+      const removeSchedule = input.db.prepare('DELETE FROM learning_card_schedules WHERE user_id = ? AND card_id = ?')
+      // Absence is meaningful after undo. Restrict deletion to cards actually returned by the cloud.
+      for (const card of input.cloudState.cards) {
+        if (!scheduledCardIds.has(card.id) && !input.protectedProgressCardIds?.has(card.id)) {
+          result.schedulesImportedOrUpdated += removeSchedule.run(input.localUserId, card.id).changes
+        }
+      }
+    }
+
     for (const event of input.cloudState.reviewEvents) {
       const insert = input.db
         .prepare(
           `
-          INSERT OR IGNORE INTO learning_review_events
-            (id, user_id, card_id, rating, reviewed_at, elapsed_ms)
-          VALUES (?, ?, ?, ?, ?, ?)
+          INSERT INTO learning_review_events
+            (id, user_id, card_id, rating, reviewed_at, elapsed_ms, voided_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET voided_at = excluded.voided_at
+          WHERE learning_review_events.user_id = excluded.user_id
+            AND excluded.voided_at IS NOT NULL
+            AND (learning_review_events.voided_at IS NULL OR excluded.voided_at > learning_review_events.voided_at)
         `
         )
-        .run(event.id, input.localUserId, event.cardId, event.rating, event.reviewedAt, event.elapsedMs)
+        .run(event.id, input.localUserId, event.cardId, event.rating, event.reviewedAt, event.elapsedMs, event.voidedAt ?? null)
       result.reviewEventsImported += insert.changes
     }
 
@@ -346,7 +367,9 @@ export function buildCloudLearningStateFromLocal(input: {
   })
 
   const schedules = (input.db
-    .prepare('SELECT * FROM learning_card_schedules WHERE user_id = ?')
+    .prepare(`SELECT s.*, MAX(s.updated_at, COALESCE((SELECT MAX(voided_at) FROM learning_review_events e
+      WHERE e.user_id = s.user_id AND e.card_id = s.card_id), s.updated_at)) AS sync_updated_at
+      FROM learning_card_schedules s WHERE s.user_id = ?`)
     .all(input.localUserId) as Row[]).map((row): CloudLearningSchedule => ({
     userId: input.remoteUserId,
     cardId: String(row.card_id),
@@ -355,7 +378,7 @@ export function buildCloudLearningStateFromLocal(input: {
     lapses: Number(row.lapses),
     lastRating: row.last_rating === null || row.last_rating === undefined ? null : (Number(row.last_rating) as ReviewRating),
     lastReviewedAt: row.last_reviewed_at ? String(row.last_reviewed_at) : null,
-    updatedAt: String(row.updated_at)
+    updatedAt: String(row.sync_updated_at)
   }))
 
   const reviewEvents = (input.db
@@ -366,7 +389,8 @@ export function buildCloudLearningStateFromLocal(input: {
     cardId: String(row.card_id),
     rating: Number(row.rating) as ReviewRating,
     reviewedAt: String(row.reviewed_at),
-    elapsedMs: row.elapsed_ms === null || row.elapsed_ms === undefined ? null : Number(row.elapsed_ms)
+    elapsedMs: row.elapsed_ms === null || row.elapsed_ms === undefined ? null : Number(row.elapsed_ms),
+    voidedAt: row.voided_at ? String(row.voided_at) : null
   }))
 
   const qualityEvents = (input.db

@@ -130,7 +130,7 @@ export const BAYBO_PODCAST_CATALOG: PodcastCatalog = {
           description:
             'Eine 18-teilige Lernreihe zur Bayerischen Bauordnung, vom Grundbegriff bis zur Abstandsfläche.',
           edition: 'April 2026',
-          artworkUrl: null,
+          artworkUrl: `${AUDIO_BASE_URL}/cover.png`,
           episodes: episodes.map((episode, index) => {
             const number = index + 1
             const directory = `${String(number).padStart(2, '0')}-${episode.slug}`

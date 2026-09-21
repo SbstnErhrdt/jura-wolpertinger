@@ -2,22 +2,28 @@
   <section class="page flashcards-page">
     <header class="page-header">
       <div>
-        <UBreadcrumb class="app-breadcrumb" :items="withHomeIcon(breadcrumbItems)" />
+        <AppBreadcrumb :items="breadcrumbItems" />
         <p class="eyebrow">Sammlung</p>
         <h1>{{ collection?.name || 'Sammlung' }}</h1>
-        <p>{{ collection?.subject || 'Allgemein' }} · {{ cardsTotal }} Karten · {{ collection?.dueCount ?? 0 }} empfohlen</p>
+        <p>{{ collection?.subject || 'Allgemein' }} · {{ studyOverview?.reviewedCards ?? 0 }} von {{ studyOverview?.eligibleCards ?? cardsTotal }} Karten einmal bearbeitet</p>
       </div>
       <div class="header-actions">
         <UButton color="neutral" variant="outline" :to="{ name: 'flashcards-collections' }">Zurück</UButton>
-        <UButton color="neutral" variant="outline" :to="{ name: 'flashcards-review', query: { collection: collectionId } }">
-          Wiederholen
+        <UButton :disabled="loading || !studyOverview" :to="{ name: 'flashcards-review', query: { ...studyEntry(studyOverview).query, collection: collectionId } }">
+          {{ studyEntry(studyOverview).label }}
         </UButton>
-        <UButton type="button" @click="openCreateCardDialog">
+        <UButton color="neutral" variant="outline" type="button" @click="openCreateCardDialog">
           <Plus :size="17" aria-hidden="true" />
           Neue Karteikarte
         </UButton>
       </div>
     </header>
+    <div v-if="studyOverview" class="study-collection-options">
+      <UButton v-if="studyOverview.dueCards" color="neutral" variant="ghost" :to="{ name: 'flashcards-review', query: { collection: collectionId, mode: 'review' } }">{{ studyOverview.dueCards }} Wiederholungen empfohlen</UButton>
+      <UButton v-if="studyOverview.weakCards" color="neutral" variant="ghost" :to="{ name: 'flashcards-review', query: { collection: collectionId, mode: 'weak' } }">{{ studyOverview.weakCards }} unsichere Karten wiederholen</UButton>
+      <UButton v-if="studyOverview.reviewedCards" color="neutral" variant="ghost" :to="{ name: 'flashcards-review', query: { collection: collectionId, mode: 'all' } }">Gesamte Sammlung durcharbeiten</UButton>
+      <span v-if="studyOverview.pausedCards">{{ studyOverview.pausedCards }} Karten pausiert</span>
+    </div>
 
     <UAlert v-if="transferMessage" class="action-notice" color="success" :description="transferMessage" />
 
@@ -73,7 +79,7 @@
             <dd>{{ card.reps }}</dd>
           </div>
           <div class="performance-cell">
-            <dt>Nochmal</dt>
+            <dt>Nicht gewusst</dt>
             <dd>{{ card.lapses }}</dd>
           </div>
         </dl>
@@ -214,9 +220,12 @@ import { Plus, Save } from 'lucide-vue-next'
 import { useRoute, useRouter } from 'vue-router'
 import type { LearningCard, LearningCardQualityReason, LearningCardQualityStatus, LearningCollection, ReviewRating } from '@shared/schemas'
 import { api } from '../api'
+import { studyEntry } from '../ui/studyNavigation'
+import type { StudyOverview } from '@shared/flashcardStudy'
 import TagInput from '../components/TagInput.vue'
 import type { AppActionMenuItem } from '../ui/actionMenu'
-import { type AppBreadcrumbItem, withHomeIcon } from '../ui/breadcrumbs'
+import AppBreadcrumb from '../components/ui/AppBreadcrumb.vue'
+import type { AppBreadcrumbItem } from '../ui/breadcrumbs'
 import {
   cardQualityLabel,
   cardQualityOptions,
@@ -229,6 +238,7 @@ const route = useRoute()
 const router = useRouter()
 const collectionId = computed(() => String(route.params.id))
 const collection = ref<LearningCollection | null>(null)
+const studyOverview = ref<StudyOverview>()
 const cards = ref<LearningCard[]>([])
 const search = ref('')
 const sortMode = ref<'updated' | 'title' | 'due' | 'rating'>('updated')
@@ -257,10 +267,10 @@ const qualityFilterOptions = [
 ]
 const lastRatingFilterOptions = [
   { label: 'Alle', value: 'all' },
-  { label: 'Nochmal', value: 1 },
-  { label: 'Schwer', value: 2 },
-  { label: 'Gut', value: 3 },
-  { label: 'Leicht', value: 4 },
+  { label: 'Nicht gewusst', value: 1 },
+  { label: 'Teilweise gewusst', value: 2 },
+  { label: 'Gewusst', value: 3 },
+  { label: 'Früher als leicht bewertet', value: 4 },
   { label: 'Noch nicht bewertet', value: 'unrated' }
 ]
 const transferMessage = ref('')
@@ -299,17 +309,25 @@ watch([search, sortMode, qualityFilter, lastRatingFilter], () => {
 })
 
 async function load(): Promise<void> {
+  const requestedCollectionId = collectionId.value
+  const isCurrentCollection = () => route.name === 'flashcards-collection' && collectionId.value === requestedCollectionId
   loading.value = true
   loadError.value = ''
   try {
-    const collections = await api.listLearningCollections()
-    collection.value = collections.find((candidate) => candidate.id === collectionId.value) ?? null
+    const [summary, collections] = await Promise.all([
+      api.studyFlashcards({ action: 'overview', collectionId: requestedCollectionId }),
+      api.listLearningCollections()
+    ])
+    if (!isCurrentCollection()) return
+    studyOverview.value = summary.overviews[0]
+    collection.value = collections.find((candidate) => candidate.id === requestedCollectionId) ?? null
     if (!collection.value) {
       await router.replace({ name: 'flashcards-collections' })
       return
     }
     await loadCards({ page: 1 })
   } catch (error) {
+    if (!isCurrentCollection()) return
     loadError.value = error instanceof Error ? error.message : 'Karteikarten konnten nicht geladen werden.'
   } finally {
     loading.value = false
@@ -408,7 +426,7 @@ async function saveCard(): Promise<void> {
   }
   showCardDialog.value = false
   editingCard.value = null
-  await loadCards()
+  await load()
 }
 
 function openQualityDialog(card: LearningCard): void {
@@ -441,7 +459,7 @@ async function saveQualityRating(): Promise<void> {
     })
     transferMessage.value = 'Kartenqualität gespeichert.'
     qualityCardTarget.value = null
-    await loadCards()
+    await load()
   } finally {
     qualityBusy.value = false
   }
@@ -463,7 +481,7 @@ async function confirmDeleteCard(): Promise<void> {
     await api.deleteLearningCard({ id: deleteCardTarget.value.id })
     transferMessage.value = 'Karteikarte gelöscht.'
     deleteCardTarget.value = null
-    await loadCards()
+    await load()
   } finally {
     deleteCardBusy.value = false
   }

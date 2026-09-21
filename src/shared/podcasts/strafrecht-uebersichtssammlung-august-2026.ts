@@ -11,6 +11,9 @@ const EPISODE_SLUG = 'urteilsaufbau-und-systematik-der-strafzumessung'
 const AUDIO_URL =
   'https://app.jura-wolpi.de/api/storage/v1/object/public/podcast-audio/' +
   `${STRAFRECHT_UEBERSICHTSSAMMLUNG_SLUG}/01-${EPISODE_SLUG}.mp3`
+const ARTWORK_URL =
+  'https://app.jura-wolpi.de/api/storage/v1/object/public/podcast-audio/' +
+  `${STRAFRECHT_UEBERSICHTSSAMMLUNG_SLUG}/cover.png`
 
 export const STRAFRECHT_UEBERSICHTSSAMMLUNG_PODCAST_CATALOG: PodcastCatalog = {
   legalAreas: [
@@ -25,7 +28,7 @@ export const STRAFRECHT_UEBERSICHTSSAMMLUNG_PODCAST_CATALOG: PodcastCatalog = {
           description:
             'Eine Übersichtssammlung zu zentralen Strukturen und Prüfungsschemata des Strafrechts.',
           edition: 'August 2026',
-          artworkUrl: null,
+          artworkUrl: ARTWORK_URL,
           episodes: [
             {
               id: STRAFRECHT_UEBERSICHTSSAMMLUNG_EPISODE_ID,

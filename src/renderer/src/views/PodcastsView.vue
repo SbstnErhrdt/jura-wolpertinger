@@ -2,7 +2,7 @@
   <section class="page podcasts-view">
     <header class="page-header">
       <div>
-        <UBreadcrumb class="app-breadcrumb" :items="withHomeIcon(breadcrumbItems)" />
+        <AppBreadcrumb :items="breadcrumbItems" />
         <p class="eyebrow">Audio lernen</p>
         <h1>Podcasts</h1>
         <p>Juristische Lernreihen für unterwegs und zwischendurch.</p>
@@ -28,17 +28,28 @@
             :to="{ name: 'podcast-series', params: { seriesSlug: series.slug } }"
             :aria-label="series.title"
           >
-            <div class="podcast-cover" aria-hidden="true">
-              <img src="/assets/icon.png" alt="" />
-              <span>Jura<br />Audio</span>
-            </div>
+            <PodcastArtwork :artwork-url="series.artworkUrl" :title="series.title" />
             <div class="podcast-series-copy">
               <p>{{ series.edition }}</p>
               <h3>{{ series.title }}</h3>
               <span>{{ series.description }}</span>
-              <small>
-                {{ series.episodes.length }} Folgen · {{ completedEpisodes(series.episodes) }} gehört
-              </small>
+              <div class="podcast-series-progress">
+                <div class="podcast-series-progress-caption">
+                  <span>{{ progressLabel(series.episodes) }}</span>
+                  <strong>{{ seriesProgress(series.episodes).percentage }} %</strong>
+                </div>
+                <div
+                  class="podcast-series-progress-track"
+                  role="progressbar"
+                  :aria-label="`Hörfortschritt: ${series.title}`"
+                  :aria-valuenow="seriesProgress(series.episodes).percentage"
+                  aria-valuemin="0"
+                  aria-valuemax="100"
+                  :aria-valuetext="progressValueText(series.title, series.episodes)"
+                >
+                  <span :style="{ width: `${seriesProgress(series.episodes).percentage}%` }" />
+                </div>
+              </div>
             </div>
           </UPageCard>
         </div>
@@ -51,9 +62,12 @@
 import { onMounted, ref } from 'vue'
 import { Landmark } from 'lucide-vue-next'
 import type { PodcastCatalog, PodcastEpisode } from '@shared/schemas'
+import { calculatePodcastSeriesProgress } from '@shared/podcastProgress'
 import { api } from '../api'
 import { usePodcastPlayer } from '../podcasts/usePodcastPlayer'
-import { type AppBreadcrumbItem, withHomeIcon } from '../ui/breadcrumbs'
+import AppBreadcrumb from '../components/ui/AppBreadcrumb.vue'
+import PodcastArtwork from '../components/PodcastArtwork.vue'
+import type { AppBreadcrumbItem } from '../ui/breadcrumbs'
 
 const catalog = ref<PodcastCatalog | null>(null)
 const loading = ref(true)
@@ -75,7 +89,18 @@ onMounted(async () => {
   }
 })
 
-function completedEpisodes(episodes: PodcastEpisode[]): number {
-  return episodes.filter((episode) => episode.progress?.completed).length
+function seriesProgress(episodes: PodcastEpisode[]) {
+  return calculatePodcastSeriesProgress(episodes)
+}
+
+function progressLabel(episodes: PodcastEpisode[]): string {
+  const progress = seriesProgress(episodes)
+  const episodeLabel = progress.totalEpisodes === 1 ? 'Folge abgeschlossen' : 'Folgen abgeschlossen'
+  return `${progress.completedEpisodes} von ${progress.totalEpisodes} ${episodeLabel}`
+}
+
+function progressValueText(title: string, episodes: PodcastEpisode[]): string {
+  const progress = seriesProgress(episodes)
+  return `${title}: ${progress.percentage} Prozent gehört, ${progressLabel(episodes)}`
 }
 </script>

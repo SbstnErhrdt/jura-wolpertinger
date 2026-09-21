@@ -1,0 +1,27 @@
+{
+  "legalArea": {
+    "id": "172b38f6-bf72-4b1b-9af4-f7d1e7337728",
+    "slug": "zivilrecht",
+    "name": "Zivilrecht",
+    "sortIndex": 0
+  },
+  "series": {
+    "id": "4d7c41fc-5785-4f0a-baad-22906dbc97bc",
+    "slug": "kautelarrecht-september-2026",
+    "title": "Kautelarrecht",
+    "description": "Eine Lernreihe zu kautelarjuristischen Gestaltungsfragen zwischen Erbrecht, Gesellschaftsrecht und MoPeG.",
+    "edition": "September 2026",
+    "artworkUrl": "https://app.jura-wolpi.de/api/storage/v1/object/public/podcast-audio/kautelarrecht-september-2026/cover.png",
+    "sortIndex": 10,
+    "publishedAt": "2026-09-20T00:00:00.000Z"
+  },
+  "episode": {
+    "id": "7eb18ca2-364b-46b2-89e5-db7a1a24a38f",
+    "slug": "kautelarrecht-von-erbrecht-bis-mopeg",
+    "number": 1,
+    "title": "Kautelarrecht von Erbrecht bis MoPeG",
+    "description": "Kautelarrechtliche Gestaltung von erbrechtlichen Ausgangslagen bis zu den Neuerungen des MoPeG.",
+    "durationSeconds": 2051.422,
+    "publishedAt": "2026-09-20T00:00:00.000Z"
+  }
+}

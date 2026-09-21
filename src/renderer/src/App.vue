@@ -170,7 +170,7 @@
       />
 
       <main class="main-pane">
-        <RouterView />
+        <RouterView :key="route.name === 'flashcards-review' ? route.fullPath : undefined" />
       </main>
       <PodcastPlayer v-if="!isExamFocus" />
 
@@ -222,7 +222,7 @@
               <UButton type="button" class="onboarding-action-card" variant="outline" @click="openOnboardingTarget('flashcards')">
                 <Layers :size="20" aria-hidden="true" />
                 <span>Karteikarten lernen</span>
-                <small>Wiederholen oder Sammlungen öffnen.</small>
+                <small>Eine Sammlung auswählen und durcharbeiten.</small>
               </UButton>
               <UButton type="button" class="onboarding-action-card" variant="outline" @click="openOnboardingTarget('exam')">
                 <LibraryBig :size="20" aria-hidden="true" />
@@ -446,7 +446,7 @@ const homeNavigationItems = computed(() => [
 ])
 const flashcardNavigationItems = computed(() => [
   {
-    label: 'Wiederholen',
+    label: 'Lernen',
     icon: 'i-lucide-layers',
     to: { name: 'flashcards-review' },
     active: route.name === 'flashcards-review'

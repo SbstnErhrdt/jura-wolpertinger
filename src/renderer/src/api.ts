@@ -68,6 +68,7 @@ import {
 } from '@shared/schemas'
 import { selectExamRevisionIdsForDeletion } from '@shared/revisionRetention'
 import { BAYBO_PODCAST_CATALOG } from '@shared/podcasts/baybo-april-2026'
+import { executeStudyCommand, type StoredStudyRun } from '@shared/flashcardStudyEngine'
 
 const BROWSER_STORE_KEY = 'jura-wolpertinger-browser-dev-v1'
 const AI_CORRECTION_NOT_IMPLEMENTED_MESSAGE = 'Diese Funktion ist derzeit nicht freigeschaltet.'
@@ -93,6 +94,7 @@ type BrowserStore = {
   learningCards: LearningCard[]
   learningCardQualityEvents: LearningCardQualityEvent[]
   learningReviewEvents: LearningReviewEvent[]
+  studyRuns: StoredStudyRun[]
   learningSchedules: Array<{
     userId: string
     cardId: string
@@ -649,7 +651,7 @@ function createBrowserDevApi(): AppApi {
       const activityDays = new Set(
         [
           ...store.learningReviewEvents
-            .filter((event) => event.userId === user.id)
+            .filter((event) => event.userId === user.id && !event.voidedAt)
             .map((event) => localDateKey(new Date(event.reviewedAt))),
           ...store.submissions
             .filter((submission) => submission.userId === user.id)
@@ -671,7 +673,7 @@ function createBrowserDevApi(): AppApi {
       const cards = store.learningCards.filter(
         (card) => card.userId === user.id && !card.isArchived
       )
-      const reviews = store.learningReviewEvents.filter((event) => event.userId === user.id)
+      const reviews = store.learningReviewEvents.filter((event) => event.userId === user.id && !event.voidedAt)
       const latestByCard = new Map<string, LearningReviewEvent>()
       for (const review of reviews) {
         const current = latestByCard.get(review.cardId)
@@ -951,30 +953,30 @@ function createBrowserDevApi(): AppApi {
     async recordReview(input: RecordReviewInput): Promise<RecordReviewResult> {
       const store = readStore()
       const user = ensureBrowserUser(store)
-      const rating = reviewRatingSchema.parse(input.rating)
-      const card = store.learningCards.find((candidate) => candidate.id === input.cardId && candidate.userId === user.id)
-      if (!card) throw new Error(`Learning card not found: ${input.cardId}`)
-      const schedule = browserScheduleFor(store, user.id, card.id)
-      const reps = schedule.reps + 1
-      const lapses = schedule.lapses + (rating === 1 ? 1 : 0)
-      const { nextDueAt, intervalLabel } = scheduleBrowserNextReview(rating, reps)
-      const event: LearningReviewEvent = {
-        schemaVersion: 1,
-        id: newId(),
-        userId: user.id,
-        cardId: card.id,
-        rating,
-        reviewedAt: nowIso(),
-        elapsedMs: input.elapsedMs ?? null
-      }
-      store.learningReviewEvents.push(event)
-      schedule.dueAt = nextDueAt
-      schedule.reps = reps
-      schedule.lapses = lapses
-      schedule.lastRating = rating
-      schedule.lastReviewedAt = event.reviewedAt
+      const result = recordBrowserReview(store, user.id, input)
       writeStore(store)
-      return { event, nextDueAt, intervalLabel }
+      return result
+    },
+    async studyFlashcards(input) {
+      const store = readStore()
+      const user = ensureBrowserUser(store)
+      const result = executeStudyCommand(input, {
+        userId: user.id, runs: store.studyRuns, now: nowIso, newId,
+        collectionIds: () => store.learningCollections.filter((collection) => collection.userId === user.id).map((collection) => collection.id),
+        collections: () => store.learningCollections.filter((collection) => collection.userId === user.id),
+        cards: (collectionId) => store.learningCards.filter((card) => card.userId === user.id && card.collectionId === collectionId).map((card) => ({ ...card, ...browserScheduleFor(store, user.id, card.id), ...browserCardQualityFor(store, user.id, card.id) })),
+        capture: (cardId) => ({ ...browserScheduleFor(store, user.id, cardId) }),
+        record: (review) => recordBrowserReview(store, user.id, review),
+        undo: (review, previous) => {
+          const events = store.learningReviewEvents.filter((event) => event.userId === user.id && event.cardId === review.event.cardId && !event.voidedAt)
+          const latest = events.at(-1)
+          if (latest?.id !== review.event.id) throw new Error('Die Karte wurde inzwischen erneut bewertet. Diese Bewertung lässt sich nicht mehr zurücknehmen.')
+          latest.voidedAt = nowIso()
+          Object.assign(browserScheduleFor(store, user.id, review.event.cardId), previous)
+        }
+      })
+      if (input.action !== 'catalog') writeStore(store)
+      return result
     },
     async rateLearningCardQuality(input: RateLearningCardQualityInput) {
       const store = readStore()
@@ -1336,6 +1338,7 @@ function emptyStore(): BrowserStore {
     learningCards: [],
     learningCardQualityEvents: [],
     learningReviewEvents: [],
+    studyRuns: [],
     learningSchedules: [],
     podcastProgress: [],
     userProfiles: []
@@ -1706,6 +1709,24 @@ function browserCollectionsForCurrentUser(store: BrowserStore): LearningCollecti
         dueCount
       }
     })
+}
+
+function recordBrowserReview(store: BrowserStore, userId: string, input: RecordReviewInput): RecordReviewResult {
+  const rating = reviewRatingSchema.parse(input.rating)
+  const card = store.learningCards.find((candidate) => candidate.id === input.cardId && candidate.userId === userId)
+  if (!card) throw new Error('Diese Karte ist nicht verfügbar.')
+  const schedule = browserScheduleFor(store, userId, card.id)
+  const existing = input.clientEventId ? store.learningReviewEvents.find((event) => event.id === input.clientEventId) : null
+  if (existing) {
+    if (existing.userId !== userId || existing.cardId !== card.id || existing.rating !== rating || existing.voidedAt) throw new Error('Diese Bewertung wurde bereits anders verwendet.')
+    return { event: existing, nextDueAt: schedule.dueAt, intervalLabel: 'Gespeichert' }
+  }
+  const reps = schedule.reps + 1
+  const { nextDueAt, intervalLabel } = scheduleBrowserNextReview(rating, reps)
+  const event: LearningReviewEvent = { schemaVersion: 1, id: input.clientEventId ?? newId(), userId, cardId: card.id, rating, reviewedAt: nowIso(), elapsedMs: input.elapsedMs ?? null }
+  store.learningReviewEvents.push(event)
+  Object.assign(schedule, { dueAt: nextDueAt, reps, lapses: schedule.lapses + (rating === 1 ? 1 : 0), lastRating: rating, lastReviewedAt: event.reviewedAt })
+  return { event, nextDueAt, intervalLabel }
 }
 
 function scheduleBrowserNextReview(

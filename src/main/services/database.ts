@@ -36,6 +36,7 @@ export function initializeDatabase(db: SqliteDatabase): void {
     if (DATABASE_SCHEMA_VERSION >= 4) migrateV3ToV4(db)
     if (DATABASE_SCHEMA_VERSION >= 5) migrateV4ToV5(db)
     if (DATABASE_SCHEMA_VERSION >= 6) migrateV5ToV6(db)
+    if (DATABASE_SCHEMA_VERSION >= 7) migrateV6ToV7(db)
     return
   }
 
@@ -44,6 +45,7 @@ export function initializeDatabase(db: SqliteDatabase): void {
     if (DATABASE_SCHEMA_VERSION >= 4) migrateV3ToV4(db)
     if (DATABASE_SCHEMA_VERSION >= 5) migrateV4ToV5(db)
     if (DATABASE_SCHEMA_VERSION >= 6) migrateV5ToV6(db)
+    if (DATABASE_SCHEMA_VERSION >= 7) migrateV6ToV7(db)
     return
   }
 
@@ -51,17 +53,25 @@ export function initializeDatabase(db: SqliteDatabase): void {
     migrateV3ToV4(db)
     if (DATABASE_SCHEMA_VERSION >= 5) migrateV4ToV5(db)
     if (DATABASE_SCHEMA_VERSION >= 6) migrateV5ToV6(db)
+    if (DATABASE_SCHEMA_VERSION >= 7) migrateV6ToV7(db)
     return
   }
 
   if (version === 4 && DATABASE_SCHEMA_VERSION >= 5) {
     migrateV4ToV5(db)
     if (DATABASE_SCHEMA_VERSION >= 6) migrateV5ToV6(db)
+    if (DATABASE_SCHEMA_VERSION >= 7) migrateV6ToV7(db)
     return
   }
 
   if (version === 5 && DATABASE_SCHEMA_VERSION >= 6) {
     migrateV5ToV6(db)
+    if (DATABASE_SCHEMA_VERSION >= 7) migrateV6ToV7(db)
+    return
+  }
+
+  if (version === 6 && DATABASE_SCHEMA_VERSION >= 7) {
+    migrateV6ToV7(db)
     return
   }
 
@@ -71,6 +81,7 @@ export function initializeDatabase(db: SqliteDatabase): void {
     repairMissingV4Schema(db)
     repairMissingV5Schema(db)
     repairMissingV6Schema(db)
+    createStudySchema(db)
     updateAppVersion(db)
     return
   }
@@ -265,6 +276,7 @@ function createSchema(db: SqliteDatabase): void {
 
     createLearningSchema(db)
     createPodcastProgressSchema(db)
+    createStudySchema(db)
 
     db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)').run(
       'schema_version',
@@ -372,6 +384,26 @@ function migrateV5ToV6(db: SqliteDatabase): void {
     db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run('last_migrated_at', migratedAt)
     updateAppVersion(db)
   })()
+}
+
+function migrateV6ToV7(db: SqliteDatabase): void {
+  db.transaction(() => {
+    createStudySchema(db)
+    db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run('schema_version', '7')
+    db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run('last_migrated_at', nowIso())
+    updateAppVersion(db)
+  })()
+}
+
+function createStudySchema(db: SqliteDatabase): void {
+  addColumnIfMissing(db, 'learning_review_events', 'voided_at TEXT')
+  db.exec(`CREATE TABLE IF NOT EXISTS learning_study_runs (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    collection_id TEXT NOT NULL REFERENCES learning_collections(id) ON DELETE CASCADE,
+    run_json TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_learning_study_runs_user ON learning_study_runs(user_id);`)
 }
 
 function createLearningSchema(db: SqliteDatabase): void {
@@ -574,6 +606,7 @@ const USER_SCOPED_TABLES = [
   'learning_review_events',
   'learning_card_schedules',
   'learning_card_quality_events',
+  'learning_study_runs',
   'podcast_episode_progress',
   'ai_settings',
   'tags',

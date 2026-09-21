@@ -1,12 +1,9 @@
 <template>
   <section class="page podcast-series-view">
     <header class="podcast-series-header">
-      <UBreadcrumb class="app-breadcrumb" :items="withHomeIcon(breadcrumbItems)" />
+      <AppBreadcrumb :items="breadcrumbItems" />
       <div v-if="series" class="podcast-series-hero">
-        <div class="podcast-cover podcast-cover-large" aria-hidden="true">
-          <img src="/assets/icon.png" alt="" />
-          <span>Jura<br />Audio</span>
-        </div>
+        <PodcastArtwork :artwork-url="series.artworkUrl" :title="series.title" large />
         <div>
           <p class="eyebrow">{{ legalAreaName }} · {{ series.edition }}</p>
           <h1>{{ series.title }}</h1>
@@ -71,7 +68,9 @@ import { useRoute } from 'vue-router'
 import { CircleCheck, Pause, Play } from 'lucide-vue-next'
 import type { PodcastEpisode } from '@shared/schemas'
 import { usePodcastPlayer } from '../podcasts/usePodcastPlayer'
-import { type AppBreadcrumbItem, withHomeIcon } from '../ui/breadcrumbs'
+import AppBreadcrumb from '../components/ui/AppBreadcrumb.vue'
+import PodcastArtwork from '../components/PodcastArtwork.vue'
+import type { AppBreadcrumbItem } from '../ui/breadcrumbs'
 
 const route = useRoute()
 const player = usePodcastPlayer()

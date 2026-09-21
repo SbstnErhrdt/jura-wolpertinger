@@ -2,80 +2,84 @@
   <section class="flashcard-review">
     <header class="review-header">
       <div>
-        <UBreadcrumb class="app-breadcrumb" :items="withHomeIcon(breadcrumbItems)" />
-        <p class="eyebrow">Wiederholen</p>
-        <h1>Karteikarten</h1>
+        <AppBreadcrumb :items="breadcrumbItems" />
+        <p class="eyebrow">{{ modeLabel }}</p>
+        <h1>{{ collectionName || 'Karteikarten' }}</h1>
       </div>
-      <UButton color="neutral" variant="outline" :to="{ name: 'flashcards-collections' }">Sammlungen</UButton>
+      <UButton v-if="run && !paused && !sessionCompleted" color="neutral" variant="outline" :disabled="ratingBusy" @click="pausePractice">Pause machen</UButton>
+      <UButton v-else color="neutral" variant="outline" :to="collectionLink">Zur Sammlung</UButton>
     </header>
 
     <UCard v-if="loading" class="empty-state"><USkeleton class="h-6 w-1/3" /><USkeleton class="mt-4 h-24 w-full" /></UCard>
-    <div v-else-if="sessionCompleted" class="empty-state">
-      <h2>Runde geschafft</h2>
-      <p>Du kannst die Karten direkt noch einmal üben oder zurück zu deinen Sammlungen gehen.</p>
+    <UAlert v-if="studyError" color="error" title="Der Durchgang konnte nicht aktualisiert werden" :description="studyError" role="alert">
+      <template #actions><UButton :loading="ratingBusy" @click="retryStudy">Erneut versuchen</UButton></template>
+    </UAlert>
+    <div v-if="!loading && paused" class="empty-state study-summary">
+      <h2>Für heute pausiert</h2>
+      <p>{{ sessionRatings.length }} Karten in dieser Lerneinheit bewertet.</p>
+      <p>{{ sessionCounts[3] }} gewusst · {{ sessionCounts[2] }} teilweise gewusst · {{ sessionCounts[1] }} nicht gewusst</p>
+      <p v-if="run">{{ run.completed }} von {{ run.total }} bearbeitet · {{ run.remaining }} noch offen</p>
+      <div class="empty-actions"><UButton :disabled="ratingBusy || Boolean(pendingStudy)" @click="resumePractice">Weiterlernen</UButton><UButton color="neutral" variant="outline" :to="collectionLink">Zur Sammlung</UButton></div>
+    </div>
+    <div v-else-if="!loading && sessionCompleted" class="empty-state study-summary">
+      <StudyCelebration :celebration="completionCelebration" complete />
+      <h2>{{ run?.mode === 'first_pass' ? 'Sammlung einmal vollständig bearbeitet' : 'Durchgang abgeschlossen' }}</h2>
+      <p>{{ run?.completed }} von {{ run?.total }} Karten in diesem Durchgang bearbeitet.</p>
+      <p v-if="completionOverview">{{ completionOverview.weakCards }} Karten der Sammlung zuletzt nicht oder nur teilweise gewusst.</p>
+      <p v-if="run?.excluded">{{ run.excluded }} Karten sind nicht mehr zum Lernen verfügbar und wurden ausgelassen.</p>
+      <p v-if="run?.added">{{ run.added }} weitere Karten sind außerhalb dieses Durchgangs verfügbar.</p>
       <div class="empty-actions">
-        <UButton type="button" @click="restartPractice">Nochmal üben</UButton>
-        <UButton color="neutral" variant="outline" :to="{ name: 'flashcards-collections' }">Zu den Sammlungen</UButton>
+        <UButton v-if="run?.added" :disabled="ratingBusy" @click="restartPractice('first_pass')">Weitere Karten bearbeiten</UButton>
+        <UButton v-if="completionOverview?.weakCards" :disabled="ratingBusy || Boolean(pendingStudy)" @click="restartPractice('weak')">Unsichere Karten wiederholen</UButton>
+        <UButton color="neutral" variant="outline" :disabled="ratingBusy" @click="restartPractice('all')">Sammlung erneut durcharbeiten</UButton>
+        <UButton color="neutral" variant="outline" :to="collectionLink">Zur Sammlung</UButton>
       </div>
     </div>
-    <div v-else-if="!currentCard" class="empty-state">
-      <h2>{{ emptyTitle }}</h2>
-      <p>{{ emptyCopy }}</p>
-      <UButton color="neutral" variant="outline" :to="{ name: 'flashcards-collections' }">Zu den Sammlungen</UButton>
+    <div v-else-if="!loading && !currentCard && !studyError" class="empty-state">
+      <h2>{{ run?.deferred ? `${run.deferred} ${run.deferred === 1 ? 'Karte' : 'Karten'} noch offen` : run?.mode === 'review' ? 'Aktuell keine Wiederholung empfohlen' : run?.mode === 'weak' ? 'Keine unsicheren Karten' : 'Keine passenden Karten' }}</h2>
+      <p>{{ run?.deferred ? 'Diese Karten hast du für später zurückgestellt.' : 'Für diese Auswahl stehen gerade keine Karten bereit.' }}</p>
+      <UButton v-if="run?.deferred" :disabled="ratingBusy" @click="resumeDeferred">Offene Karten bearbeiten</UButton>
+      <UButton color="neutral" variant="outline" :to="collectionLink">Zur Sammlung</UButton>
+      <StudyCelebration :celebration="milestoneCelebration" @dismiss="milestoneCelebration = null" />
     </div>
 
-    <article v-else class="study-card">
+    <article v-else-if="!loading && currentCard && !paused" class="study-card study-traversal">
       <div class="study-card-toolbar">
         <div>
-          <span class="study-card-kicker">{{ showBack ? 'Rückseite' : 'Vorderseite' }}</span>
-          <strong>{{ currentCard.title }}</strong>
+          <span class="study-card-kicker">{{ modeLabel }}</span>
+          <strong>{{ positionLabel }}</strong>
         </div>
-        <span>{{ positionLabel }}</span>
         <UDropdownMenu :items="reviewActions">
-          <UButton color="neutral" variant="ghost" icon="i-lucide-ellipsis" aria-label="Kartenaktionen" :disabled="voiceInProgress" />
+          <UButton color="neutral" variant="ghost" icon="i-lucide-ellipsis" aria-label="Kartenaktionen" :disabled="voiceInProgress || ratingBusy || Boolean(pendingStudy)" />
         </UDropdownMenu>
       </div>
-      <UButton
-        :key="`${currentCard.id}-${showBack ? 'back' : 'front'}`"
-        :class="[
-          'study-card-face',
-          showBack ? 'study-card-face-back' : 'study-card-face-front',
-          {
-            'study-card-motion-flip': cardMotion === 'flip',
-            'study-card-motion-next': cardMotion === 'next',
-            'study-card-motion-previous': cardMotion === 'previous'
-          }
-        ]"
-        type="button"
-        color="neutral"
-        variant="ghost"
-        :disabled="voiceInProgress"
-        @click="revealBack"
-      >
-        <MarkdownBlock :markdown="showBack ? currentCard.backMarkdown : currentCard.frontMarkdown" />
-      </UButton>
-      <div v-if="currentCard.tags.length" class="study-card-tags" aria-label="Tags">
-        <UBadge v-for="tag in currentCard.tags" :key="tag" variant="soft">{{ tag }}</UBadge>
+      <div v-if="run" class="study-progress" role="progressbar" aria-label="Bearbeitete Karten im Durchgang" :aria-valuenow="run.completed" :aria-valuemin="0" :aria-valuemax="run.total || 1"><span :style="{ width: `${run.total ? run.completed / run.total * 100 : 0}%` }" /></div>
+      <p v-if="run?.added" class="study-extra">{{ run.added }} weitere Karten sind nach diesem Durchgang verfügbar.</p>
+      <section :key="currentCard.id" class="study-question" aria-label="Frage">
+        <p class="study-card-kicker">Frage</p>
+        <MarkdownBlock :markdown="currentCard.frontMarkdown" />
+      </section>
+      <section v-if="showBack" class="study-answer" aria-label="Antwort">
+        <p class="study-card-kicker">Antwort</p>
+        <MarkdownBlock :markdown="currentCard.backMarkdown" />
+      </section>
+      <div v-if="showBack && currentCard.tags.length" class="study-card-tags" aria-label="Tags">
+        <UBadge v-for="tag in currentCard.tags" :key="tag" class="study-tag" variant="soft">{{ tag }}</UBadge>
         <UBadge :class="cardQualityTone(currentCard.qualityStatus)" variant="soft">
           {{ cardQualityLabel(currentCard.qualityStatus) }}
         </UBadge>
       </div>
       <p v-if="feedback" class="review-feedback">{{ feedback }}</p>
       <div class="review-navigation">
-        <UButton type="button" color="neutral" variant="outline" :disabled="!canGoPrevious || ratingBusy || voiceInProgress" @click="previousCard">
-          <kbd class="key-hint" aria-hidden="true">←</kbd>
-          Vorherige
-        </UButton>
-        <UButton type="button" color="neutral" variant="outline" :disabled="ratingBusy || voiceInProgress" @click="skipCard">
-          Überspringen
-          <kbd class="key-hint" aria-hidden="true">→</kbd>
+        <UButton type="button" color="neutral" variant="ghost" :disabled="ratingBusy || voiceInProgress || Boolean(pendingStudy)" @click="skipCard">
+          Für später zurückstellen
         </UButton>
       </div>
       <UButton
         v-if="voiceEnabled"
         type="button"
         icon="i-lucide-mic"
-        :disabled="voiceInProgress || ratingBusy"
+        :disabled="voiceInProgress || ratingBusy || Boolean(pendingStudy)"
         @click="startVoiceReview"
       >
         Mit Wolpi sprechen
@@ -86,7 +90,7 @@
         <p v-if="voiceError" class="review-feedback">{{ voiceError }}</p>
         <div v-if="voiceResult">
           <p>{{ voiceResult.assessment.reason }}</p>
-          <p v-if="!voiceResult.recorded">Antwort konnte nicht sicher bewertet werden.</p>
+          <p>Vorschlag: {{ voiceRatingLabel }}. Vergleiche die Lösung und bestätige deine eigene Einschätzung unten.</p>
         </div>
         <UButton
           v-if="voiceClient && voiceInProgress"
@@ -98,58 +102,36 @@
           Antwort beenden
         </UButton>
       </section>
-      <div v-if="showBack" class="rating-row">
-        <UButton class="rating-option again" color="error" variant="soft" :disabled="ratingBusy || voiceInProgress" @click="rate(1)">
+      <p v-if="showBack" class="study-rating-prompt">Wie gut konntest du die Antwort vor dem Aufdecken?</p>
+      <div v-if="showBack" class="rating-row study-rating-three">
+        <UButton class="rating-option again" color="error" variant="soft" :disabled="ratingBusy || voiceInProgress || Boolean(pendingStudy)" @click="rate(1)">
           <RotateCcw :size="18" aria-hidden="true" />
-          <span>Nochmal</span>
+          <span>Nicht gewusst</span>
           <kbd class="key-hint">1</kbd>
-          <small>nicht sicher</small>
+          <small>Wesentliches fehlte</small>
         </UButton>
-        <UButton class="rating-option hard" color="warning" variant="soft" :disabled="ratingBusy || voiceInProgress" @click="rate(2)">
+        <UButton class="rating-option hard" color="warning" variant="soft" :disabled="ratingBusy || voiceInProgress || Boolean(pendingStudy)" @click="rate(2)">
           <TriangleAlert :size="18" aria-hidden="true" />
-          <span>Schwer</span>
+          <span>Teilweise gewusst</span>
           <kbd class="key-hint">2</kbd>
-          <small>wackelig</small>
+          <small>Wichtige Punkte fehlten</small>
         </UButton>
-        <UButton class="rating-option good" color="success" variant="soft" :disabled="ratingBusy || voiceInProgress" @click="rate(3)">
+        <UButton class="rating-option good" color="success" variant="soft" :disabled="ratingBusy || voiceInProgress || Boolean(pendingStudy)" @click="rate(3)">
           <CircleCheck :size="18" aria-hidden="true" />
-          <span>Gut</span>
+          <span>Gewusst</span>
           <kbd class="key-hint">3</kbd>
-          <small>sauber</small>
-        </UButton>
-        <UButton class="rating-option easy" color="info" variant="soft" :disabled="ratingBusy || voiceInProgress" @click="rate(4)">
-          <Sparkles :size="18" aria-hidden="true" />
-          <span>Leicht</span>
-          <kbd class="key-hint">4</kbd>
-          <small>sicher</small>
+          <small>Wesentliche Antwort gewusst</small>
         </UButton>
       </div>
       <UButton v-else color="neutral" variant="outline" class="reveal-button" :disabled="voiceInProgress" @click="revealBack">
-        Rückseite zeigen
+        Antwort zeigen
         <kbd class="key-hint">Enter</kbd>
       </UButton>
+      <StudyCelebration :celebration="milestoneCelebration" @dismiss="milestoneCelebration = null" />
     </article>
-
-    <Transition name="wolpi-milestone">
-      <aside v-if="wolpiMilestone" class="wolpi-milestone" aria-live="polite">
-        <div class="wolpi-milestone-image-wrap">
-          <img :src="wolpiMilestone.imageUrl" alt="" class="wolpi-milestone-image" />
-        </div>
-        <div class="wolpi-milestone-copy">
-          <span>{{ wolpiMilestone.kicker }}</span>
-          <strong>{{ wolpiMilestone.title }}</strong>
-          <p>{{ wolpiMilestone.copy }}</p>
-        </div>
-        <UButton
-          class="wolpi-milestone-close"
-          color="neutral"
-          variant="ghost"
-          icon="i-lucide-x"
-          aria-label="Motivation ausblenden"
-          @click="dismissWolpiMilestone"
-        />
-      </aside>
-    </Transition>
+    <div v-if="lastReview && !loading" class="study-undo">
+      <UButton color="neutral" variant="ghost" :disabled="ratingBusy || voiceInProgress || Boolean(pendingStudy)" @click="previousCard">Bewertung rückgängig machen</UButton>
+    </div>
 
     <UModal :open="showCardDialog" @update:open="showCardDialog = $event">
       <template #content>
@@ -237,17 +219,23 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineComponent, h, nextTick, onMounted, onUnmounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
-import { CircleCheck, RotateCcw, Save, Sparkles, TriangleAlert } from 'lucide-vue-next'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { CircleCheck, RotateCcw, Save, TriangleAlert } from 'lucide-vue-next'
 import type { FeatureFlags, VoiceSessionCompleteResult } from '@shared/ipc'
 import type { LearningCard, LearningCardQualityReason, LearningCardQualityStatus, ReviewCard, ReviewRating } from '@shared/schemas'
 import { api } from '../api'
+import { createStudySession } from '../ui/studySession'
+import { createStudyCelebration, type StudyCelebration as Celebration } from '../ui/studyCelebration'
+import StudyCelebration from '../components/StudyCelebration.vue'
+import type { StudyMode, StudyOverview } from '@shared/flashcardStudy'
+import MarkdownBlock from '../components/StudyMarkdown.vue'
 import TagInput from '../components/TagInput.vue'
 import { hasFeatureFlag } from '../voice/featureFlags'
 import { startVoiceClient, type VoiceAssessment, type VoiceClient, type VoiceClientStatus, type VoiceCommand } from '../voice/voiceClient'
 import type { AppActionMenuItem } from '../ui/actionMenu'
-import { type AppBreadcrumbItem, withHomeIcon } from '../ui/breadcrumbs'
+import AppBreadcrumb from '../components/ui/AppBreadcrumb.vue'
+import type { AppBreadcrumbItem } from '../ui/breadcrumbs'
 import {
   cardQualityLabel,
   cardQualityOptions,
@@ -256,14 +244,30 @@ import {
 } from '../ui/flashcardQuality'
 
 const route = useRoute()
+const router = useRouter()
 const loading = ref(true)
-const cards = ref<ReviewCard[]>([])
-const againQueue = ref<ReviewCard[]>([])
-const currentIndex = ref(0)
+const study = createStudySession((input) => api.studyFlashcards(input))
+const { cards, run, error: studyError, pending: pendingStudy, ratings: sessionRatings, lastReview } = study
+const celebrations = createStudyCelebration()
+const studyUserId = ref<string | null>(null)
+const milestoneCelebration = ref<Celebration | null>(null)
+const completionCelebration = ref<Celebration | null>(null)
+watch(study.applied, (applied) => {
+  if (!applied) return
+  const userId = studyUserId.value ?? applied.response.review?.event.userId
+  if (!userId) return
+  const result = celebrations.apply(userId, applied.command, applied.response)
+  milestoneCelebration.value = result.milestone
+  completionCelebration.value = result.completion
+})
+const paused = ref(false)
+const modeLabel = computed(() => ({ first_pass: 'Erster Durchgang', review: 'Empfohlene Wiederholung', weak: 'Unsichere Karten', all: 'Vollständiger Durchgang' })[run.value?.mode ?? 'first_pass'])
+const sessionCounts = computed(() => ({ 1: sessionRatings.value.filter((r) => r.rating === 1).length, 2: sessionRatings.value.filter((r) => r.rating === 2).length, 3: sessionRatings.value.filter((r) => r.rating >= 3).length }))
+const collectionLink = computed(() => collectionId.value ? { name: 'flashcards-collection', params: { id: collectionId.value } } : { name: 'flashcards-collections' })
+const voiceRatingLabel = computed(() => voiceResult.value?.assessment.confidence === 'low' ? 'noch unsicher' : voiceResult.value?.assessment.rating === 1 ? 'Nicht gewusst' : voiceResult.value?.assessment.rating === 2 ? 'Teilweise gewusst' : 'Gewusst')
 const showBack = ref(false)
-const cardMotion = ref<'flip' | 'next' | 'previous'>('flip')
 const feedback = ref('')
-const ratingBusy = ref(false)
+const ratingBusy = study.busy
 const featureFlags = ref<FeatureFlags>({})
 const voiceStatus = ref<VoiceClientStatus>('idle')
 const voiceTranscript = ref('')
@@ -276,15 +280,14 @@ const wolpiIntroduced = ref(false)
 const profileFirstName = ref<string | null>(null)
 const collectionId = computed(() => (typeof route.query.collection === 'string' ? route.query.collection : null))
 const collectionName = ref('')
-const hasPracticeCards = ref(false)
-const sessionCompleted = ref(false)
-const reviewedCardsInSession = ref(0)
-const wolpiMilestone = ref<{
-  kicker: string
-  title: string
-  copy: string
-  imageUrl: string
-} | null>(null)
+const sessionCompleted = computed(() => Boolean(run.value && run.value.total > 0 && run.value.status === 'completed'))
+const completionOverview = ref<StudyOverview | null>(null)
+watch(() => sessionCompleted.value ? run.value?.id : null, async (id) => {
+  completionOverview.value = null
+  if (!id || !collectionId.value) return
+  const result = await api.studyFlashcards({ action: 'overview', collectionId: collectionId.value }).catch(() => null)
+  if (run.value?.id === id) completionOverview.value = result?.overviews[0] ?? null
+})
 const showCardDialog = ref(false)
 const editingCard = ref<ReviewCard | null>(null)
 const cardTitle = ref('')
@@ -298,20 +301,10 @@ const qualityStatus = ref<LearningCardQualityStatus>('good')
 const qualityReasons = ref<LearningCardQualityReason[]>([])
 const qualityNote = ref('')
 const qualityBusy = ref(false)
-let wolpiMilestoneTimer: number | null = null
 let voiceRequestGeneration = 0
 let voiceAbortController: AbortController | null = null
 
-const WOLPI_MILESTONE_IMAGE_COUNT = 39
-const WOLPI_MILESTONE_COPY = [
-  'Kurze Pause, tiefer Atemzug, weiter geht es.',
-  'Das ist genau die Art Wiederholung, die hängen bleibt.',
-  'Sauber gearbeitet. Die nächste Karte wartet schon.',
-  'Du machst aus einzelnen Karten echtes Prüfungstraining.',
-  'Kleine Einheiten, großer Effekt.'
-]
-
-const currentCard = computed(() => cards.value[currentIndex.value] ?? againQueue.value[0] ?? null)
+const currentCard = computed(() => cards.value[0] ?? null)
 const voiceEnabled = computed(() => hasFeatureFlag(featureFlags.value, 'flashcards_voice_agent'))
 const voiceInProgress = computed(() => ['connecting', 'listening', 'prompting', 'assessing'].includes(voiceStatus.value))
 const voiceStatusLabel = computed(() => {
@@ -327,8 +320,8 @@ const voiceStatusLabel = computed(() => {
   }
   return labels[voiceStatus.value]
 })
-const canGoPrevious = computed(() => currentIndex.value > 0 && !sessionCompleted.value)
-const positionLabel = computed(() => `${Math.min(currentIndex.value + 1, cards.value.length)} / ${cards.value.length}`)
+const canGoPrevious = computed(() => Boolean(lastReview.value))
+const positionLabel = computed(() => run.value ? `${run.value.completed} von ${run.value.total} ${run.value.mode === 'first_pass' ? 'einmal ' : ''}bearbeitet` : '')
 const canSaveCard = computed(() => Boolean(cardFront.value.trim()) && Boolean(cardBack.value.trim()))
 const tagSuggestions = computed(() =>
   [...new Set(cards.value.flatMap((card) => card.tags).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de-DE'))
@@ -342,18 +335,8 @@ const breadcrumbItems = computed<AppBreadcrumbItem[]>(() => {
     items.push({ label: 'Sammlungen', to: { name: 'flashcards-collections' } })
     items.push({ label: collectionName.value || 'Sammlung', to: { name: 'flashcards-collection', params: { id: collectionId.value } } })
   }
-  items.push({ label: 'Wiederholen' })
+  items.push({ label: 'Lernen' })
   return items
-})
-const emptyTitle = computed(() => (!hasPracticeCards.value ? 'Noch keine Karten' : 'Karten bereit'))
-const emptyCopy = computed(() => {
-  if (!hasPracticeCards.value && collectionId.value) {
-    return 'Erstelle in dieser Sammlung zuerst eine Karteikarte.'
-  }
-  if (!hasPracticeCards.value) {
-    return 'Erstelle zuerst eine Karteikarte in einer Sammlung.'
-  }
-  return 'Starte die Übungsrunde mit den vorhandenen Karten.'
 })
 const reviewActions = computed<AppActionMenuItem[]>(() => [
   {
@@ -367,9 +350,8 @@ const reviewActions = computed<AppActionMenuItem[]>(() => [
     onSelect: () => currentCard.value && openQualityDialog(currentCard.value)
   },
   {
-    label: 'Aus Session entfernen',
-    icon: 'i-lucide-trash-2',
-    color: 'error',
+    label: 'Für später zurückstellen',
+    icon: 'i-lucide-clock',
     onSelect: removeFromSession
   }
 ])
@@ -380,50 +362,61 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  studyLoadGeneration += 1
   window.removeEventListener('keydown', handleReviewKeydown)
-  clearWolpiMilestoneTimer()
   voiceRequestGeneration += 1
   stopVoiceClient()
 })
 
+let studyLoadGeneration = 0
+
 async function load(): Promise<void> {
+  const generation = ++studyLoadGeneration
+  const requestedFullPath = route.fullPath
+  const requestedCollectionId = collectionId.value
+  const requestedRunId = typeof route.query.run === 'string' ? route.query.run : null
+  const mode = ['review', 'weak', 'all'].includes(String(route.query.mode)) ? route.query.mode as StudyMode : 'first_pass'
+  const isCurrentStudy = () => generation === studyLoadGeneration && route.fullPath === requestedFullPath
   loading.value = true
+  milestoneCelebration.value = null
+  completionCelebration.value = null
+  studyUserId.value = null
   clearVoiceReview()
   wolpiIntroduced.value = false
-  sessionCompleted.value = false
-  const [nextFeatureFlags, nextProfile] = await Promise.all([
+  if (!requestedCollectionId) {
+    await router.replace({ name: 'flashcards-collections' })
+    loading.value = false
+    return
+  }
+  try {
+  const [nextFeatureFlags, nextProfile, nextUser] = await Promise.all([
     api.getFeatureFlags().catch(() => ({})),
-    api.getUserProfile().catch(() => null)
+    api.getUserProfile().catch(() => null),
+    api.getCurrentUser().catch(() => null)
   ])
+  if (!isCurrentStudy()) return
   featureFlags.value = nextFeatureFlags
   profileFirstName.value = nextProfile?.firstName ?? null
-  if (collectionId.value) {
-    const collections = await api.listLearningCollections()
-    collectionName.value = collections.find((collection) => collection.id === collectionId.value)?.name ?? ''
-  } else {
-    collectionName.value = ''
-  }
-  cards.value = await api.getReviewBatch({
-    collectionId: collectionId.value,
-    limit: 40
-  })
-  if (!cards.value.length) {
-    const collectionCards = await api.listLearningCards(collectionId.value)
-    const usableCards = collectionCards.filter((card) => !cardBlockedFromReview(card))
-    hasPracticeCards.value = collectionCards.length > 0
-    cards.value = usableCards.slice(0, 40)
-  } else {
-    hasPracticeCards.value = cards.value.length > 0
-  }
-  currentIndex.value = 0
+  studyUserId.value = nextUser?.id ?? nextProfile?.userId ?? null
+  const collections = await api.listLearningCollections()
+  if (!isCurrentStudy()) return
+  collectionName.value = collections.find((collection) => collection.id === requestedCollectionId)?.name ?? ''
+  if (requestedRunId) await study.send({ action: 'batch', runId: requestedRunId })
+  else await study.send({ action: 'start', collectionId: requestedCollectionId, mode })
+  if (!isCurrentStudy()) return
+  if (!pendingStudy.value && run.value?.remaining && run.value.remaining === run.value.deferred) await study.send({ action: 'resume_deferred', runId: run.value.id })
+  if (!isCurrentStudy()) return
+  if (run.value) await router.replace({ name: 'flashcards-review', query: { collection: requestedCollectionId, run: run.value.id, mode: run.value.mode } })
   showBack.value = false
-  cardMotion.value = 'flip'
-  reviewedCardsInSession.value = 0
-  dismissWolpiMilestone()
-  loading.value = false
+  } catch {
+    studyError.value = 'Die Sammlung konnte nicht geladen werden. Bitte öffne sie erneut.'
+  } finally {
+    loading.value = false
+  }
 }
 
 function openEditCardDialog(card: ReviewCard): void {
+  milestoneCelebration.value = null
   if (voiceInProgress.value) return
   editingCard.value = card
   cardTitle.value = card.title
@@ -458,7 +451,10 @@ async function saveCard(): Promise<void> {
     }
     replaceSessionCard(updated)
     feedback.value = 'Karteikarte aktualisiert.'
-    cancelCardDialog()
+    showCardDialog.value = false
+    editingCard.value = null
+  } catch {
+    feedback.value = 'Die Änderungen konnten nicht gespeichert werden. Bitte versuche es erneut.'
   } finally {
     cardSaveBusy.value = false
   }
@@ -497,19 +493,22 @@ async function saveQualityRating(): Promise<void> {
     qualityCardTarget.value = null
     if (cardBlockedFromReview(updated)) {
       feedback.value = 'Karte pausiert, bis sie überarbeitet ist.'
-      removeCardById(updated.id)
+      await removeCardById(updated.id)
     } else {
       replaceSessionCard(updated)
       feedback.value = 'Kartenqualität gespeichert.'
     }
+  } catch {
+    feedback.value = 'Die Kartenqualität konnte nicht gespeichert werden. Bitte versuche es erneut.'
   } finally {
     qualityBusy.value = false
   }
 }
 
 async function startVoiceReview(): Promise<void> {
+  milestoneCelebration.value = null
   const card = currentCard.value
-  if (!card || voiceInProgress.value) return
+  if (!card || voiceInProgress.value || ratingBusy.value || pendingStudy.value) return
   clearVoiceReview()
   const requestGeneration = ++voiceRequestGeneration
   const abortController = new AbortController()
@@ -580,11 +579,12 @@ async function finishVoiceReview(): Promise<void> {
     const result = await api.completeVoiceReviewSession({
       sessionId,
       transcript: voiceTranscript.value,
-      assessment: voiceAssessment.value
+      assessment: { ...voiceAssessment.value, record_review: false }
     })
     if (!isCurrentVoiceRequest(completionGeneration)) return
     voiceResult.value = result
-    voiceStatus.value = result.recorded ? 'result' : 'uncertain'
+    voiceStatus.value = 'result'
+    showBack.value = true
   } catch {
     if (!isCurrentVoiceRequest(completionGeneration)) return
     voiceStatus.value = 'uncertain'
@@ -594,7 +594,9 @@ async function finishVoiceReview(): Promise<void> {
 
 async function handleVoiceCommand(command: VoiceCommand): Promise<void> {
   if (command === 'next_card') {
-    nextCard()
+    stopVoiceClient()
+    voiceStatus.value = 'idle'
+    await skipCard()
   } else if (command === 'previous_card') {
     if (!canGoPrevious.value) {
       clearVoiceReview()
@@ -602,7 +604,10 @@ async function handleVoiceCommand(command: VoiceCommand): Promise<void> {
       voiceError.value = 'Das ist schon die erste Karte.'
       return
     }
-    moveToPreviousCard(true)
+    stopVoiceClient()
+    voiceStatus.value = 'uncertain'
+    voiceError.value = 'Du kannst die letzte Bewertung über „Bewertung rückgängig machen“ korrigieren.'
+    return
   } else if (command === 'end_session') {
     stopVoiceClient()
     voiceStatus.value = 'uncertain'
@@ -637,124 +642,91 @@ function isCurrentVoiceRequest(requestGeneration: number): boolean {
   return requestGeneration === voiceRequestGeneration
 }
 
-async function restartPractice(): Promise<void> {
-  await load()
+async function restartPractice(mode: StudyMode = 'all'): Promise<void> {
+  if (!collectionId.value || ratingBusy.value || pendingStudy.value) return
+  if (await study.send({ action: 'start', collectionId: collectionId.value, mode })) {
+    paused.value = false
+    showBack.value = false
+    clearVoiceReview()
+    if (run.value) await router.replace({ name: 'flashcards-review', query: { collection: collectionId.value, run: run.value.id, mode } })
+  }
 }
 
 async function rate(rating: ReviewRating): Promise<void> {
   const card = currentCard.value
-  if (!card || ratingBusy.value || voiceInProgress.value) return
-  ratingBusy.value = true
-  try {
-    const result = await api.recordReview({ cardId: card.id, rating })
-    feedback.value = result.intervalLabel
-    if (rating === 1) againQueue.value.push(card)
-    registerReviewedCard()
-    window.setTimeout(nextCard, 550)
-  } catch (error) {
-    ratingBusy.value = false
-    throw error
+  if (!card || !run.value || !showBack.value || paused.value || ratingBusy.value || voiceInProgress.value || pendingStudy.value) return
+  if (await study.send({ action: 'rate', runId: run.value.id, cardId: card.id, rating, eventId: crypto.randomUUID() })) {
+    showBack.value = false
+    clearVoiceReview()
+    feedback.value = ''
   }
 }
 
-function registerReviewedCard(): void {
-  reviewedCardsInSession.value += 1
-  if (reviewedCardsInSession.value % 10 !== 0) return
-  showWolpiMilestone(reviewedCardsInSession.value)
+async function retryStudy(): Promise<void> {
+  if (!pendingStudy.value) { await load(); return }
+  const action = pendingStudy.value.action
+  if (await study.retry()) { showBack.value = action === 'undo'; clearVoiceReview() }
 }
 
-function showWolpiMilestone(reviewedCount: number): void {
-  clearWolpiMilestoneTimer()
-  const milestoneIndex = Math.floor(reviewedCount / 10) - 1
-  const imageNumber = (milestoneIndex % WOLPI_MILESTONE_IMAGE_COUNT) + 1
-  wolpiMilestone.value = {
-    kicker: `${reviewedCount} Karten`,
-    title: 'Starker Lauf',
-    copy: WOLPI_MILESTONE_COPY[milestoneIndex % WOLPI_MILESTONE_COPY.length],
-    imageUrl: `assets/wolpi/wolpi-${String(imageNumber).padStart(2, '0')}.webp`
-  }
-  wolpiMilestoneTimer = window.setTimeout(dismissWolpiMilestone, 3600)
-}
-
-function dismissWolpiMilestone(): void {
-  clearWolpiMilestoneTimer()
-  wolpiMilestone.value = null
-}
-
-function clearWolpiMilestoneTimer(): void {
-  if (wolpiMilestoneTimer === null) return
-  window.clearTimeout(wolpiMilestoneTimer)
-  wolpiMilestoneTimer = null
-}
-
-function nextCard(): void {
+function pausePractice(): void {
+  milestoneCelebration.value = null
   clearVoiceReview()
-  ratingBusy.value = false
-  feedback.value = ''
-  cardMotion.value = 'next'
-  showBack.value = false
-  if (currentIndex.value < cards.value.length - 1) {
-    currentIndex.value += 1
-    return
-  }
-  if (againQueue.value.length > 0) {
-    cards.value = [...againQueue.value]
-    againQueue.value = []
-    currentIndex.value = 0
-    return
-  }
-  cards.value = []
-  currentIndex.value = 0
-  sessionCompleted.value = true
+  paused.value = true
 }
 
-function previousCard(): void {
-  moveToPreviousCard(false)
+async function resumePractice(): Promise<void> {
+  if (pendingStudy.value) return
+  const previousId = currentCard.value?.id
+  if (run.value && await study.send({ action: 'batch', runId: run.value.id })) {
+    if (currentCard.value?.id !== previousId) showBack.value = false
+    paused.value = false
+  }
 }
 
-function moveToPreviousCard(allowDuringVoice: boolean): void {
-  if (!canGoPrevious.value || ratingBusy.value || (!allowDuringVoice && voiceInProgress.value)) return
+async function resumeDeferred(): Promise<void> {
+  if (pendingStudy.value) return
+  if (run.value) await study.send({ action: 'resume_deferred', runId: run.value.id })
+}
+
+async function nextCard(): Promise<void> {
+  if (run.value) await study.send({ action: 'batch', runId: run.value.id })
+}
+
+async function previousCard(): Promise<void> {
+  if (!run.value || !lastReview.value || ratingBusy.value || voiceInProgress.value || pendingStudy.value) return
   clearVoiceReview()
-  cardMotion.value = 'previous'
-  currentIndex.value -= 1
-  feedback.value = ''
-  showBack.value = false
+  if (await study.send({ action: 'undo', runId: run.value.id, eventId: lastReview.value.eventId })) {
+    showBack.value = true
+    paused.value = false
+  }
 }
 
-function skipCard(): void {
-  if (!currentCard.value || ratingBusy.value || voiceInProgress.value) return
-  nextCard()
+async function skipCard(): Promise<void> {
+  if (!currentCard.value || !run.value || ratingBusy.value || voiceInProgress.value || pendingStudy.value) return
+  const cardId = currentCard.value.id
+  if (await study.send({ action: 'defer', runId: run.value.id, cardId })) {
+    clearVoiceReview()
+    showBack.value = false
+    feedback.value = 'Für später zurückgestellt. Die Karte bleibt offen.'
+  }
 }
 
 function removeFromSession(): void {
   if (voiceInProgress.value) return
   clearVoiceReview()
-  cardMotion.value = 'next'
-  removeCardAtCurrentIndex()
+  void skipCard()
 }
 
-function removeCardAtCurrentIndex(): void {
-  cards.value.splice(currentIndex.value, 1)
-  if (currentIndex.value >= cards.value.length && currentIndex.value > 0) currentIndex.value -= 1
-  showBack.value = false
-}
-
-function removeCardById(cardId: string): void {
+async function removeCardById(cardId: string): Promise<void> {
   clearVoiceReview()
-  const index = cards.value.findIndex((card) => card.id === cardId)
-  if (index >= 0) {
-    cards.value.splice(index, 1)
-    if (currentIndex.value >= cards.value.length && currentIndex.value > 0) currentIndex.value -= 1
-  }
-  againQueue.value = againQueue.value.filter((card) => card.id !== cardId)
+  cards.value = cards.value.filter((card) => card.id !== cardId)
   showBack.value = false
-  if (!cards.value.length && !againQueue.value.length) sessionCompleted.value = true
+  await nextCard()
 }
 
 function replaceSessionCard(card: LearningCard): void {
   const replace = (candidate: ReviewCard) => candidate.id === card.id ? { ...candidate, ...card } : candidate
   cards.value = cards.value.map(replace)
-  againQueue.value = againQueue.value.map(replace)
 }
 
 function cardBlockedFromReview(card: Pick<LearningCard, 'qualityStatus'>): boolean {
@@ -763,16 +735,16 @@ function cardBlockedFromReview(card: Pick<LearningCard, 'qualityStatus'>): boole
 
 function revealBack(): void {
   if (voiceInProgress.value) return
-  cardMotion.value = 'flip'
+  milestoneCelebration.value = null
   showBack.value = true
 }
 
 function handleReviewKeydown(event: KeyboardEvent): void {
-  if (event.altKey || event.ctrlKey || event.metaKey || isTypingTarget(event.target)) return
+  if (event.repeat || event.altKey || event.ctrlKey || event.metaKey || isTypingTarget(event.target) || showCardDialog.value || qualityCardTarget.value || paused.value || pendingStudy.value) return
   if (!currentCard.value || loading.value || sessionCompleted.value) return
   if (voiceInProgress.value) return
 
-  if (event.key === 'Enter' && !showBack.value) {
+  if (['Enter', ' '].includes(event.key) && !showBack.value) {
     event.preventDefault()
     revealBack()
     return
@@ -790,7 +762,7 @@ function handleReviewKeydown(event: KeyboardEvent): void {
     return
   }
 
-  if (showBack.value && ['1', '2', '3', '4'].includes(event.key)) {
+  if (showBack.value && ['1', '2', '3'].includes(event.key)) {
     event.preventDefault()
     void rate(Number(event.key) as ReviewRating)
   }
@@ -799,23 +771,33 @@ function handleReviewKeydown(event: KeyboardEvent): void {
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false
   if (target.isContentEditable) return true
-  return ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
+  return Boolean(target.closest('input, textarea, select, button, a, [role="button"], [role="menuitem"], [role="combobox"]'))
 }
 
-const MarkdownBlock = defineComponent({
-  props: {
-    markdown: {
-      type: String,
-      required: true
-    }
-  },
-  setup(props) {
-    return () =>
-      h(
-        'div',
-        { class: 'markdown-block' },
-        props.markdown.split(/\n{2,}/).map((paragraph) => h('p', paragraph))
-      )
-  }
-})
 </script>
+
+<style scoped>
+.flashcard-review { min-width: 0; grid-template-columns: minmax(0, 1fr); }
+.review-header > div { min-width: 0; max-width: 100%; }
+.study-traversal { width: 100%; max-width: 900px; min-height: 0; margin-inline: auto; }
+.study-progress { height: 5px; overflow: hidden; border-radius: 3px; background: var(--ui-bg-accented); }
+.study-progress > span { display: block; height: 100%; background: var(--ui-primary); }
+.study-question, .study-answer { padding: .75rem 0; }
+.study-question { min-height: 150px; }
+.study-answer { border-top: 1px solid var(--ui-border); }
+.study-extra { font-size: .875rem; color: var(--ui-text-muted); }
+.study-rating-prompt { margin-block: 1rem .5rem; font-weight: 600; }
+.study-rating-three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.study-card-tags .study-tag { color: #164d6a; background: #e9f2f8; }
+:global(:root[data-theme='dark'] .study-card-tags .study-tag) { color: #b7ddf4; background: #17384a; }
+.study-rating-three .again { color: #9f241c; background: #fff1f0; }
+.study-rating-three .hard { color: #854000; background: #fff6df; }
+.study-rating-three .good { color: #12633b; background: #eaf8f0; }
+.study-rating-three .rating-option small { color: inherit; opacity: 1; }
+:global(:root[data-theme='dark'] .study-rating-three .rating-option.again) { color: #ffb4ad; background: #452321; }
+:global(:root[data-theme='dark'] .study-rating-three .rating-option.hard) { color: #ffdc99; background: #40331b; }
+:global(:root[data-theme='dark'] .study-rating-three .rating-option.good) { color: #a0e8bd; background: #1a3a2a; }
+.study-undo { text-align: center; margin-block: 1rem; }
+.study-summary p { margin-block: .75rem; }
+@media (max-width: 600px) { .study-rating-three { grid-template-columns: 1fr; } }
+</style>

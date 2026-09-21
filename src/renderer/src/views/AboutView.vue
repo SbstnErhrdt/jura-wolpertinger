@@ -2,7 +2,7 @@
   <section class="about-view">
     <header class="page-header about-header">
       <div>
-        <UBreadcrumb class="app-breadcrumb" :items="withHomeIcon(breadcrumbItems)" />
+        <AppBreadcrumb :items="breadcrumbItems" />
         <p class="eyebrow">Über das Projekt</p>
         <h1>Wolpi und das Schreiben</h1>
       </div>
@@ -46,6 +46,10 @@
           Karteikarten in Sammlungen organisieren, Schlagwörter vergeben, Wiederholungen bewerten,
           Kartenqualität prüfen, Prüfungen verwalten, Kommentare und Bewertungen festhalten und
           Fortschritt sichtbar machen. Alles klar, ruhig und ohne unnötigen Ballast.
+          Frühere Abgaben und Rückmeldungen lassen sich bei der passenden Prüfung nachlesen;
+          hinterlegte Originaldateien kannst du in der Online-Version herunterladen.
+          Der Bewertungsverlauf zeigt deine Monatsdurchschnitte; an den Punkten
+          findest du die genauen Werte und die Zahl der Bewertungen.
         </p>
       </UCard>
 
@@ -61,9 +65,15 @@
       <UCard class="about-panel">
         <h3>Karteikarten</h3>
         <p>
-          Karteikarten ergänzen das Klausurtraining um kurze Einheiten: Sammlungen öffnen,
-          Vorder- und Rückseite wiederholen, den eigenen Stand bewerten und schwierige Karten
-          gezielt früher wiedersehen. Wenn eine Karte unklar, zu lang oder fachlich fraglich ist,
+          Auch große Sammlungen lassen sich in einem gespeicherten Durchgang vollständig bearbeiten.
+          Frage und Antwort bleiben zum Vergleichen sichtbar. Du schätzt deinen Abruf mit
+          Nicht gewusst, Teilweise gewusst oder Gewusst ein und kannst jederzeit pausieren.
+          Empfohlene und unsichere Karten wiederholst du bewusst zusätzlich.
+          In der Übersicht helfen dir die Suche nach Name oder Rechtsgebiet, Bearbeitungsbalken
+          und ein begründeter nächster Lernschritt: Wiederholen, Fortsetzen oder neue Karten beginnen.
+          Der Balken zeigt einmal bearbeitete Karten, nicht sichere Beherrschung.
+          Wolpi freut sich nach jeweils zehn bearbeiteten Karten und am Abschluss mit dir.
+          Wenn eine Karte unklar, zu lang oder fachlich fraglich ist,
           kann sie zur Überarbeitung markiert werden und pausiert dann in der Wiederholung.
         </p>
       </UCard>
@@ -81,7 +91,8 @@
 </template>
 
 <script setup lang="ts">
-import { type AppBreadcrumbItem, withHomeIcon } from '../ui/breadcrumbs'
+import AppBreadcrumb from '../components/ui/AppBreadcrumb.vue'
+import type { AppBreadcrumbItem } from '../ui/breadcrumbs'
 
 const breadcrumbItems: AppBreadcrumbItem[] = [
   { label: 'Home', to: { name: 'home' } },

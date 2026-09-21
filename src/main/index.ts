@@ -1,4 +1,5 @@
 import { existsSync, renameSync } from 'node:fs'
+import type { StudyCommand } from '@shared/flashcardStudy'
 import { join } from 'node:path'
 import {
   app,
@@ -335,6 +336,7 @@ function registerIpc(): void {
       services.updateLearningTaskStatus(taskId, status)
   )
   ipcMain.handle('learning:dashboard', () => services.getLearningDashboard())
+  ipcMain.handle('learning:study', (_event, input: StudyCommand) => services.studyFlashcards(input))
   ipcMain.handle('learning:statistics', () => services.getLearningStatistics())
   ipcMain.handle('learning:exportDecksJson', () => services.exportLearningDecks())
   ipcMain.handle('learning:importDecksJson', (_event, json: string) => services.importLearningDecksFromJson(json))

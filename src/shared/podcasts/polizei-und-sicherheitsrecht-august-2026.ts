@@ -8,6 +8,9 @@ const EPISODE_SLUG = 'klausurfallen-im-bayerischen-polizei-und-versammlungsrecht
 const AUDIO_URL =
   'https://app.jura-wolpi.de/api/storage/v1/object/public/podcast-audio/' +
   `${POLIZEI_SICHERHEITSRECHT_SLUG}/01-${EPISODE_SLUG}.mp3`
+const ARTWORK_URL =
+  'https://app.jura-wolpi.de/api/storage/v1/object/public/podcast-audio/' +
+  `${POLIZEI_SICHERHEITSRECHT_SLUG}/cover.png`
 
 export const POLIZEI_SICHERHEITSRECHT_PODCAST_CATALOG: PodcastCatalog = {
   legalAreas: [
@@ -22,7 +25,7 @@ export const POLIZEI_SICHERHEITSRECHT_PODCAST_CATALOG: PodcastCatalog = {
           description:
             'Eine Lernfolge zu typischen Klausurfallen im bayerischen Polizei- und Versammlungsrecht.',
           edition: 'August 2026',
-          artworkUrl: null,
+          artworkUrl: ARTWORK_URL,
           episodes: [
             {
               id: POLIZEI_SICHERHEITSRECHT_EPISODE_ID,

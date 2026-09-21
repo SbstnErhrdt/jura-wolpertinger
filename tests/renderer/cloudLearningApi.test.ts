@@ -1,10 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppApi, ExamDetails, ExamListItem } from '../../src/shared/ipc'
-import type { ExamRevision } from '../../src/shared/schemas'
+import type { Attachment, Correction, ExamRevision, InlineComment, Submission } from '../../src/shared/schemas'
 
 type QueryCall = {
   table: string
-  operation: 'select' | 'eq' | 'in' | 'order' | 'range' | 'limit' | 'maybeSingle' | 'upsert'
+  operation: 'select' | 'eq' | 'is' | 'in' | 'order' | 'range' | 'limit' | 'maybeSingle' | 'upsert'
   column?: string
   value?: unknown
   from?: number
@@ -23,7 +23,13 @@ const collectionId = '22222222-2222-4222-8222-222222222222'
 let queryCalls: QueryCall[] = []
 let rpcCalls: RpcCall[] = []
 let tableData: Record<string, unknown[]> = {}
+let studyRpcResult: { data: unknown; error: unknown } = { data: null, error: null }
 let upsertCalls: Array<{ table: string; value: Record<string, unknown>; options?: Record<string, unknown> }> = []
+let sessionUserId = userId
+let beforeSnapshotResponse: (() => void) | null = null
+let downloadCalls: Array<{ bucket: string; path: string }> = []
+let downloadResult: { data: Blob | null; error: Error | null } = { data: null, error: null }
+let beforeDownloadResponse: (() => void) | null = null
 
 const browserStoreKey = 'jura-wolpertinger-browser-dev-v1'
 
@@ -32,12 +38,55 @@ describe('cloud learning API', () => {
     queryCalls = []
     rpcCalls = []
     tableData = {}
+    studyRpcResult = { data: null, error: null }
     upsertCalls = []
+    sessionUserId = userId
+    beforeSnapshotResponse = null
+    downloadCalls = []
+    downloadResult = { data: new Blob(['pdf']), error: null }
+    beforeDownloadResponse = null
     Object.defineProperty(globalThis, 'localStorage', {
       configurable: true,
       value: createMemoryLocalStorage()
     })
     vi.resetModules()
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  it('uses one study RPC with stable event identity and rejects malformed responses or save failures', async () => {
+    const authModulePath = '../../src/renderer/src/cloudAuth'
+    vi.doMock(authModulePath, () => ({ getSupabaseAuthClient: () => createSupabaseClientMock() }))
+    const apiModulePath = '../../src/renderer/src/cloudLearningApi'
+    const { createCloudLearningApi } = await import(/* @vite-ignore */ apiModulePath)
+    const api: AppApi = createCloudLearningApi(createLocalApiStub())
+    const command = { action: 'rate' as const, runId: collectionId, cardId: userId, rating: 1 as const, eventId: uuidFor(1, 'event') }
+    studyRpcResult = { data: { overviews: [], run: null, cards: [], review: null }, error: null }
+    await api.studyFlashcards(command)
+    expect(rpcCalls).toEqual([{ name: 'study_flashcards', args: { p_command: command } }])
+    expect(queryCalls).toEqual([])
+    studyRpcResult = { data: { cards: [] }, error: null }
+    await expect(api.studyFlashcards(command)).rejects.toThrow()
+    studyRpcResult = { data: null, error: new Error('Verbindung unterbrochen') }
+    await expect(api.studyFlashcards(command)).rejects.toThrow('Verbindung unterbrochen')
+  })
+
+  it('loads bounded searchable collection orientation from a dedicated RPC and requires its payload', async () => {
+    vi.doMock('../../src/renderer/src/cloudAuth', () => ({ getSupabaseAuthClient: () => createSupabaseClientMock() }))
+    const apiModulePath = '../../src/renderer/src/cloudLearningApi'
+    const { createCloudLearningApi } = await import(/* @vite-ignore */ apiModulePath)
+    const api: AppApi = createCloudLearningApi(createLocalApiStub())
+    const catalog = { items: [], total: 0, collectionCount: 0, eligibleCollectionCount: 0, recommendation: null }
+    studyRpcResult = { data: { overviews: [], run: null, cards: [], review: null, catalog }, error: null }
+    expect((await api.studyFlashcards({ action: 'catalog', search: ' Bau% ', page: 2 })).catalog).toEqual(catalog)
+    expect(rpcCalls).toEqual([{ name: 'get_study_collection_catalog', args: { p_search: 'Bau%', p_page: 2 } }])
+    expect(queryCalls).toEqual([])
+    studyRpcResult = { data: { overviews: [], run: null, cards: [], review: null }, error: null }
+    await expect(api.studyFlashcards({ action: 'catalog' })).rejects.toThrow()
+    studyRpcResult = { data: null, error: new Error('Verbindung unterbrochen') }
+    await expect(api.studyFlashcards({ action: 'catalog' })).rejects.toThrow('Verbindung unterbrochen')
   })
 
   it('loads cloud review batches through RPC and chunks follow-up ID queries', async () => {
@@ -418,6 +467,417 @@ describe('cloud learning API', () => {
     expect(promptIdCalls[0].value).toHaveLength(10)
   })
 
+  it('adds cloud-only exams to an existing browser without replacing its local work', async () => {
+    const localId = '44444444-4444-4444-8444-444444444444'
+    const importedId = '55555555-5555-4555-8555-555555555555'
+    const local = createBrowserStoreWithExam(localId, 'Neuere lokale Ausarbeitung')
+    const remote = createBrowserStoreWithExam(importedId, 'Importierte Ausarbeitung')
+    remote.revisions[0].id = '66666666-6666-4666-8666-666666666666'
+    remote.exams[0].currentRevisionId = remote.revisions[0].id
+    remote.exams.push(...createBrowserStoreWithExam(localId, 'Alter Cloud-Stand').exams)
+    remote.revisions.push(...createBrowserStoreWithExam(localId, 'Alter Cloud-Stand').revisions)
+    writeBrowserStore(local)
+    localStorage.setItem('jura-wolpertinger-cloud-browser-snapshot-v1', JSON.stringify({ userId, updatedAt: now }))
+    tableData.user_sync_snapshots = [{ user_id: userId, local_user_id: userId, payload_json: { browserStore: remote }, updated_at: now }]
+    vi.doMock('../../src/renderer/src/cloudAuth', () => ({ getSupabaseAuthClient: () => createSupabaseClientMock() }))
+    const modulePath = '../../src/renderer/src/cloudLearningApi'
+    const { createCloudLearningApi } = await import(/* @vite-ignore */ modulePath)
+    const api = createCloudLearningApi(createBrowserExamLocalApiStub())
+    expect(JSON.stringify((await api.getExam(importedId)).currentRevision?.content)).toContain('Importierte Ausarbeitung')
+    expect(JSON.stringify((await api.getExam(localId)).currentRevision?.content)).toContain('Neuere lokale Ausarbeitung')
+    expect(readBrowserStore().exams).toHaveLength(2)
+    expect(queryCalls.filter(c => c.table === 'user_sync_snapshots' && c.operation === 'select')).toHaveLength(1)
+  })
+
+  it.each(['load', 'upload'] as const)('adopts a tag import once during %s while preserving local work and later tag removals', async action => {
+    const examId = '44444444-4444-4444-8444-444444444444'
+    const local = createBrowserStoreWithExam(examId, 'Neuere lokale Ausarbeitung')
+    local.exams[0].tags = ['Eigener Tag']
+    local.exams[0].notes = 'Eigene Notiz'
+    local.exams[0].updatedAt = '2026-09-20T18:00:00.000Z'
+    const remote = createBrowserStoreWithExam(examId, 'Alter Cloud-Text')
+    const tagImport = { schemaVersion: 1, revision: 1, tags: ['Arbeitsrecht', 'Kündigungsschutzklage'] }
+    Object.assign(remote.exams[0], { tags: tagImport.tags, tagImport })
+    writeBrowserStore(local)
+    vi.doMock('../../src/renderer/src/cloudAuth', () => ({ getSupabaseAuthClient: () => createSupabaseClientMock() }))
+    const modulePath = '../../src/renderer/src/cloudLearningApi'
+    const { createCloudLearningApi } = await import(/* @vite-ignore */ modulePath)
+    const api = createCloudLearningApi(createBrowserExamLocalApiStub())
+    if (action === 'upload') await api.getExam(examId)
+    tableData.user_sync_snapshots = [{ user_id: userId, local_user_id: userId, payload_json: { browserStore: remote }, updated_at: now }]
+    if (action === 'load') {
+      await api.getExam(examId)
+      expect(readBrowserStore().revisions).toEqual(local.revisions)
+      expect(readBrowserStore().exams[0]).toEqual({ ...local.exams[0], tags: ['Arbeitsrecht', 'Eigener Tag', 'Kündigungsschutzklage'], tagImport })
+    } else {
+      await api.saveRevision({ examId, kind: 'manual', content: tiptapDoc('Weitergeschrieben') })
+      await waitForCondition(() => upsertCalls.length === 1)
+      expect(JSON.stringify(upsertCalls[0].value.payload_json)).toContain('Weitergeschrieben')
+      expect(readBrowserStore().exams[0]).toMatchObject({ tags: ['Arbeitsrecht', 'Eigener Tag', 'Kündigungsschutzklage'], notes: 'Eigene Notiz', tagImport })
+    }
+    // Simulate a subsequent explicit user removal. A stale remote import must not restore it.
+    const edited = readBrowserStore()
+    edited.exams[0].tags = ['Eigener Tag']
+    writeBrowserStore(edited)
+    const uploadsBefore = upsertCalls.length
+    await api.saveRevision({ examId, kind: 'manual', content: tiptapDoc('Weitere eigene Bearbeitung') })
+    await waitForCondition(() => upsertCalls.length > uploadsBefore)
+    expect(readBrowserStore().exams[0].tags).toEqual(['Eigener Tag'])
+    const payload = upsertCalls.at(-1)?.value.payload_json as { browserStore: { exams: unknown[] }; tables: { exams: Array<{ tags_json: string }> } }
+    expect(payload.browserStore.exams[0]).toMatchObject({ tags: ['Eigener Tag'], tagImport })
+    expect(JSON.parse(payload.tables.exams[0].tags_json)).toEqual(['Eigener Tag'])
+  })
+
+  it.each(['unknown schema', 'invalid revision', 'invalid tags', 'foreign owner', 'stale revision'] as const)('ignores an unsafe tag import: %s', async kind => {
+    const examId = '44444444-4444-4444-8444-444444444444'
+    const local = createBrowserStoreWithExam(examId, 'Eigener Text')
+    const remote = createBrowserStoreWithExam(examId, 'Cloud-Text')
+    const tagImport = { schemaVersion: 1, revision: 1, tags: ['Importiert'] }
+    Object.assign(remote.exams[0], { tags: ['Importiert'], tagImport })
+    if (kind === 'unknown schema') tagImport.schemaVersion = 2
+    if (kind === 'invalid revision') tagImport.revision = -1
+    if (kind === 'invalid tags') Object.assign(tagImport, { tags: [null] })
+    if (kind === 'foreign owner') remote.exams[0].userId = '77777777-7777-4777-8777-777777777777'
+    if (kind === 'stale revision') Object.assign(local.exams[0], { tagImport: { ...tagImport, revision: 2 } })
+    writeBrowserStore(local)
+    tableData.user_sync_snapshots = [{ user_id: userId, local_user_id: userId, payload_json: { browserStore: remote }, updated_at: now }]
+    vi.doMock('../../src/renderer/src/cloudAuth', () => ({ getSupabaseAuthClient: () => createSupabaseClientMock() }))
+    const modulePath = '../../src/renderer/src/cloudLearningApi'
+    const { createCloudLearningApi } = await import(/* @vite-ignore */ modulePath)
+    await createCloudLearningApi(createBrowserExamLocalApiStub()).getExam(examId)
+    expect(readBrowserStore().exams).toEqual(local.exams)
+    expect(readBrowserStore().revisions).toEqual(local.revisions)
+  })
+
+  it.each(['load', 'upload'] as const)('adopts a date import once during %s and persists the date and receipt through upload and fresh hydration', async action => {
+    const { local, remote, marker, examId } = dateImportFixture()
+    writeBrowserStore(local)
+    const api = await browserCloudApi()
+    if (action === 'upload') await api.getExam(examId)
+    setRemoteSnapshot(remote)
+    if (action === 'load') {
+      await api.getExam(examId)
+      expect(readBrowserStore().exams[0]).toEqual({ ...local.exams[0], createdAt: marker.createdAt, dateImport: marker })
+      expect(readBrowserStore().revisions).toEqual(local.revisions)
+    }
+    await api.saveRevision({ examId, content: tiptapDoc('Mein weitergeschriebener Entwurf') })
+    await waitForCondition(() => upsertCalls.length === 1)
+    const uploaded = upsertCalls[0].value.payload_json as { browserStore: ReturnType<typeof createBrowserStoreWithExam>; tables: { exams: Array<{ created_at: string }> } }
+    expect(uploaded.browserStore.exams[0]).toMatchObject({ createdAt: marker.createdAt, dateImport: marker, title: 'Mein Titel', notes: 'Meine Notiz', tags: ['Eigener Tag'], status: 'archived' })
+    expect(uploaded.tables.exams[0].created_at).toBe(marker.createdAt)
+    expect(JSON.stringify(uploaded.browserStore.revisions)).toContain('Mein weitergeschriebener Entwurf')
+    // An already acknowledged import must not undo a later deliberate date edit.
+    const edited = readBrowserStore()
+    const manualDate = '2025-06-04T08:00:00.000Z'
+    edited.exams[0].createdAt = manualDate
+    writeBrowserStore(edited)
+    setRemoteSnapshot(remote)
+    await api.saveRevision({ examId, content: tiptapDoc('Spätere Bearbeitung') })
+    await waitForCondition(() => upsertCalls.length === 2)
+    expect(readBrowserStore().exams[0]).toMatchObject({ createdAt: manualDate, dateImport: marker })
+    // Reload the uploaded snapshot into a fresh browser and save again.
+    tableData.user_sync_snapshots = [{ ...upsertCalls[1].value, updated_at: now }]
+    localStorage.removeItem(browserStoreKey)
+    expect((await api.getExam(examId)).createdAt).toBe(manualDate)
+    expect(readBrowserStore().exams[0]).toMatchObject({ dateImport: marker })
+    await api.saveRevision({ examId, content: tiptapDoc('Frische Sitzung') })
+    await waitForCondition(() => upsertCalls.length === 3)
+    const latest = upsertCalls[2].value.payload_json as typeof uploaded
+    expect(latest.tables.exams[0].created_at).toBe(manualDate)
+  })
+
+  it.each(['schema', 'local date conflict', 'mismatched target', 'foreign owner', 'foreign snapshot', 'unknown local marker', 'duplicate exam'] as const)('retains the remote date import and locally saved draft when upload rejects %s', async kind => {
+    const { local, remote, marker, examId } = dateImportFixture()
+    if (kind === 'schema') marker.schemaVersion = 99
+    if (kind === 'local date conflict') local.exams[0].createdAt = '2025-06-04T08:00:00.000Z'
+    if (kind === 'mismatched target') remote.exams[0].createdAt = now
+    if (kind === 'foreign owner') remote.exams[0].userId = collectionId
+    if (kind === 'foreign snapshot') remote.currentUserId = collectionId
+    if (kind === 'unknown local marker') Object.assign(local.exams[0], { dateImport: { schemaVersion: 99 } })
+    if (kind === 'duplicate exam') remote.exams.push(structuredClone(remote.exams[0]))
+    writeBrowserStore(local)
+    const api = await browserCloudApi()
+    await api.getExam(examId)
+    setRemoteSnapshot(remote)
+    const remoteBefore = structuredClone(tableData.user_sync_snapshots)
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    await api.saveRevision({ examId, content: tiptapDoc('Sicher auf diesem Gerät gespeichert') })
+    await waitForCondition(() => upsertCalls.length > 0 || logged.mock.calls.length > 0)
+    expect(upsertCalls).toHaveLength(0)
+    expect(tableData.user_sync_snapshots).toEqual(remoteBefore)
+    expect(readBrowserStore().exams[0].createdAt).toBe(local.exams[0].createdAt)
+    expect(JSON.stringify(readBrowserStore().revisions)).toContain('Sicher auf diesem Gerät gespeichert')
+  })
+
+  it('applies date, tag and correction imports together without replacing the local draft', async () => {
+    const { local, remote, examId } = correctionImportFixture()
+    const dateImport = { schemaVersion: 1, revision: 1, userId, examId, previousCreatedAt: now, createdAt: '2025-06-03T08:00:00.000Z' }
+    const tagImport = { schemaVersion: 1, revision: 1, tags: ['Importierter Tag'] }
+    Object.assign(remote.exams[0], { dateImport, createdAt: dateImport.createdAt, tagImport, tags: tagImport.tags })
+    writeBrowserStore(local)
+    setRemoteSnapshot(remote)
+    await (await browserCloudApi()).getExam(examId)
+    expect(readBrowserStore().exams[0]).toMatchObject({ createdAt: dateImport.createdAt, dateImport, tagImport, tags: ['Eigener Tag', 'Importierter Tag'] })
+    expect(readBrowserStore().submissions).toEqual(remote.submissions)
+    expect(readBrowserStore().corrections).toEqual(remote.corrections)
+    expect(readBrowserStore().revisions).toContainEqual(local.revisions[0])
+  })
+
+  it('preserves an exam imported after this browser session started when uploading a local edit', async () => {
+    const localId = '44444444-4444-4444-8444-444444444444'
+    const importedId = '55555555-5555-4555-8555-555555555555'
+    writeBrowserStore(createBrowserStoreWithExam(localId, 'Lokaler Text'))
+    vi.doMock('../../src/renderer/src/cloudAuth', () => ({ getSupabaseAuthClient: () => createSupabaseClientMock() }))
+    const modulePath = '../../src/renderer/src/cloudLearningApi'
+    const { createCloudLearningApi } = await import(/* @vite-ignore */ modulePath)
+    const api = createCloudLearningApi(createBrowserExamLocalApiStub())
+    await api.getExam(localId)
+    const remote = createBrowserStoreWithExam(importedId, 'Später importierte Klausur')
+    remote.revisions[0].id = '66666666-6666-4666-8666-666666666666'
+    remote.exams[0].currentRevisionId = remote.revisions[0].id
+    tableData.user_sync_snapshots = [{ user_id: userId, local_user_id: userId, payload_json: { browserStore: remote }, updated_at: now }]
+    await api.saveRevision({ examId: localId, kind: 'manual', content: tiptapDoc('Weitergeschriebener Text') })
+    await waitForCondition(() => upsertCalls.length > 0)
+    const uploaded = JSON.stringify(upsertCalls.at(-1)?.value.payload_json)
+    expect(uploaded).toContain('Später importierte Klausur')
+    expect(uploaded).toContain('Weitergeschriebener Text')
+    expect(readBrowserStore().exams).toHaveLength(2)
+  })
+
+  it.each(['load', 'upload'] as const)('hydrates an explicit correction import once during %s without replacing local work', async action => {
+    const { local, remote, marker, examId } = correctionImportFixture()
+    writeBrowserStore(local)
+    const api = await browserCloudApi()
+    if (action === 'upload') await api.getExam(examId)
+    setRemoteSnapshot(remote)
+    if (action === 'load') await api.getExam(examId)
+    else {
+      await api.saveRevision({ examId, content: tiptapDoc('Neuer eigener Entwurf') })
+      await waitForCondition(() => upsertCalls.length === 1)
+    }
+    let stored = readBrowserStore()
+    expect(stored.submissions).toEqual(remote.submissions)
+    expect(stored.corrections).toEqual(remote.corrections)
+    expect(stored.inlineComments).toEqual(remote.inlineComments)
+    expect(stored.attachments).toEqual(remote.attachments)
+    expect(stored.revisions).toContainEqual(local.revisions[0])
+    expect(stored.exams[0]).toMatchObject({ notes: 'Meine Notiz', tags: ['Eigener Tag'], correctionImport: marker })
+    expect(stored.exams[0].status).toBe(action === 'load' ? 'corrected' : 'in_progress')
+    // The acknowledged marker must never restore removed comments or overwrite manual grading.
+    stored.corrections[0].score.points = 12
+    stored.corrections[0].gradingComment = 'Eigene Ergänzung'
+    stored.corrections[0].inlineComments = []
+    stored.inlineComments = []
+    stored.exams[0].status = 'archived'
+    writeBrowserStore(stored)
+    setRemoteSnapshot(remote)
+    const before = upsertCalls.length
+    await api.saveRevision({ examId, content: tiptapDoc('Spätere Bearbeitung') })
+    await waitForCondition(() => upsertCalls.length > before)
+    stored = readBrowserStore()
+    expect(stored.corrections[0]).toMatchObject({ score: { points: 12 }, gradingComment: 'Eigene Ergänzung', inlineComments: [] })
+    expect(stored.inlineComments).toEqual([])
+    expect(stored.exams[0].status).toBe('archived')
+    expect(stored.submissions).toHaveLength(1)
+  })
+
+  it.each(['schema', 'foreign submission', 'missing revision', 'wrong hash', 'foreign attachment', 'wrong comment hash', 'immutable collision', 'unknown local marker'] as const)('rejects the whole unsafe correction import: %s', async kind => {
+    const { local, remote, marker, examId } = correctionImportFixture()
+    if (kind === 'schema') marker.schemaVersion = 2
+    if (kind === 'foreign submission') remote.submissions[0].userId = collectionId
+    if (kind === 'missing revision') remote.revisions.pop()
+    if (kind === 'wrong hash') remote.submissions[0].contentHash = 'wrong'
+    if (kind === 'foreign attachment') remote.attachments[0].examId = collectionId
+    if (kind === 'wrong comment hash') remote.corrections[0].inlineComments[0].anchor.contentHash = 'wrong'
+    if (kind === 'immutable collision') local.revisions.push({ ...remote.revisions[1], content: tiptapDoc('Other immutable content') })
+    if (kind === 'unknown local marker') Object.assign(local.exams[0], { correctionImport: { schemaVersion: 99 } })
+    writeBrowserStore(local)
+    setRemoteSnapshot(remote)
+    await (await browserCloudApi()).getExam(examId)
+    expect(readBrowserStore().exams).toEqual(local.exams)
+    expect(readBrowserStore().submissions).toEqual([])
+    expect(readBrowserStore().attachments).toEqual([])
+    expect(readBrowserStore().revisions).toEqual(local.revisions)
+  })
+
+  it.each(['archived', 'in_progress'] as const)('preserves a locally changed %s status while importing historical children', async status => {
+    const { local, remote, examId } = correctionImportFixture()
+    local.exams[0].status = status
+    if (status === 'in_progress') local.exams[0].currentRevisionId = uuidFor(80, 'event')
+    writeBrowserStore(local)
+    setRemoteSnapshot(remote)
+    await (await browserCloudApi()).getExam(examId)
+    expect(readBrowserStore().exams[0].status).toBe(status)
+    expect(readBrowserStore().submissions).toHaveLength(1)
+  })
+
+  it('keeps pre-existing correction edits and imports only explicitly named trees', async () => {
+    const { local, remote, examId } = correctionImportFixture()
+    local.corrections.push({ ...remote.corrections[0], gradingComment: 'Meine Korrektur', inlineComments: [] })
+    remote.submissions.push({ ...remote.submissions[0], id: uuidFor(99, 'event') })
+    remote.attachments.push({ ...remote.attachments[0], id: uuidFor(98, 'event') })
+    writeBrowserStore(local)
+    setRemoteSnapshot(remote)
+    await (await browserCloudApi()).getExam(examId)
+    expect(readBrowserStore().corrections).toEqual(local.corrections)
+    expect(readBrowserStore().inlineComments).toEqual([])
+    expect(readBrowserStore().submissions).toHaveLength(1)
+    expect(readBrowserStore().attachments).toHaveLength(1)
+  })
+
+  it('preserves valid private file manifests and rebuilds imported attachment entries on upload', async () => {
+    const { local, remote, examId } = correctionImportFixture()
+    const attachment = remote.attachments[0]
+    writeBrowserStore(local)
+    const api = await browserCloudApi()
+    await api.getExam(examId)
+    const preserved = { attachmentId: uuidFor(72, 'event'), relativePath: 'old/file.pdf', storagePath: `users/${userId}/workspaces/${userId}/attachments/${uuidFor(72, 'event')}/file.pdf`, size: 30 }
+    setRemoteSnapshot(remote, [preserved, { ...preserved, storagePath: '../other-user/private.pdf' }])
+    await api.saveRevision({ examId, content: tiptapDoc('Bearbeitet') })
+    await waitForCondition(() => upsertCalls.length === 1)
+    expect(upsertCalls[0].value.file_manifest_json).toEqual([preserved, {
+      attachmentId: attachment.id, relativePath: attachment.relativePath, size: attachment.size,
+      storagePath: `users/${userId}/workspaces/${userId}/attachments/${attachment.id}/${attachment.storedName}`
+    }])
+    const payload = upsertCalls[0].value.payload_json as { tables: Record<string, unknown[]> }
+    expect(payload.tables.inline_comments).toHaveLength(1)
+  })
+
+  it('downloads a private imported attachment with its original name and releases the object URL', async () => {
+    const { local, remote } = correctionImportFixture()
+    writeBrowserStore(local)
+    setRemoteSnapshot(remote)
+    const link = { href: '', download: '', click: vi.fn(), remove: vi.fn() }
+    const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:private-file')
+    const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+    vi.stubGlobal('document', { createElement: vi.fn(() => link), body: { appendChild: vi.fn() } })
+    await (await browserCloudApi()).openAttachment(remote.attachments[0].id)
+    expect(downloadCalls).toEqual([{ bucket: 'user-files', path: `users/${userId}/workspaces/${userId}/attachments/${remote.attachments[0].id}/correction.pdf` }])
+    expect(create).toHaveBeenCalledWith(downloadResult.data)
+    expect(link.download).toBe('Korrektur.pdf')
+    expect(link.href).toBe('blob:private-file')
+    expect(link.click).toHaveBeenCalledOnce()
+    expect(link.remove).toHaveBeenCalledOnce()
+    await waitForCondition(() => revoke.mock.calls.length === 1)
+    expect(revoke).toHaveBeenCalledWith('blob:private-file')
+  })
+
+  it('exports the current editable comments instead of stale flattened import comments', async () => {
+    const { local, remote, examId } = correctionImportFixture()
+    writeBrowserStore(local)
+    setRemoteSnapshot(remote)
+    const api = await browserCloudApi()
+    await api.getExam(examId)
+    const edited = readBrowserStore()
+    edited.corrections[0].inlineComments[0].body = 'Meine ergänzte Randbemerkung'
+    writeBrowserStore(edited)
+    await api.saveRevision({ examId, content: tiptapDoc('Weitergeschrieben') })
+    await waitForCondition(() => upsertCalls.length === 1)
+    const payload = upsertCalls[0].value.payload_json as { tables: { inline_comments: Array<{ body: string }> } }
+    expect(payload.tables.inline_comments[0].body).toBe('Meine ergänzte Randbemerkung')
+  })
+
+  it('rejects duplicate comment IDs across imported corrections atomically', async () => {
+    const { local, remote, examId } = correctionImportFixture()
+    const correctionId = uuidFor(84, 'event')
+    remote.corrections.push({ ...remote.corrections[0], id: correctionId, inlineComments: [{ ...remote.inlineComments[0], correctionId }] })
+    writeBrowserStore(local)
+    setRemoteSnapshot(remote)
+    await (await browserCloudApi()).getExam(examId)
+    expect(readBrowserStore().submissions).toHaveLength(0)
+    expect(readBrowserStore().corrections).toHaveLength(0)
+  })
+
+  it.each([
+    ['load', 'edited'], ['load', 'deleted'], ['upload', 'edited'], ['upload', 'deleted']
+  ] as const)('uses authoritative %s nested comments after they were %s in another browser', async (action, edit) => {
+    const { local, remote, examId } = correctionImportFixture()
+    // Browser edits change the nested array; the flattened import copy stays stale.
+    remote.corrections[0].inlineComments = edit === 'edited'
+      ? [{ ...remote.corrections[0].inlineComments[0], body: 'Nachträglich bearbeitet' }]
+      : []
+    writeBrowserStore(local)
+    const api = await browserCloudApi()
+    if (action === 'upload') await api.getExam(examId)
+    setRemoteSnapshot(remote)
+    if (action === 'load') await api.getExam(examId)
+    else {
+      await api.saveRevision({ examId, content: tiptapDoc('Mein neuer Entwurf') })
+      await waitForCondition(() => upsertCalls.length === 1)
+    }
+    expect(readBrowserStore().submissions).toEqual(remote.submissions)
+    expect(readBrowserStore().corrections[0].inlineComments).toEqual(remote.corrections[0].inlineComments)
+    expect(readBrowserStore().inlineComments).toEqual(remote.corrections[0].inlineComments)
+  })
+
+  it.each(['immutable conflict', 'unknown schema', 'missing revision', 'foreign submission', 'unknown local marker'] as const)('retains remote historical data and local work when upload rejects an import: %s', async kind => {
+    const { local, remote, marker, examId } = correctionImportFixture()
+    if (kind === 'immutable conflict') local.revisions.push({ ...remote.revisions[1], content: tiptapDoc('Anderer unveränderlicher Text') })
+    if (kind === 'unknown schema') marker.schemaVersion = 99
+    if (kind === 'missing revision') remote.revisions.pop()
+    if (kind === 'foreign submission') remote.submissions[0].userId = collectionId
+    if (kind === 'unknown local marker') Object.assign(local.exams[0], { correctionImport: { schemaVersion: 99 } })
+    writeBrowserStore(local)
+    const api = await browserCloudApi()
+    await api.getExam(examId)
+    setRemoteSnapshot(remote)
+    const remoteBefore = structuredClone(tableData.user_sync_snapshots)
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    await api.saveRevision({ examId, content: tiptapDoc('Mein lokal gesicherter Entwurf') })
+    await waitForCondition(() => upsertCalls.length > 0 || logged.mock.calls.length > 0)
+    expect(upsertCalls).toHaveLength(0)
+    expect(tableData.user_sync_snapshots).toEqual(remoteBefore)
+    expect(JSON.stringify(readBrowserStore().revisions)).toContain('Mein lokal gesicherter Entwurf')
+    expect(logged).toHaveBeenCalled()
+  })
+
+  it.each(['foreign owner', 'foreign exam', 'unsafe name', 'unsafe id', 'storage error', 'account switch'] as const)('rejects attachment download safely: %s', async kind => {
+    const { local, remote, examId } = correctionImportFixture()
+    const file = remote.attachments[0]
+    local.attachments.push(file)
+    if (kind === 'foreign owner') file.userId = collectionId
+    if (kind === 'foreign exam') local.exams[0].userId = collectionId
+    if (kind === 'unsafe name') file.storedName = '../private.pdf'
+    if (kind === 'unsafe id') file.id = '../other-account'
+    if (kind === 'storage error') downloadResult = { data: null, error: new Error('Datei fehlt') }
+    writeBrowserStore(local)
+    const api = await browserCloudApi()
+    await api.getExam(examId)
+    if (kind === 'account switch') beforeDownloadResponse = () => { sessionUserId = collectionId }
+    const create = vi.spyOn(URL, 'createObjectURL')
+    await expect(api.openAttachment(file.id)).rejects.toThrow()
+    expect(create).not.toHaveBeenCalled()
+    expect(downloadCalls).toHaveLength(['storage error', 'account switch'].includes(kind) ? 1 : 0)
+  })
+
+  it.each(['load', 'upload'] as const)('leaves the new account untouched when the account changes during a snapshot %s', async action => {
+    const examId = '44444444-4444-4444-8444-444444444444'
+    const otherUserId = '77777777-7777-4777-8777-777777777777'
+    const other = JSON.parse(JSON.stringify(createBrowserStoreWithExam(examId, 'Privater Text des anderen Kontos')).replaceAll(userId, otherUserId))
+    writeBrowserStore(createBrowserStoreWithExam(examId, 'Text des ersten Kontos'))
+    vi.doMock('../../src/renderer/src/cloudAuth', () => ({ getSupabaseAuthClient: () => createSupabaseClientMock() }))
+    const modulePath = '../../src/renderer/src/cloudLearningApi'
+    const { createCloudLearningApi } = await import(/* @vite-ignore */ modulePath)
+    const api = createCloudLearningApi(createBrowserExamLocalApiStub())
+    if (action === 'upload') await api.getExam(examId)
+    let switched = false
+    beforeSnapshotResponse = () => {
+      sessionUserId = otherUserId
+      writeBrowserStore(other)
+      switched = true
+      beforeSnapshotResponse = null
+    }
+    if (action === 'load') {
+      await expect(api.getExam(examId)).rejects.toThrow('Konto wurde gewechselt')
+    } else {
+      await api.saveRevision({ examId, kind: 'manual', content: tiptapDoc('Weitere Bearbeitung') })
+      await waitForCondition(() => switched)
+      await new Promise<void>(resolve => setImmediate(resolve))
+    }
+    expect(readBrowserStore()).toEqual(other)
+    expect(upsertCalls).toHaveLength(0)
+  })
+
   it('stores browser exam revisions in the cloud snapshot and hydrates them in a fresh browser', async () => {
     const examId = '44444444-4444-4444-8444-444444444444'
     const uploadedText = 'Obersatz aus der Cloud-Klausur'
@@ -456,13 +916,22 @@ describe('cloud learning API', () => {
 
 function createSupabaseClientMock() {
   return {
+    storage: {
+      from(bucket: string) {
+        return { async download(path: string) {
+          downloadCalls.push({ bucket, path })
+          beforeDownloadResponse?.()
+          return downloadResult
+        } }
+      }
+    },
     auth: {
       async getSession() {
         return {
           data: {
             session: {
               user: {
-                id: userId,
+                id: sessionUserId,
                 email: 'learner@example.test',
                 created_at: now,
                 updated_at: now,
@@ -476,6 +945,7 @@ function createSupabaseClientMock() {
     },
     async rpc(name: string, args: Record<string, unknown>) {
       rpcCalls.push({ name, args })
+      if (name === 'study_flashcards' || name === 'get_study_collection_catalog') return studyRpcResult
       if (name === 'get_review_batch') {
         return {
           data: tableData.learning_items.map((item, index) => ({
@@ -604,6 +1074,11 @@ function createQueryBuilder(table: string) {
       rows = rows.filter((row) => (row as Record<string, unknown>)[column] === value)
       return builder
     },
+    is(column: string, value: unknown) {
+      queryCalls.push({ table, operation: 'is', column, value })
+      rows = rows.filter((row) => ((row as Record<string, unknown>)[column] ?? null) === value)
+      return builder
+    },
     in(column: string, value: unknown[]) {
       queryCalls.push({ table, operation: 'in', column, value })
       const allowed = new Set(value)
@@ -626,6 +1101,7 @@ function createQueryBuilder(table: string) {
     },
     async maybeSingle<T>() {
       queryCalls.push({ table, operation: 'maybeSingle' })
+      if (table === 'user_sync_snapshots') beforeSnapshotResponse?.()
       return { data: (rows[0] ?? null) as T | null, error: null }
     },
     async upsert(value: Record<string, unknown>, options?: Record<string, unknown>) {
@@ -702,6 +1178,7 @@ function createLocalApiStub(): AppApi {
     deleteLearningCard: unimplemented,
     getReviewBatch: unimplemented,
     recordReview: unimplemented,
+    studyFlashcards: unimplemented,
     rateLearningCardQuality: unimplemented,
     getPodcastCatalog: unimplemented,
     savePodcastProgress: unimplemented,
@@ -824,9 +1301,10 @@ function createBrowserStoreWithExam(examId: string, text: string) {
     folders: [],
     exams: [exam],
     revisions: [revision],
-    submissions: [],
-    attachments: [],
-    corrections: [],
+    submissions: [] as Submission[],
+    attachments: [] as Attachment[],
+    corrections: [] as Correction[],
+    inlineComments: [] as InlineComment[],
     aiSettings: null,
     aiCorrectionDrafts: [],
     learningTasks: [],
@@ -835,6 +1313,47 @@ function createBrowserStoreWithExam(examId: string, text: string) {
     learningReviewEvents: [],
     learningSchedules: []
   }
+}
+
+async function browserCloudApi(): Promise<AppApi> {
+  vi.doMock('../../src/renderer/src/cloudAuth', () => ({ getSupabaseAuthClient: () => createSupabaseClientMock() }))
+  const path = '../../src/renderer/src/cloudLearningApi'
+  return (await import(/* @vite-ignore */ path)).createCloudLearningApi(createBrowserExamLocalApiStub())
+}
+
+function setRemoteSnapshot(store: ReturnType<typeof createBrowserStoreWithExam>, files: unknown[] = []): void {
+  tableData.user_sync_snapshots = [{ user_id: userId, local_user_id: userId, payload_json: { browserStore: store }, file_manifest_json: files, updated_at: now }]
+}
+
+function dateImportFixture() {
+  const examId = '44444444-4444-4444-8444-444444444444'
+  const local = createBrowserStoreWithExam(examId, 'Mein lokaler Entwurf')
+  Object.assign(local.exams[0], { title: 'Mein Titel', notes: 'Meine Notiz', tags: ['Eigener Tag'], status: 'archived' })
+  const remote = createBrowserStoreWithExam(examId, 'Alter Cloud-Entwurf')
+  const marker = { schemaVersion: 1, revision: 1, userId, examId, previousCreatedAt: now, createdAt: '2025-06-03T08:00:00.000Z' }
+  Object.assign(remote.exams[0], { createdAt: marker.createdAt, dateImport: marker })
+  return { local, remote, marker, examId }
+}
+
+function correctionImportFixture() {
+  const examId = '44444444-4444-4444-8444-444444444444'
+  const local = createBrowserStoreWithExam(examId, 'Mein Entwurf')
+  local.exams[0].notes = 'Meine Notiz'
+  local.exams[0].tags = ['Eigener Tag']
+  const remote = createBrowserStoreWithExam(examId, 'Alter Cloud Entwurf')
+  const revision: ExamRevision = { ...remote.revisions[0], id: uuidFor(61, 'event'), kind: 'submission', content: tiptapDoc('Historische Abgabe'), contentHash: 'historical-content-hash' }
+  const submission: Submission = { schemaVersion: 1, id: uuidFor(62, 'event'), userId, examId, submittedAt: now, revisionId: revision.id, contentHash: revision.contentHash, canContinueEditing: true, pdfPath: null }
+  const comment: InlineComment = { schemaVersion: 1, id: uuidFor(64, 'event'), userId, targetSubmissionId: submission.id, correctionId: uuidFor(63, 'event'), createdAt: now, status: 'open', body: 'Begründung fehlt', tags: [], anchor: { type: 'prosemirror-selection', editorSchemaVersion: 1, from: 0, to: 11, selectedText: 'Historische', prefix: '', suffix: ' Abgabe', contentHash: revision.contentHash } }
+  const correction: Correction = { schemaVersion: 1, id: comment.correctionId, userId, targetSubmissionId: submission.id, createdAt: now, updatedAt: now, score: { system: 'bayern-0-18', points: 8 }, gradingComment: 'Gute Ansätze', tags: [], inlineComments: [comment] }
+  const attachment: Attachment = { schemaVersion: 1, id: uuidFor(65, 'event'), userId, examId, originalName: 'Korrektur.pdf', storedName: 'correction.pdf', mimeType: 'application/pdf', size: 3, relativePath: `attachments/${uuidFor(65, 'event')}/correction.pdf`, role: 'other', createdAt: now }
+  const marker = { schemaVersion: 1, revision: 1, submissionIds: [submission.id], attachmentIds: [attachment.id], previousStatus: local.exams[0].status, currentRevisionId: local.exams[0].currentRevisionId }
+  Object.assign(remote.exams[0], { correctionImport: marker, status: 'corrected' })
+  remote.revisions.push(revision)
+  remote.submissions.push(submission)
+  remote.corrections.push(correction)
+  remote.inlineComments.push(comment)
+  remote.attachments.push(attachment)
+  return { local, remote, marker, examId }
 }
 
 function tiptapDoc(text: string): Record<string, unknown> {

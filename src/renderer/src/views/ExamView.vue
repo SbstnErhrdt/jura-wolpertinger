@@ -12,7 +12,7 @@
         </div>
       </div>
       <div class="header-actions">
-        <RouterLink class="secondary" :to="{ name: 'dashboard' }">
+        <RouterLink class="secondary" :to="examLibraryLocation(exam.folderId ?? UNASSIGNED_FOLDER_ID)">
           <ArrowLeft :size="17" />
           Bibliothek
         </RouterLink>
@@ -252,6 +252,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { examLibraryLocation, UNASSIGNED_FOLDER_ID } from '../ui/examNavigation'
 import {
   ArrowLeft,
   ArrowRight,
@@ -306,7 +307,7 @@ const breadcrumbItems = computed<BreadcrumbItem[]>(() => [
   { label: 'Home', to: { name: 'home' } },
   { label: 'Prüfungen', to: { name: 'exams' } },
   { label: 'Bibliothek', to: { name: 'dashboard' } },
-  { label: exam.value?.folderName ?? 'Ohne Ordner' },
+  { label: exam.value?.folderName ?? 'Ohne Ordner', to: examLibraryLocation(exam.value?.folderId ?? UNASSIGNED_FOLDER_ID) },
   { label: title.value || exam.value?.title || 'Klausur' }
 ])
 

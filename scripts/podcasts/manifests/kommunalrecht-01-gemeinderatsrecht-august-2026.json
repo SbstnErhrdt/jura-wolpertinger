@@ -1,0 +1,27 @@
+{
+  "legalArea": {
+    "id": "ba7b2026-0400-4000-8000-000000000000",
+    "slug": "oeffentliches-recht",
+    "name": "Öffentliches Recht",
+    "sortIndex": 20
+  },
+  "series": {
+    "id": "9f143318-0db6-4993-8678-dee3beac0b57",
+    "slug": "kommunalrecht-august-2026",
+    "title": "Kommunalrecht",
+    "description": "Eine Lernreihe zu typischen Strukturen und Klausurproblemen des bayerischen Kommunalrechts.",
+    "edition": "August 2026",
+    "artworkUrl": "https://app.jura-wolpi.de/api/storage/v1/object/public/podcast-audio/kommunalrecht-august-2026/cover.png",
+    "sortIndex": 30,
+    "publishedAt": "2026-08-25T00:00:00.000Z"
+  },
+  "episode": {
+    "id": "5239ec1a-b5a7-4f91-9d70-ab4f01ec257a",
+    "slug": "bayerisches-gemeinderatsrecht-im-zweiten-staatsexamen",
+    "number": 1,
+    "title": "Bayerisches Gemeinderatsrecht im zweiten Staatsexamen",
+    "description": "Das bayerische Gemeinderatsrecht mit Blick auf Aufbau, typische Probleme und Anforderungen im zweiten Staatsexamen.",
+    "durationSeconds": 1732.78,
+    "publishedAt": "2026-08-25T00:00:00.000Z"
+  }
+}

@@ -14,18 +14,17 @@ const files = [
 ]
 
 describe('general Nuxt UI views', () => {
-  it.each(files)('%s has no native standard controls or legacy breadcrumb', async (file) => {
+  it.each(files)('%s has no native standard controls', async (file) => {
     const source = await readFile(resolve(viewsRoot, file), 'utf8')
 
     expect(source).not.toMatch(/<(button|input|select|textarea)\b/)
-    expect(source).not.toContain("components/ui/AppBreadcrumb.vue")
   })
 
   it('uses Nuxt UI for navigation cards, feedback, forms, and dialogs', async () => {
     const sources = await Promise.all(files.map((file) => readFile(resolve(viewsRoot, file), 'utf8')))
     const combined = sources.join('\n')
 
-    expect(combined).toContain('<UBreadcrumb')
+    expect(combined).toContain('<AppBreadcrumb')
     expect(combined).toContain('<UButton')
     expect(combined).toContain('<UPageCard')
     expect(combined).toContain('<UCard')

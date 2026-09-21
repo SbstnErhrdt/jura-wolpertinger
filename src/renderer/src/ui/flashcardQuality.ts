@@ -30,9 +30,8 @@ export function cardQualityTone(status: LearningCardQualityStatus | null): strin
 }
 
 export function learningRatingLabel(rating: ReviewRating | null): string {
-  if (rating === 1) return 'Nochmal'
-  if (rating === 2) return 'Schwer'
-  if (rating === 3) return 'Gut'
-  if (rating === 4) return 'Leicht'
+  if (rating === 1) return 'Nicht gewusst'
+  if (rating === 2) return 'Teilweise gewusst'
+  if (rating === 3 || rating === 4) return 'Gewusst'
   return 'Noch nicht bewertet'
 }

@@ -41,4 +41,36 @@ describe('podcast UI', () => {
       /\.podcast-icon-control\s*>\s*\.lucide-play-icon\s*\{[^}]*translateX\(1px\)/
     )
   })
+
+  it('shows thematic artwork with a fallback and accessible series progress', async () => {
+    const library = await readFile(resolve(rendererRoot, 'views/PodcastsView.vue'), 'utf8')
+    const series = await readFile(resolve(rendererRoot, 'views/PodcastSeriesView.vue'), 'utf8')
+    const artwork = await readFile(resolve(rendererRoot, 'components/PodcastArtwork.vue'), 'utf8')
+    const styles = await readFile(resolve(rendererRoot, 'styles/main.css'), 'utf8')
+
+    expect(library).toContain('calculatePodcastSeriesProgress')
+    expect(library).toContain('<PodcastArtwork')
+    expect(library).toContain('role="progressbar"')
+    expect(library).toContain(':aria-valuenow')
+    expect(library).toContain('Folgen abgeschlossen')
+    expect(series).toContain('<PodcastArtwork')
+    expect(artwork).toContain('@error="showFallback = true"')
+    expect(artwork).toContain('/assets/icon.png')
+    expect(artwork).toContain("'podcast-cover-has-artwork': artworkUrl && !showFallback")
+    expect(artwork).toContain('loading="lazy"')
+    expect(artwork).toContain('decoding="async"')
+    expect(styles).toMatch(
+      /\.podcast-cover-has-artwork\s*\{[^}]*background:\s*transparent;[^}]*border:\s*0;[^}]*padding:\s*0;/
+    )
+    expect(styles).toMatch(
+      /\.podcast-series-card \[data-slot='container'\]\s*\{[^}]*grid-template-columns:\s*144px minmax\(0, 1fr\)/
+    )
+    expect(styles).toMatch(
+      /@media[^}]+\{[\s\S]*?\.podcast-series-card \[data-slot='container'\]\s*\{[^}]*grid-template-columns:\s*104px minmax\(0, 1fr\)/
+    )
+    expect(styles).toContain('.podcast-series-progress-track')
+    expect(styles).toMatch(
+      /:root\[data-theme='dark'\] \.podcast-series-progress-track > span\s*\{[^}]*background:/
+    )
+  })
 })

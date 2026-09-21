@@ -1,6 +1,6 @@
 <template>
   <section class="correction-page">
-    <UBreadcrumb class="app-breadcrumb" :items="withHomeIcon(activeBreadcrumbItems)" />
+    <AppBreadcrumb :items="activeBreadcrumbItems" />
 
     <section class="correction-view">
       <aside class="correction-list-panel">
@@ -177,7 +177,8 @@ import { EDITOR_SCHEMA_VERSION } from '@shared/constants'
 import type { SubmissionDetails } from '@shared/ipc'
 import type { Correction, InlineComment } from '@shared/schemas'
 import { api } from '../api'
-import { type AppBreadcrumbItem, withHomeIcon } from '../ui/breadcrumbs'
+import AppBreadcrumb from '../components/ui/AppBreadcrumb.vue'
+import type { AppBreadcrumbItem } from '../ui/breadcrumbs'
 import { renderTiptapHtml } from '../utils/renderTiptap'
 
 type SubmittedItem = {

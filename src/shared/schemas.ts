@@ -351,7 +351,8 @@ export const learningReviewEventSchema = z.object({
   cardId: uuidSchema,
   rating: reviewRatingSchema,
   reviewedAt: isoDateSchema,
-  elapsedMs: z.number().int().nonnegative().nullable()
+  elapsedMs: z.number().int().nonnegative().nullable(),
+  voidedAt: isoDateSchema.nullable().optional()
 })
 
 export const learningCardQualityEventSchema = z.object({

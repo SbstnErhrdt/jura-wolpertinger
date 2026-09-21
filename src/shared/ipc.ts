@@ -207,6 +207,7 @@ export type GetReviewBatchInput = {
 export type RecordReviewInput = {
   cardId: string
   rating: ReviewRating
+  clientEventId?: string
   elapsedMs?: number | null
 }
 
@@ -347,6 +348,7 @@ export type AppApi = {
   deleteLearningCard(input: DeleteLearningCardInput): Promise<void>
   getReviewBatch(input?: GetReviewBatchInput): Promise<ReviewCard[]>
   recordReview(input: RecordReviewInput): Promise<RecordReviewResult>
+  studyFlashcards(input: import('./flashcardStudy').StudyCommand): Promise<import('./flashcardStudy').StudyResponse>
   rateLearningCardQuality(input: RateLearningCardQualityInput): Promise<LearningCard>
   getPodcastCatalog(): Promise<PodcastCatalog>
   savePodcastProgress(input: SavePodcastProgressInput): Promise<PodcastProgress>

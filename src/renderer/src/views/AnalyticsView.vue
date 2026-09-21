@@ -2,7 +2,7 @@
   <section class="analytics-view">
     <header class="page-header analytics-header">
       <div>
-        <UBreadcrumb class="app-breadcrumb" :items="withHomeIcon(breadcrumbItems)" />
+        <AppBreadcrumb :items="breadcrumbItems" />
         <p class="eyebrow">Leistung über die Zeit</p>
         <h1>Auswertung</h1>
       </div>
@@ -77,12 +77,13 @@
         <div class="panel-header">
           <div>
             <h2>Bewertungsverlauf</h2>
-            <p class="analytics-panel-copy">Ein Punkt pro bewerteter Abgabe im gewählten Zeitraum.</p>
+            <p class="analytics-panel-copy">Durchschnitt pro Monat. Monate ohne Bewertung bleiben als Lücke sichtbar.</p>
           </div>
         </div>
 
-        <div v-if="filteredEntries.length" class="analytics-chart">
-          <svg viewBox="0 0 760 280" class="analytics-svg" aria-label="Bewertungsverlauf">
+        <div v-if="chartMonths.length" ref="chartElement" class="analytics-chart" @pointerleave="leaveChart" @keydown.esc.stop.prevent="dismissTooltip">
+          <div ref="chartScrollElement" class="analytics-chart-scroll" @scroll="updateTooltipPosition">
+          <svg :viewBox="`0 0 ${lineChartWidth} 280`" :style="{ width: `${lineChartWidth}px` }" class="analytics-svg" aria-label="Monatlicher Bewertungsverlauf">
             <g v-for="tick in yTicks" :key="tick.value">
               <line
                 class="analytics-grid-line"
@@ -99,20 +100,39 @@
             <path v-if="lineAreaPath" :d="lineAreaPath" class="analytics-area" />
             <path v-if="linePath" :d="linePath" class="analytics-line" />
 
-            <g v-for="point in linePoints" :key="point.id">
-              <circle class="analytics-point" :cx="point.x" :cy="point.y" r="4.5">
-                <title>{{ point.tooltip }}</title>
-              </circle>
+            <g
+              v-for="point in linePoints"
+              :key="point.id"
+              class="analytics-point-target"
+              role="button"
+              tabindex="0"
+              :aria-label="point.tooltip"
+              :aria-describedby="activePoint?.id === point.id ? 'analytics-score-tooltip' : undefined"
+              @pointerenter="showPoint(point.id)"
+              @focus="focusPoint(point.id, $event)"
+              @blur="dismissTooltip"
+              @click="showPoint(point.id)"
+              @keydown.enter.prevent="showPoint(point.id)"
+              @keydown.space.prevent="showPoint(point.id)"
+            >
+              <circle class="analytics-point-hit-area" :cx="point.x" :cy="point.y" r="14" />
+              <circle class="analytics-point" :cx="point.x" :cy="point.y" r="4.5" />
             </g>
 
             <g v-for="label in lineXAxisLabels" :key="label.key">
-              <text class="analytics-axis-label" :x="label.x" :y="lineChartBounds.bottom + 22">
+              <text class="analytics-axis-label analytics-month-label" :x="label.x" :y="lineChartBounds.bottom + 22">
                 {{ label.text }}
               </text>
             </g>
           </svg>
+          </div>
+          <div v-if="activePoint" id="analytics-score-tooltip" ref="tooltipElement" role="tooltip" class="analytics-chart-tooltip" :style="tooltipPosition">
+            <span>{{ activePoint.month }}</span>
+            <strong>{{ activePoint.score }} Punkte</strong>
+            <span>{{ activePoint.count }} Bewertung{{ activePoint.count === 1 ? '' : 'en' }}</span>
+          </div>
         </div>
-        <p v-else class="empty-state">Keine bewerteten Abgaben im gewählten Zeitraum.</p>
+        <p v-if="!filteredEntries.length" class="empty-state">Keine bewerteten Abgaben im gewählten Zeitraum.</p>
       </section>
 
       <section class="analytics-panel analytics-chart-panel">
@@ -205,12 +225,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { AnalyticsEntry } from '@shared/ipc'
 import type { LearningTask } from '@shared/schemas'
 import { api } from '../api'
 import TagInput from '../components/TagInput.vue'
-import { type AppBreadcrumbItem, withHomeIcon } from '../ui/breadcrumbs'
+import AppBreadcrumb from '../components/ui/AppBreadcrumb.vue'
+import type { AppBreadcrumbItem } from '../ui/breadcrumbs'
 
 type RangePresetId = '3m' | '6m' | '12m'
 
@@ -226,11 +247,19 @@ type LinePoint = {
   x: number
   y: number
   tooltip: string
-  key: string
+  month: string
+  score: string
+  count: number
 }
 
 const FILTER_STORAGE_KEY = 'jura-wolpertinger-analytics-filters-v1'
-const lineChartBounds = { left: 56, right: 724, top: 20, bottom: 232 }
+const chartElement = ref<HTMLElement | null>(null)
+const chartScrollElement = ref<HTMLElement | null>(null)
+const tooltipElement = ref<HTMLElement | null>(null)
+const chartViewportWidth = ref(760)
+const activePointId = ref<string | null>(null)
+const focusedPointId = ref<string | null>(null)
+const tooltipPosition = ref({ left: '8px', top: '8px' })
 const rangePresets: Array<{ id: RangePresetId; label: string; months: number }> = [
   { id: '3m', label: 'Letzte 3 Monate', months: 3 },
   { id: '6m', label: 'Letztes Halbjahr', months: 6 },
@@ -248,11 +277,14 @@ const breadcrumbItems: AppBreadcrumbItem[] = [
 ]
 
 onMounted(load)
+onMounted(() => document.addEventListener('keydown', handleTooltipKeydown))
+onBeforeUnmount(() => document.removeEventListener('keydown', handleTooltipKeydown))
 
 watch(
   filters,
   (value) => {
     localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(value))
+    dismissTooltip()
   },
   { deep: true }
 )
@@ -341,68 +373,125 @@ const yTicks = computed(() =>
   }))
 )
 
-const linePoints = computed<LinePoint[]>(() => {
-  const source = [...filteredEntries.value].sort((left, right) => left.correctedAt.localeCompare(right.correctedAt))
-  if (!source.length) return []
-  const width = lineChartBounds.right - lineChartBounds.left
-
-  return source.map((entry, index) => {
-    const ratio = source.length === 1 ? 0.5 : index / (source.length - 1)
-    const x = lineChartBounds.left + width * ratio
-    const y = scoreToY(entry.scorePoints)
-    return {
-      id: entry.correctionId,
-      x,
-      y,
-      key: `${entry.correctionId}-${entry.correctedAt}`,
-      tooltip: `${entry.examTitle} · ${formatDate(entry.correctedAt)} · ${formatScore(entry.scorePoints)} Punkte`
-    }
+const chartMonths = computed(() => {
+  const totals = new Map<string, { total: number; count: number }>()
+  for (const entry of filteredEntries.value) {
+    const key = entry.correctedAt.slice(0, 7)
+    const month = totals.get(key) ?? { total: 0, count: 0 }
+    month.total += entry.scorePoints
+    month.count += 1
+    totals.set(key, month)
+  }
+  const firstDate = filters.value.startDate || [...totals.keys()].sort()[0] || effectiveEndDate.value
+  const firstMonth = monthIndex(firstDate)
+  const lastMonth = monthIndex(effectiveEndDate.value)
+  return Array.from({ length: Math.max(0, lastMonth - firstMonth + 1) }, (_, index) => {
+    const absoluteMonth = firstMonth + index
+    const key = `${Math.floor(absoluteMonth / 12)}-${String(absoluteMonth % 12 + 1).padStart(2, '0')}`
+    const total = totals.get(key)
+    return { key, average: total ? total.total / total.count : null, count: total?.count ?? 0 }
   })
 })
 
-const linePath = computed(() => {
-  if (!linePoints.value.length) return ''
-  return linePoints.value
-    .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
-    .join(' ')
-})
+const lineChartWidth = computed(() => Math.max(chartViewportWidth.value, chartMonths.value.length * 76 + 92))
+const lineChartBounds = computed(() => ({ left: 56, right: lineChartWidth.value - 36, top: 20, bottom: 232 }))
 
-const lineAreaPath = computed(() => {
-  if (!linePoints.value.length) return ''
-  const first = linePoints.value[0]
-  const last = linePoints.value[linePoints.value.length - 1]
-  return `${linePath.value} L ${last.x} ${lineChartBounds.bottom} L ${first.x} ${lineChartBounds.bottom} Z`
-})
-
-const lineXAxisLabels = computed(() => {
-  if (!linePoints.value.length) return []
-  if (linePoints.value.length === 1) {
-    return [
-      {
-        key: linePoints.value[0].key,
-        x: linePoints.value[0].x,
-        text: formatDateLabel(filteredEntries.value[0].correctedAt)
-      }
-    ]
+const lineMonthPoints = computed(() => chartMonths.value.map((month, index): LinePoint | null => {
+  if (month.average === null) return null
+  const label = new Intl.DateTimeFormat('de-DE', { month: 'long', year: 'numeric' }).format(new Date(`${month.key}-01T12:00:00`))
+  const score = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 2 }).format(month.average)
+  return {
+    id: month.key,
+    x: monthToX(index),
+    y: scoreToY(month.average),
+    month: label,
+    score,
+    count: month.count,
+    tooltip: `${label} · ${score} Punkte · ${month.count} Bewertung${month.count === 1 ? '' : 'en'}`
   }
-
-  const source = [...filteredEntries.value].sort((left, right) => left.correctedAt.localeCompare(right.correctedAt))
-  const labels = [
-    { key: 'first', x: linePoints.value[0].x, text: formatDateLabel(source[0].correctedAt) },
-    {
-      key: 'middle',
-      x: linePoints.value[Math.floor((linePoints.value.length - 1) / 2)].x,
-      text: formatDateLabel(source[Math.floor((source.length - 1) / 2)].correctedAt)
-    },
-    {
-      key: 'last',
-      x: linePoints.value[linePoints.value.length - 1].x,
-      text: formatDateLabel(source[source.length - 1].correctedAt)
+}))
+const linePoints = computed(() => lineMonthPoints.value.filter((point): point is LinePoint => point !== null))
+const lineSegments = computed(() => {
+  const segments: LinePoint[][] = []
+  let current: LinePoint[] = []
+  for (const point of lineMonthPoints.value) {
+    if (!point) {
+      current = []
+    } else {
+      if (!current.length) segments.push(current)
+      current.push(point)
     }
-  ]
-
-  return labels.filter((label, index, all) => all.findIndex((candidate) => candidate.text === label.text) === index)
+  }
+  return segments
 })
+const linePath = computed(() => lineSegments.value.map(segment => segment.map((point, index) =>
+  `${index ? 'L' : 'M'} ${point.x} ${point.y}`).join(' ')).join(' '))
+const lineAreaPath = computed(() => lineSegments.value.filter(segment => segment.length > 1).map(segment =>
+  `${segment.map((point, index) => `${index ? 'L' : 'M'} ${point.x} ${point.y}`).join(' ')} L ${segment.at(-1)!.x} ${lineChartBounds.value.bottom} L ${segment[0].x} ${lineChartBounds.value.bottom} Z`
+).join(' '))
+const lineXAxisLabels = computed(() => chartMonths.value.map((month, index) => ({
+  key: month.key,
+  x: monthToX(index),
+  text: formatMonthLabel(month.key)
+})))
+const activePoint = computed(() => linePoints.value.find(point => point.id === activePointId.value) ?? null)
+
+watch(chartElement, (element, _old, onCleanup) => {
+  if (!element) return
+  const observer = new ResizeObserver(() => {
+    chartViewportWidth.value = element.clientWidth
+    void nextTick(updateTooltipPosition)
+  })
+  observer.observe(element)
+  onCleanup(() => observer.disconnect())
+})
+watch([activePoint, tooltipElement], () => { void nextTick(updateTooltipPosition) }, { flush: 'post' })
+
+function monthIndex(date: string): number {
+  const [year, month] = date.slice(0, 7).split('-').map(Number)
+  return year * 12 + month - 1
+}
+
+function monthToX(index: number): number {
+  const ratio = chartMonths.value.length === 1 ? 0.5 : index / (chartMonths.value.length - 1)
+  return lineChartBounds.value.left + (lineChartBounds.value.right - lineChartBounds.value.left) * ratio
+}
+
+function showPoint(id: string): void {
+  activePointId.value = id
+}
+
+function focusPoint(id: string, event: FocusEvent): void {
+  focusedPointId.value = id
+  ;(event.currentTarget as SVGElement).scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  showPoint(id)
+}
+
+function dismissTooltip(): void {
+  activePointId.value = null
+  focusedPointId.value = null
+}
+
+function handleTooltipKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape') dismissTooltip()
+}
+
+function leaveChart(event: PointerEvent): void {
+  if (event.pointerType !== 'touch') activePointId.value = focusedPointId.value
+}
+
+function updateTooltipPosition(): void {
+  const chart = chartElement.value
+  const tooltip = tooltipElement.value
+  const point = activePoint.value
+  if (!chart || !tooltip || !point) return
+  const x = point.x - (chartScrollElement.value?.scrollLeft ?? 0)
+  const top = point.y < 140 ? point.y + 18 : point.y - tooltip.offsetHeight - 18
+  tooltipPosition.value = {
+    left: `${Math.max(8, Math.min(x - tooltip.offsetWidth / 2, chart.clientWidth - tooltip.offsetWidth - 8))}px`,
+    top: `${Math.max(8, Math.min(top, chart.clientHeight - tooltip.offsetHeight - 8))}px`
+  }
+}
 
 const monthlyBars = computed(() => {
   const grouped = new Map<string, { total: number; count: number }>()
@@ -519,8 +608,8 @@ function toDateInputValue(date: Date): string {
 }
 
 function scoreToY(score: number): number {
-  const usableHeight = lineChartBounds.bottom - lineChartBounds.top
-  return lineChartBounds.bottom - (score / 18) * usableHeight
+  const usableHeight = lineChartBounds.value.bottom - lineChartBounds.value.top
+  return lineChartBounds.value.bottom - (score / 18) * usableHeight
 }
 
 function formatScore(value: number | null): string {
@@ -541,13 +630,6 @@ function formatDateInput(value: string): string {
   return new Intl.DateTimeFormat('de-DE', {
     dateStyle: 'medium'
   }).format(new Date(`${value}T12:00:00`))
-}
-
-function formatDateLabel(value: string): string {
-  return new Intl.DateTimeFormat('de-DE', {
-    day: '2-digit',
-    month: '2-digit'
-  }).format(new Date(value))
 }
 
 function formatMonthLabel(value: string): string {
@@ -580,3 +662,65 @@ function formatLearningPriority(priority: LearningTask['priority']): string {
   return labels[priority]
 }
 </script>
+
+<style scoped>
+.analytics-chart {
+  position: relative;
+}
+
+.analytics-chart-scroll {
+  overflow-x: auto;
+}
+
+.analytics-svg {
+  height: 280px;
+  max-width: none;
+  pointer-events: auto;
+}
+
+.analytics-point-target {
+  cursor: pointer;
+  outline: none;
+  pointer-events: all;
+}
+
+.analytics-point-hit-area {
+  fill: transparent;
+  pointer-events: all;
+}
+
+.analytics-point-target:focus-visible .analytics-point-hit-area {
+  stroke: var(--color-text);
+  stroke-width: 2;
+}
+
+.analytics-chart .analytics-line {
+  fill: none;
+}
+
+:root[data-theme='dark'] .analytics-chart .analytics-line {
+  fill: none;
+}
+
+.analytics-chart-tooltip {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 14%);
+  color: var(--color-text);
+  display: grid;
+  font-size: 13px;
+  gap: 3px;
+  line-height: 1.4;
+  max-width: calc(100% - 16px);
+  padding: 10px 12px;
+  pointer-events: none;
+  position: absolute;
+  width: 220px;
+  z-index: 1;
+}
+
+.analytics-chart-tooltip strong {
+  font-size: 17px;
+}
+</style>

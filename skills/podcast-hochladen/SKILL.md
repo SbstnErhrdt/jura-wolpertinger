@@ -61,7 +61,61 @@ Nutze `ffprobe`, falls `afinfo` auf dem System nicht vorhanden ist. Verwende `af
 
 Stoppe, wenn die MP3 leer, nicht abspielbar, kein MPEG Layer 3 oder größer als `104857600` Bytes (100 MiB) ist. Übernimm die geprüfte Dauer in Sekunden mit höchstens drei Nachkommastellen in Katalog und Manifest.
 
-## 3. Desktop-Katalog aktualisieren
+## 3. Podcast-Cover vorbereiten
+
+Lies und verwende zuerst den Projekt-Skill
+`.agents/skills/podcast-cover-erstellen/SKILL.md`. Er definiert Motivwahl,
+Wolpi-Konsistenz, Thumbnail-Pruefung und das verbindliche Groessenbudget.
+
+Erstelle für jede neue Reihe ein quadratisches, textfreies PNG-Cover. Nutze den
+vorhandenen Wolpi aus `assets/wolpi/` als Identitätsreferenz und den eingebauten
+ImageGen-Weg. Wolpi muss anhand von Fell, großen Ohren, kleinem Geweih, Flügeln,
+Schweif und blau-goldenem Paragrafen-Halstuch wiedererkennbar bleiben. Verwende
+themenspezifische Requisiten, aber keine Schrift, Wasserzeichen, fremden Logos
+oder amtlichen Hoheitszeichen.
+
+Speichere das finale Bild unter:
+
+```text
+src/renderer/public/assets/podcast-covers/<reihen-slug>.png
+```
+
+Prüfe das Bild visuell sowie technisch als quadratisches PNG mit mindestens
+1024 × 1024 Pixeln. Der öffentliche Storage-Pfad lautet immer:
+
+```text
+<reihen-slug>/cover.png
+```
+
+und die Katalog-URL:
+
+```text
+https://app.jura-wolpi.de/api/storage/v1/object/public/podcast-audio/<reihen-slug>/cover.png
+```
+
+Trage exakt diese URL als `artworkUrl` in Desktop-Katalog und Manifest ein. Die
+UI zeigt bei fehlendem oder nicht ladbarem Cover automatisch die vorhandene
+Jura-Audio-Kachel.
+
+Veröffentliche das Cover bei einer neuen Reihe nach dem Podcast, damit die
+Serienzeile bereits existiert. Bei einer bestehenden Reihe kann das Cover
+direkt veröffentlicht werden. Führe zuerst den Dry Run aus:
+
+```bash
+pnpm podcasts:publish-artwork -- \
+  --url=https://app.jura-wolpi.de/api \
+  --series-id=<stabile-reihen-uuid> \
+  --series-slug=<reihen-slug> \
+  --image=src/renderer/public/assets/podcast-covers/<reihen-slug>.png
+```
+
+Der Cover-Publisher lädt idempotent mit `image/png` und `x-upsert: true` hoch,
+prüft die öffentliche URL per HEAD, aktualisiert nur `artwork_url` der exakt
+angegebenen Serie und verifiziert anschließend den anonymen Katalog. Führe nach
+dem geprüften Dry Run denselben Befehl mit den in Abschnitt 7 beschriebenen
+Prozessvariablen und `--apply` aus.
+
+## 4. Desktop-Katalog aktualisieren
 
 1. Lege die neue Reihe als fokussierte Datei unter `src/shared/podcasts/` an oder ergänze die bestehende Reihe.
 2. Verwende exakt dieselben IDs, Slugs, Texte, Dauer, Audio-URL und Veröffentlichungszeitpunkte wie im Upload-Manifest.
@@ -69,7 +123,7 @@ Stoppe, wenn die MP3 leer, nicht abspielbar, kein MPEG Layer 3 oder größer als
 4. Schreibe zuerst einen fehlschlagenden Test unter `tests/podcasts/`; implementiere danach den kleinsten Katalogschritt und führe den Test erneut aus.
 5. Prüfe, dass `src/main/services/services.ts` den aggregierten `PODCAST_CATALOG` verwendet. Dadurch zeigt auch die lokale Desktop-App die Veröffentlichung.
 
-## 4. Upload-Manifest anlegen
+## 5. Upload-Manifest anlegen
 
 Lege ein JSON-Manifest unter `scripts/podcasts/manifests/` an. Speichere darin nur Katalogdaten, niemals Zugangsdaten oder lokale Audiodateipfade. Nutze diese Form:
 
@@ -87,6 +141,7 @@ Lege ein JSON-Manifest unter `scripts/podcasts/manifests/` an. Speichere darin n
     "title": "Reihentitel",
     "description": "Beschreibung",
     "edition": "August 2026",
+    "artworkUrl": "https://app.jura-wolpi.de/api/storage/v1/object/public/podcast-audio/eindeutiger-reihen-slug/cover.png",
     "sortIndex": 20,
     "publishedAt": "2026-08-09T00:00:00.000Z"
   },
@@ -104,7 +159,7 @@ Lege ein JSON-Manifest unter `scripts/podcasts/manifests/` an. Speichere darin n
 
 Validiere UUIDs, Slugs, ISO-Zeitpunkte und die Übereinstimmung mit dem Desktop-Katalog in Tests.
 
-## 5. Dry-Run ausführen
+## 6. Dry-Run ausführen
 
 Führe den Publisher ohne `--apply` aus:
 
@@ -117,7 +172,7 @@ pnpm podcasts:publish -- \
 
 Prüfe Reihentitel, Folgennummer, Storage-Pfad, Größe und Ziel-URL. Ein Dry-Run benötigt keinen Service-Role-Key und führt keine entfernten Schreibzugriffe aus. Stoppe bei einer geplanten Produktionsveröffentlichung, wenn die Ausgabe `127.0.0.1`, `localhost` oder eine andere lokale URL nennt.
 
-## 6. Veröffentlichen
+## 7. Veröffentlichen
 
 Behandle `../jura-supabase/.env` als lokale Standardkonfiguration. Verwende sie nicht versehentlich für Produktion. Gib niemals Werte von `SERVICE_ROLE_KEY`, `SUPABASE_SECRET_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_PUBLISHABLE_KEY`, `ANON_KEY` oder vergleichbaren Variablen aus.
 
@@ -156,13 +211,14 @@ Der Publisher führt diese Reihenfolge aus:
 
 Schlägt die letzte Katalogprüfung fehl, setzt der Publisher Folge und Reihe wieder auf unveröffentlicht. Schlägt ein früherer Schritt fehl, bleiben die vorbereiteten Metadaten unveröffentlicht. Wiederhole nach Behebung denselben Befehl mit unveränderten IDs und Slugs; die Upserts erzeugen keine Duplikate.
 
-## 7. Öffentlich und lokal verifizieren
+## 8. Öffentlich und lokal verifizieren
 
 1. Rufe die ausgegebene MP3-URL ohne Anmeldung mit HEAD ab und erwarte HTTP 200 sowie `audio/mpeg`.
-2. Prüfe den öffentlichen Katalog oder die produktive Podcast-Seite ohne Service-Role-Kontext.
-3. Prüfe exakt eine Reihe und eine Folge mit den Manifest-IDs.
-4. Spiele Anfang und einen späteren Abschnitt der Folge ab; prüfe Dauer und Seek.
-5. Führe mindestens diese lokalen Checks aus:
+2. Rufe die Cover-URL ohne Anmeldung mit HEAD ab und erwarte HTTP 200 sowie `image/png`.
+3. Prüfe den öffentlichen Katalog oder die produktive Podcast-Seite ohne Service-Role-Kontext.
+4. Prüfe exakt eine Reihe und eine Folge mit den Manifest-IDs und exakt dieselbe `artworkUrl`.
+5. Spiele Anfang und einen späteren Abschnitt der Folge ab; prüfe Dauer und Seek.
+6. Führe mindestens diese lokalen Checks aus:
 
 ```bash
 pnpm vitest run tests/podcasts tests/main/services.test.ts tests/shared/schemas.test.ts \
@@ -170,13 +226,14 @@ pnpm vitest run tests/podcasts tests/main/services.test.ts tests/shared/schemas.
 pnpm run typecheck
 ```
 
-6. Führe den Publisher erneut ohne `--apply` aus und bestätige denselben Plan.
-7. Melde Titel, Rechtsgebiet, öffentliche URL, geprüfte Dauer und alle ausgeführten Checks. Melde keine Zugangsdaten.
+7. Führe Audio- und Cover-Publisher erneut ohne `--apply` aus und bestätige denselben Plan.
+8. Melde Titel, Rechtsgebiet, Audio- und Cover-URL, geprüfte Dauer und alle ausgeführten Checks. Melde keine Zugangsdaten.
 
 ## Sicherheitsgrenzen
 
 - Lösche keine bestehenden Katalogzeilen oder Storage-Objekte.
 - Überschreibe nur den im aktuellen Manifest abgeleiteten Storage-Pfad.
+- Aktualisiere beim Cover-Upload nur die exakt angegebene Serien-ID.
 - Veröffentliche nie vor erfolgreicher öffentlicher Audio-Prüfung.
 - Verwende ausschließlich Service-Role-Zugangsdaten aus lokaler Umgebung, nie im Renderer oder Browser.
 - Behandle Teilfehler als wiederholbaren Upsert, nicht als Anlass für manuelle Datenlöschung.

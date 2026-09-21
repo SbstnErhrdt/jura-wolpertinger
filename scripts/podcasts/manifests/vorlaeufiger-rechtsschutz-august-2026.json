@@ -1,0 +1,27 @@
+{
+  "legalArea": {
+    "id": "ba7b2026-0400-4000-8000-000000000000",
+    "slug": "oeffentliches-recht",
+    "name": "Öffentliches Recht",
+    "sortIndex": 20
+  },
+  "series": {
+    "id": "e78242ec-0550-4a37-a7ad-ca740b139762",
+    "slug": "vorlaeufiger-rechtsschutz-august-2026",
+    "title": "Vorläufiger Rechtsschutz",
+    "description": "Eine Lernreihe zu den Strukturen und Klausurproblemen des vorläufigen verwaltungsgerichtlichen Rechtsschutzes.",
+    "edition": "August 2026",
+    "artworkUrl": "https://app.jura-wolpi.de/api/storage/v1/object/public/podcast-audio/vorlaeufiger-rechtsschutz-august-2026/cover.png",
+    "sortIndex": 40,
+    "publishedAt": "2026-08-25T00:00:00.000Z"
+  },
+  "episode": {
+    "id": "8156bd9a-918d-4654-a1af-57567fff2b4d",
+    "slug": "schild-und-schwert-im-bayerischen-eilrechtsschutz",
+    "number": 1,
+    "title": "Schild und Schwert im bayerischen Eilrechtsschutz",
+    "description": "Vorläufiger Rechtsschutz als Schild und Schwert mit den klausurrelevanten Besonderheiten des bayerischen Verwaltungsrechts.",
+    "durationSeconds": 2064.118,
+    "publishedAt": "2026-08-25T00:00:00.000Z"
+  }
+}

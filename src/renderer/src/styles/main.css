@@ -279,7 +279,7 @@
   align-items: stretch;
   display: grid;
   gap: 18px;
-  grid-template-columns: 132px minmax(0, 1fr);
+  grid-template-columns: 144px minmax(0, 1fr);
 }
 
 .podcast-series-card > a {
@@ -308,6 +308,18 @@
   height: 62%;
   object-fit: contain;
   width: 62%;
+}
+
+.podcast-cover .podcast-artwork-image {
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.podcast-cover-has-artwork {
+  background: transparent;
+  border: 0;
+  padding: 0;
 }
 
 .podcast-cover span {
@@ -349,6 +361,45 @@
   color: var(--color-text-muted);
   font-size: 14px;
   line-height: 1.45;
+}
+
+.podcast-series-progress {
+  border-top: 1px solid var(--color-border);
+  margin-top: 4px;
+  padding-top: 10px;
+}
+
+.podcast-series-progress-caption {
+  align-items: baseline;
+  display: flex;
+  font-size: 12px;
+  gap: 12px;
+  justify-content: space-between;
+  line-height: 1.4;
+}
+
+.podcast-series-progress-caption span {
+  color: var(--color-text-muted);
+}
+
+.podcast-series-progress-caption strong {
+  color: var(--color-text);
+  white-space: nowrap;
+}
+
+.podcast-series-progress-track {
+  background: var(--color-border-strong);
+  border-radius: 99px;
+  height: 7px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+
+.podcast-series-progress-track > span {
+  background: var(--color-primary);
+  border-radius: inherit;
+  display: block;
+  height: 100%;
 }
 
 .podcast-series-header {
@@ -662,6 +713,10 @@
   background: #173746;
 }
 
+:root[data-theme='dark'] .podcast-series-progress-track > span {
+  background: #7dd3fc;
+}
+
 :root[data-theme='dark'] .episode-complete {
   color: #65d8a0;
 }
@@ -725,7 +780,7 @@
   }
 
   .podcast-series-card [data-slot='container'] {
-    grid-template-columns: 96px minmax(0, 1fr);
+    grid-template-columns: 104px minmax(0, 1fr);
   }
 
   .podcast-series-hero {
@@ -824,10 +879,6 @@
   color: #eef5f7;
 }
 
-:root .app-breadcrumb .font-semibold > .truncate[data-slot='linkLabel'] {
-  color: inherit;
-}
-
 :root {
   --wolpi-nav-blue: #005a84;
   --wolpi-blue-tint: #e2ebf3;
@@ -921,117 +972,6 @@ body {
   min-height: 36px;
   padding: 7px 10px;
   width: 100%;
-}
-
-.app-breadcrumb {
-  align-items: center;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  box-shadow: 0 8px 24px rgba(0, 90, 132, 0.08);
-  display: inline-flex;
-  max-width: 100%;
-  overflow-x: auto;
-  padding: 4px;
-  scrollbar-width: none;
-}
-
-.app-breadcrumb::-webkit-scrollbar {
-  display: none;
-}
-
-.app-breadcrumb ol {
-  align-items: center;
-  display: flex;
-  gap: 2px;
-  list-style: none;
-  margin: 0;
-  min-width: 0;
-  padding: 0;
-  white-space: nowrap;
-}
-
-.app-breadcrumb-item {
-  align-items: center;
-  display: inline-flex;
-  flex: 0 0 auto;
-  gap: 2px;
-}
-
-.app-breadcrumb-link,
-.app-breadcrumb-current,
-.app-breadcrumb [data-slot='link'] {
-  align-items: center;
-  border-radius: 999px;
-  color: var(--color-text-muted);
-  display: inline-flex;
-  font-size: 12px;
-  font-weight: 800;
-  gap: 5px;
-  line-height: 1;
-  min-height: 26px;
-  padding: 0 9px;
-  text-decoration: none;
-  transition:
-    background-color 140ms ease,
-    color 140ms ease;
-}
-
-.app-breadcrumb-link:hover {
-  background: var(--wolpi-blue-tint);
-  color: var(--color-primary-strong);
-  filter: none;
-}
-
-.app-breadcrumb a[data-slot='link']:hover {
-  background: var(--wolpi-blue-tint);
-  color: var(--color-primary-strong);
-}
-
-.app-breadcrumb-link:focus-visible {
-  background: var(--wolpi-blue-tint);
-  color: var(--color-primary-strong);
-  outline: 2px solid var(--wolpi-nav-blue);
-  outline-offset: 2px;
-}
-
-.app-breadcrumb a[data-slot='link']:focus-visible {
-  background: var(--wolpi-blue-tint);
-  color: var(--color-primary-strong);
-  outline: 2px solid var(--wolpi-nav-blue);
-  outline-offset: 2px;
-}
-
-.app-breadcrumb-current[aria-current='page'] {
-  background: var(--color-primary-strong);
-  color: #fff;
-}
-
-.app-breadcrumb span[data-slot='link'] {
-  background: var(--color-primary-strong);
-  color: #fff;
-}
-
-.app-breadcrumb [data-slot='linkLabel'] {
-  color: #1e3440;
-}
-
-.app-breadcrumb .truncate[data-slot='linkLabel'] {
-  color: #1e3440;
-}
-
-.app-breadcrumb .font-semibold .truncate[data-slot='linkLabel'] {
-  color: #fff;
-}
-
-.app-breadcrumb-separator {
-  color: var(--color-text-muted);
-  opacity: 0.62;
-}
-
-.app-breadcrumb [data-slot='separatorIcon'] {
-  color: var(--color-text-muted);
-  opacity: 0.62;
 }
 
 .app-breadcrumb + .eyebrow {
@@ -5293,62 +5233,6 @@ button:active .key-hint,
 :root[data-theme='dark'] .tag {
   background: #12364a;
   color: #9bdcff !important;
-}
-
-:root[data-theme='dark'] .app-breadcrumb {
-  background: rgba(17, 27, 32, 0.78);
-  border-color: #31424a;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.24);
-}
-
-:root[data-theme='dark'] .app-breadcrumb-link,
-:root[data-theme='dark'] .app-breadcrumb-current,
-:root[data-theme='dark'] .app-breadcrumb [data-slot='link'] {
-  color: #b7c9d0;
-}
-
-:root[data-theme='dark'] .app-breadcrumb [data-slot='linkLabel'] {
-  color: #b7c9d0;
-}
-
-:root[data-theme='dark'] .app-breadcrumb-link:hover {
-  background: #173746;
-  color: var(--wolpi-blue-tint);
-}
-
-:root[data-theme='dark'] .app-breadcrumb a[data-slot='link']:hover {
-  background: #173746;
-  color: var(--wolpi-blue-tint);
-}
-
-:root[data-theme='dark'] .app-breadcrumb-current[aria-current='page'] {
-  background: var(--wolpi-nav-blue);
-  color: #fff;
-}
-
-:root[data-theme='dark'] .app-breadcrumb span[data-slot='link'] {
-  background: var(--wolpi-nav-blue);
-  color: #fff;
-}
-
-:root[data-theme='dark'] .app-breadcrumb-separator {
-  color: #8fa3ac;
-}
-
-:root[data-theme='dark'] .app-breadcrumb [data-slot='separatorIcon'] {
-  color: #8fa3ac;
-}
-
-:root[data-theme='dark'] .app-breadcrumb-link:focus-visible {
-  background: #173746;
-  color: var(--wolpi-blue-tint);
-  outline-color: var(--wolpi-blue-tint);
-}
-
-:root[data-theme='dark'] .app-breadcrumb a[data-slot='link']:focus-visible {
-  background: #173746;
-  color: var(--wolpi-blue-tint);
-  outline-color: var(--wolpi-blue-tint);
 }
 
 :root[data-theme='dark'] .app-badge-blue {
