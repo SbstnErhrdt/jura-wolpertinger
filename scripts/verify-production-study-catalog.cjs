@@ -109,8 +109,10 @@ async function settle(page) {
     const search = page.getByRole('searchbox', { name: 'Sammlungen suchen' })
     await search.fill('öffentliches')
     await expect(page.locator('.collection-card')).toHaveCount(1)
-    await expect(page.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '50')
     await expect(page.locator('.collection-card')).toContainText('2 von 4 Karten einmal bearbeitet')
+    await expect(page.getByRole('img', {
+      name: 'Lernstand Wiederholen – Katalogprüfung: 0 Nicht gewusst, 0 Teilweise gewusst, 2 Gewusst, 2 Noch nicht bearbeitet'
+    })).toBeVisible()
     await search.fill('nonexistent')
     await expect(page.getByText('Keine passenden Sammlungen gefunden.')).toBeVisible()
     await expect(page.locator('.study-recommendation')).toContainText('Wiederholen – Katalogprüfung')
