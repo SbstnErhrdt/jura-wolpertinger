@@ -3,43 +3,45 @@
 
 <main id="top">
   <section class="hero">
-    <div class="hero-copy">
-      <p class="kicker">Jura lernen ohne Umwege</p>
-      <h1>Karteikarten lernen. Podcasts hören. Klausuren schreiben.</h1>
-      <p>
-        Jura Wolpertinger verbindet kurze Lerneinheiten mit echter Klausurarbeit:
-        Karteikarten mit sichtbarem Lernstand, juristische Podcasts, einen ruhigen Schreibmodus
-        und Auswertungen, die zeigen, was heute wirklich dran ist.
-      </p>
-      <div class="hero-actions">
-        <a class="button primary" href="#download">Desktop-App laden</a>
-        <a class="button secondary" href="https://app.jura-wolpi.de/">Web-App öffnen</a>
+    <div class="hero-inner">
+      <div class="hero-copy">
+        <p class="kicker">Jura lernen ohne Umwege</p>
+        <h1>Karteikarten lernen. Podcasts hören. Klausuren schreiben.</h1>
+        <p>
+          Jura Wolpertinger verbindet kurze Lerneinheiten mit echter Klausurarbeit:
+          Karteikarten mit sichtbarem Lernstand, juristische Podcasts, einen ruhigen Schreibmodus
+          und Auswertungen, die zeigen, was heute wirklich dran ist.
+        </p>
+        <div class="hero-actions">
+          <a class="button primary" href="#download">Desktop-App laden</a>
+          <a class="button secondary" href="https://app.jura-wolpi.de/">Web-App öffnen</a>
+        </div>
+        <dl class="hero-stats" aria-label="Kernfunktionen">
+          <div>
+            <dt>Karteikarten</dt>
+            <dd>Sammlungen, Schlagwörter, Wiederholung</dd>
+          </div>
+          <div>
+            <dt>Podcasts</dt>
+            <dd>Rechtsgebiete, Reihen, Hörfortschritt</dd>
+          </div>
+          <div>
+            <dt>Prüfungen</dt>
+            <dd>Schreiben, sichern, bewerten</dd>
+          </div>
+        </dl>
       </div>
-      <dl class="hero-stats" aria-label="Kernfunktionen">
-        <div>
-          <dt>Karteikarten</dt>
-          <dd>Sammlungen, Schlagwörter, Wiederholung</dd>
+      <div class="hero-product" aria-label="Produktvorschau">
+        <div class="product-window">
+          <div class="window-bar" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <img src="/screenshots/1_home.png" alt="Jura Wolpertinger Home mit Lernaktionen und Tagesstand" width="1440" height="960" fetchpriority="high">
         </div>
-        <div>
-          <dt>Podcasts</dt>
-          <dd>Rechtsgebiete, Reihen, Hörfortschritt</dd>
-        </div>
-        <div>
-          <dt>Prüfungen</dt>
-          <dd>Schreiben, sichern, bewerten</dd>
-        </div>
-      </dl>
-    </div>
-    <div class="hero-product" aria-label="Produktvorschau">
-      <div class="product-window">
-        <div class="window-bar">
-          <span></span>
-          <span></span>
-          <span></span>
-        </div>
-        <img src="/screenshots/1_home.png" alt="Jura Wolpertinger Home mit Lernaktionen und Tagesstand" width="1440" height="960" fetchpriority="high">
+        <img class="hero-wolpi" src="/assets/wolpi/hero.png" alt="Wolpi winkt mit Karteikarten" width="760" height="760" decoding="async">
       </div>
-      <img class="hero-wolpi" src="/assets/wolpi/hero.png" alt="Wolpi winkt mit Karteikarten" width="760" height="760" decoding="async">
     </div>
   </section>
 
@@ -131,7 +133,7 @@
       <div class="mini-review-card">
         <span>Lernstand</span>
         <strong>15 Karten</strong>
-        <div class="mini-status-track" aria-label="Beispielhafter Lernstand">
+        <div class="mini-status-track" aria-hidden="true">
           <i class="not-known"></i><i class="partially-known"></i><i class="known"></i><i class="unreviewed"></i>
         </div>
         <small>Auf einen Blick sehen, was schon sitzt.</small>

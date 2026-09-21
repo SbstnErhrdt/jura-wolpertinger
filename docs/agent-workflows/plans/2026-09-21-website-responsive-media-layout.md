@@ -28,7 +28,7 @@
 - Consumes: Homepage-Markup, Website-CSS und statische Bilder.
 - Produces: automatisierte Layout-Invarianten für Desktop und Mobil.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
   Erzeuge einen lokalen HTTP-Testserver, öffne die Seite mit Playwright und
   prüfe für Hero-Screenshot, Hero-Wolpi, Karten-Wolpi und Desktop-Wolpi, dass
@@ -36,14 +36,14 @@
   Prüfe zusätzlich `scrollWidth <= innerWidth` und eine begrenzte Breite des
   Hero-Inhalts.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
   Run: `corepack pnpm exec vitest run tests/website/layout.test.ts`
 
   Expected: FAIL, weil Hero-Screenshot und Wolpi-Grafiken vertikal gestreckt
   werden und der begrenzte Hero-Inhaltscontainer fehlt.
 
-- [ ] **Step 3: Commit the regression test together with the fix**
+- [x] **Step 3: Commit the regression test together with the fix**
 
   Der Test wird nach dem Red-Green-Zyklus gemeinsam mit der Layoutkorrektur
   committed, damit kein absichtlich roter Zwischenstand gepusht wird.
@@ -58,23 +58,23 @@
 - Consumes: bestehende Hero-Texte, Screenshots und transparente Wolpi-PNGs.
 - Produces: `.hero-inner` als begrenzte Layoutfläche sowie stabile Bildregeln.
 
-- [ ] **Step 1: Add the centered hero container**
+- [x] **Step 1: Add the centered hero container**
 
   Umschließe `.hero-copy` und `.hero-product` mit `.hero-inner`. Der äußere
   `.hero` bleibt für Hintergrund und Überlauf zuständig; `.hero-inner` trägt
   Raster, Abstände und `max-width: 1520px`.
 
-- [ ] **Step 2: Make image sizing intrinsic and explicit**
+- [x] **Step 2: Make image sizing intrinsic and explicit**
 
   Ergänze global `height: auto`. Setze Produkt-Screenshot und Wolpi-Grafiken
   zusätzlich auf explizite Seitenverhältnisse und passende `object-fit`-Regeln.
 
-- [ ] **Step 3: Stabilize desktop and mobile composition**
+- [x] **Step 3: Stabilize desktop and mobile composition**
 
   Begrenze die Produktvorschau, positioniere den Hero-Wolpi außerhalb der
   primären Inhaltsfläche und passe die Breakpoints 1100 px und 760 px an.
 
-- [ ] **Step 4: Run the focused test**
+- [x] **Step 4: Run the focused test**
 
   Run: `corepack pnpm exec vitest run tests/website/layout.test.ts`
 
@@ -90,24 +90,24 @@
 - Consumes: korrigiertes Homepage-Template und Stylesheet.
 - Produces: veröffentlichbare statische Website.
 
-- [ ] **Step 1: Run all website tests**
+- [x] **Step 1: Run all website tests**
 
   Run: `corepack pnpm exec vitest run tests/website`
 
   Expected: alle Website-Tests PASS.
 
-- [ ] **Step 2: Build the Hugo site into a temporary directory**
+- [x] **Step 2: Build the Hugo site into a temporary directory**
 
   Run: `hugo --source website --destination <temporary-directory> --cleanDestinationDir`
 
   Expected: Build exit code 0.
 
-- [ ] **Step 3: Inspect desktop and mobile screenshots**
+- [x] **Step 3: Inspect desktop and mobile screenshots**
 
   Rendere die gebaute Homepage bei 1440×1000 und 390×844. Prüfe Bildformate,
   Überlagerungen, Lesbarkeit und Überlauf visuell.
 
-- [ ] **Step 4: Regenerate the tracked public website output**
+- [x] **Step 4: Regenerate the tracked public website output**
 
   Kopiere nur die von Hugo erzeugten Website-Dateien nach `docs/`, ohne
   technische Dokumentationsdateien zu löschen.
