@@ -1,6 +1,6 @@
 # Podcast-Cover-Skill und Grundskript Steuerrecht
 
-**Datum:** 21. September 2026  
+**Datum:** 21. September 2026
 **Status:** fachlich freigegeben
 
 ## Ziel

@@ -24,4 +24,3 @@ Die thematischen Podcast-Cover sollen auf der Podcast-Übersicht ohne den derzei
 - Typecheck und die fokussierten Podcast-UI-Tests müssen erfolgreich sein.
 - Ein visueller Smoke-Test prüft Desktop und mobilen Breakpoint.
 - Nach dem Produktionsbuild wird die Live-Podcast-Seite geprüft.
-

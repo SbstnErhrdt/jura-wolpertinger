@@ -145,4 +145,3 @@ git status --short --branch
 ```
 
 Expected: no whitespace errors, no credential files, and only intended edits plus pre-existing worktree changes.
-
