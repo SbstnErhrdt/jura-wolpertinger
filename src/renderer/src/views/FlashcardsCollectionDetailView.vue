@@ -34,9 +34,11 @@
       <UFormField class="dialog-field" label="Letzte Lernbewertung"><USelect v-model="lastRatingFilter" :items="lastRatingFilterOptions" value-key="value" /></UFormField>
     </div>
 
-    <div v-if="loading" class="skeleton-list" aria-hidden="true">
-      <UCard v-for="index in 4" :key="index" class="skeleton-tile"><USkeleton class="h-5 w-2/5" /><USkeleton class="mt-3 h-4 w-full" /><USkeleton class="mt-2 h-4 w-3/5" /></UCard>
-    </div>
+    <AppLoadingState v-if="loading" label="Sammlung wird geladen">
+      <div class="skeleton-list">
+        <UCard v-for="index in 4" :key="index" class="skeleton-tile"><USkeleton class="h-5 w-2/5" /><USkeleton class="mt-3 h-4 w-full" /><USkeleton class="mt-2 h-4 w-3/5" /></UCard>
+      </div>
+    </AppLoadingState>
     <UAlert v-else-if="loadError" class="action-notice" color="error" :description="loadError">
       <template #actions><UButton color="neutral" variant="outline" @click="reloadCards">Erneut versuchen</UButton></template>
     </UAlert>
@@ -225,6 +227,7 @@ import type { StudyOverview } from '@shared/flashcardStudy'
 import TagInput from '../components/TagInput.vue'
 import type { AppActionMenuItem } from '../ui/actionMenu'
 import AppBreadcrumb from '../components/ui/AppBreadcrumb.vue'
+import AppLoadingState from '../components/ui/AppLoadingState.vue'
 import type { AppBreadcrumbItem } from '../ui/breadcrumbs'
 import {
   cardQualityLabel,

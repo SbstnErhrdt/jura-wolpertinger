@@ -10,7 +10,9 @@
       <UButton v-else color="neutral" variant="outline" :to="collectionLink">Zur Sammlung</UButton>
     </header>
 
-    <UCard v-if="loading" class="empty-state"><USkeleton class="h-6 w-1/3" /><USkeleton class="mt-4 h-24 w-full" /></UCard>
+    <AppLoadingState v-if="loading" label="Lerneinheit wird geladen">
+      <UCard class="empty-state"><USkeleton class="h-6 w-1/3" /><USkeleton class="mt-4 h-24 w-full" /></UCard>
+    </AppLoadingState>
     <UAlert v-if="studyError" color="error" title="Der Durchgang konnte nicht aktualisiert werden" :description="studyError" role="alert">
       <template #actions><UButton :loading="ratingBusy" @click="retryStudy">Erneut versuchen</UButton></template>
     </UAlert>
@@ -228,6 +230,7 @@ import { api } from '../api'
 import { createStudySession } from '../ui/studySession'
 import { createStudyCelebration, type StudyCelebration as Celebration } from '../ui/studyCelebration'
 import StudyCelebration from '../components/StudyCelebration.vue'
+import AppLoadingState from '../components/ui/AppLoadingState.vue'
 import type { StudyMode, StudyOverview } from '@shared/flashcardStudy'
 import MarkdownBlock from '../components/StudyMarkdown.vue'
 import TagInput from '../components/TagInput.vue'

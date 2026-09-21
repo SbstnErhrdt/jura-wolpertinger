@@ -63,4 +63,27 @@ describe('app loading states', () => {
     expect(analytics).toContain(':loading="taskBusyId === task.id"')
     expect(settings).toContain('userActionBusy')
   })
+
+  it('uses the shared loading semantics across learning and podcast views', async () => {
+    const files = [
+      'DashboardView.vue',
+      'FlashcardsCollectionsView.vue',
+      'FlashcardsCollectionDetailView.vue',
+      'FlashcardsReviewView.vue',
+      'FlashcardsStatisticsView.vue',
+      'PodcastsView.vue',
+      'PodcastSeriesView.vue'
+    ]
+    for (const file of files) {
+      expect(await rendererFile(`views/${file}`), file).toContain('<AppLoadingState')
+    }
+  })
+
+  it('shows busy feedback while collection files and records change', async () => {
+    const source = await rendererFile('views/FlashcardsCollectionsView.vue')
+
+    expect(source).toContain(':loading="createBusy"')
+    expect(source).toContain(':loading="importBusy"')
+    expect(source).toContain(':loading="exportBusy"')
+  })
 })

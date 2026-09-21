@@ -128,9 +128,11 @@
           </UButton>
         </div>
 
-        <div v-if="store.loading" class="skeleton-list" aria-hidden="true">
-          <UCard v-for="index in 5" :key="index" class="skeleton-tile"><USkeleton class="h-5 w-2/5" /><USkeleton class="mt-3 h-4 w-full" /></UCard>
-        </div>
+        <AppLoadingState v-if="store.loading" label="Prüfungsbibliothek wird geladen">
+          <div class="skeleton-list">
+            <UCard v-for="index in 5" :key="index" class="skeleton-tile"><USkeleton class="h-5 w-2/5" /><USkeleton class="mt-3 h-4 w-full" /></UCard>
+          </div>
+        </AppLoadingState>
         <p v-else-if="store.error" class="action-notice error">
           <span>{{ store.error }}</span>
           <UButton type="button" color="neutral" variant="outline" @click="reloadExams">Erneut versuchen</UButton>
@@ -336,6 +338,7 @@ import { Download, FileText, FolderPlus, Pencil, Plus, RotateCcw, Trash2, Upload
 import type { ExamStatus } from '@shared/schemas'
 import TagInput from '../components/TagInput.vue'
 import AppBreadcrumb from '../components/ui/AppBreadcrumb.vue'
+import AppLoadingState from '../components/ui/AppLoadingState.vue'
 import type { AppBreadcrumbItem } from '../ui/breadcrumbs'
 import { examLibraryLocation, folderFromQuery, UNASSIGNED_FOLDER_ID } from '../ui/examNavigation'
 import { useLibraryStore } from '../stores/library'

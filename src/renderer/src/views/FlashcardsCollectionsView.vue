@@ -12,11 +12,11 @@
           <Plus :size="17" aria-hidden="true" />
           Neue Sammlung
         </UButton>
-        <UButton color="neutral" variant="outline" type="button" @click="triggerImport">
+        <UButton color="neutral" variant="outline" type="button" :loading="importBusy" @click="triggerImport">
           <Upload :size="17" aria-hidden="true" />
           Datei auswählen
         </UButton>
-        <UButton color="neutral" variant="outline" type="button" @click="exportDecks">
+        <UButton color="neutral" variant="outline" type="button" :loading="exportBusy" @click="exportDecks">
           <Download :size="17" aria-hidden="true" />
           Karten sichern
         </UButton>
@@ -69,7 +69,16 @@
     <UAlert v-if="loadError" color="error" :description="loadError">
       <template #actions><UButton type="button" color="neutral" variant="outline" @click="load">Erneut versuchen</UButton></template>
     </UAlert>
-    <div v-else-if="loading" class="collection-loading" role="status">Die Übersicht wird geladen …</div>
+    <AppLoadingState v-else-if="loading" label="Sammlungen werden geladen">
+      <div class="collection-grid collection-grid-skeleton">
+        <UCard v-for="index in 6" :key="index" class="collection-card collection-card-skeleton">
+          <USkeleton class="h-5 w-2/3" />
+          <USkeleton class="mt-4 h-4 w-full" />
+          <USkeleton class="mt-2 h-4 w-3/4" />
+          <USkeleton class="mt-6 h-10 w-full" />
+        </UCard>
+      </div>
+    </AppLoadingState>
     <div v-else-if="!collections.length" class="collection-empty" role="status">
       <h2>{{ search.trim() ? 'Keine passenden Sammlungen gefunden.' : 'Noch keine Sammlungen vorhanden.' }}</h2>
       <p>{{ search.trim() ? 'Versuche einen anderen Namen oder ein Rechtsgebiet.' : 'Erstelle deine erste Sammlung oder wähle oben eine Karteikarten-Datei aus.' }}</p>
@@ -145,7 +154,7 @@
           <UFormField class="dialog-field" label="Rechtsgebiet"><UInput v-model="newSubject" placeholder="z. B. Strafrecht" /></UFormField>
           <div class="dialog-actions">
             <UButton type="button" color="neutral" variant="outline" @click="cancelCreateCollection">Abbrechen</UButton>
-            <UButton type="submit" :disabled="!newName.trim()">Sammlung speichern</UButton>
+            <UButton type="submit" :loading="createBusy" :disabled="!newName.trim()">Sammlung speichern</UButton>
           </div>
         </form>
       </div>
@@ -160,6 +169,7 @@ import { Clock3, Download, FolderKanban, FolderOpen, Layers, Play, Plus, Upload 
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '../api'
 import AppBreadcrumb from '../components/ui/AppBreadcrumb.vue'
+import AppLoadingState from '../components/ui/AppLoadingState.vue'
 import LearningStatusBar from '../components/LearningStatusBar.vue'
 import type { AppBreadcrumbItem } from '../ui/breadcrumbs'
 import { STUDY_CATALOG_PAGE_SIZE } from '@shared/flashcardStudy'
@@ -190,6 +200,9 @@ const transferMessage = ref('')
 const transferMessageKind = ref<'info' | 'error'>('info')
 const showImportPrompt = ref(false)
 const showCreateCollectionDialog = ref(false)
+const createBusy = ref(false)
+const importBusy = ref(false)
+const exportBusy = ref(false)
 const breadcrumbItems: AppBreadcrumbItem[] = [
   { label: 'Home', to: { name: 'home' } },
   { label: 'Karteikarten', to: { name: 'flashcards' } },
@@ -220,16 +233,25 @@ function triggerImport(): void {
 }
 
 async function exportDecks(): Promise<void> {
-  const json = await api.exportLearningDecksJson()
-  const blob = new Blob([json], { type: 'application/json;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = `jura-wolpertinger-karteikarten-${new Date().toISOString().slice(0, 10)}.json`
-  anchor.click()
-  URL.revokeObjectURL(url)
-  transferMessageKind.value = 'info'
-  transferMessage.value = 'Deine Karteikarten-Datei wurde erstellt.'
+  exportBusy.value = true
+  transferMessage.value = ''
+  try {
+    const json = await api.exportLearningDecksJson()
+    const blob = new Blob([json], { type: 'application/json;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `jura-wolpertinger-karteikarten-${new Date().toISOString().slice(0, 10)}.json`
+    anchor.click()
+    URL.revokeObjectURL(url)
+    transferMessageKind.value = 'info'
+    transferMessage.value = 'Deine Karteikarten-Datei wurde erstellt.'
+  } catch {
+    transferMessageKind.value = 'error'
+    transferMessage.value = 'Die Karteikarten-Datei konnte nicht erstellt werden.'
+  } finally {
+    exportBusy.value = false
+  }
 }
 
 async function importDecks(event: Event): Promise<void> {
@@ -237,6 +259,7 @@ async function importDecks(event: Event): Promise<void> {
   const file = input.files?.[0]
   input.value = ''
   if (!file) return
+  importBusy.value = true
   try {
     const result = await api.importLearningDecksJson(await file.text())
     transferMessageKind.value = 'info'
@@ -245,6 +268,8 @@ async function importDecks(event: Event): Promise<void> {
   } catch {
     transferMessageKind.value = 'error'
     transferMessage.value = 'Die Datei konnte nicht gelesen werden. Bitte wähle eine Karteikarten-Datei aus Jura Wolpertinger.'
+  } finally {
+    importBusy.value = false
   }
 }
 
@@ -260,13 +285,22 @@ function cancelCreateCollection(): void {
 
 async function createCollection(): Promise<void> {
   if (!newName.value.trim()) return
-  const collection = await api.createLearningCollection({
-    name: newName.value,
-    subject: newSubject.value || null
-  })
-  showCreateCollectionDialog.value = false
-  await load()
-  await router.push({ name: 'flashcards-collection', params: { id: collection.id } })
+  createBusy.value = true
+  transferMessage.value = ''
+  try {
+    const collection = await api.createLearningCollection({
+      name: newName.value,
+      subject: newSubject.value || null
+    })
+    showCreateCollectionDialog.value = false
+    await load()
+    await router.push({ name: 'flashcards-collection', params: { id: collection.id } })
+  } catch {
+    transferMessageKind.value = 'error'
+    transferMessage.value = 'Die Sammlung konnte nicht angelegt werden.'
+  } finally {
+    createBusy.value = false
+  }
 }
 </script>
 

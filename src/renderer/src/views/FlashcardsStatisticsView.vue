@@ -13,10 +13,12 @@
       </UButton>
     </header>
 
-    <div v-if="loading" class="statistics-skeleton" aria-label="Statistik wird geladen">
-      <USkeleton v-for="index in 4" :key="index" class="statistics-skeleton-tile" />
-      <USkeleton class="statistics-skeleton-chart" />
-    </div>
+    <AppLoadingState v-if="loading" label="Statistik wird geladen">
+      <div class="statistics-skeleton">
+        <USkeleton v-for="index in 4" :key="index" class="statistics-skeleton-tile" />
+        <USkeleton class="statistics-skeleton-chart" />
+      </div>
+    </AppLoadingState>
     <UAlert v-else-if="error" color="error" :description="error" />
 
     <template v-else-if="statistics">
@@ -127,6 +129,7 @@ import type { LearningStatusCounts } from '@shared/learningStatus'
 import { api } from '../api'
 import AppBreadcrumb from '../components/ui/AppBreadcrumb.vue'
 import LearningStatusBar from '../components/LearningStatusBar.vue'
+import AppLoadingState from '../components/ui/AppLoadingState.vue'
 import type { AppBreadcrumbItem } from '../ui/breadcrumbs'
 
 const statistics = ref<LearningStatistics | null>(null)

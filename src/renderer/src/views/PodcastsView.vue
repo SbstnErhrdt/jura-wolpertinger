@@ -28,11 +28,15 @@
       </p>
     </div>
 
-    <div v-if="loading" class="podcast-library-skeleton" aria-label="Podcasts werden geladen">
-      <USkeleton class="podcast-skeleton-title" />
-      <USkeleton v-for="index in 3" :key="index" class="podcast-skeleton-card" />
-    </div>
-    <UAlert v-else-if="error" color="error" :description="error" />
+    <AppLoadingState v-if="loading" label="Podcasts werden geladen">
+      <div class="podcast-library-skeleton">
+        <USkeleton class="podcast-skeleton-title" />
+        <USkeleton v-for="index in 3" :key="index" class="podcast-skeleton-card" />
+      </div>
+    </AppLoadingState>
+    <UAlert v-else-if="error" color="error" :description="error">
+      <template #actions><UButton type="button" color="neutral" variant="outline" @click="loadCatalog">Erneut versuchen</UButton></template>
+    </UAlert>
     <div v-else-if="filteredCatalog.legalAreas.length" class="podcast-legal-areas">
       <section v-for="legalArea in filteredCatalog.legalAreas" :key="legalArea.slug">
         <div class="podcast-section-heading">
@@ -93,6 +97,7 @@ import { api } from '../api'
 import { usePodcastPlayer } from '../podcasts/usePodcastPlayer'
 import AppBreadcrumb from '../components/ui/AppBreadcrumb.vue'
 import PodcastArtwork from '../components/PodcastArtwork.vue'
+import AppLoadingState from '../components/ui/AppLoadingState.vue'
 import type { AppBreadcrumbItem } from '../ui/breadcrumbs'
 import { filterPodcastCatalog } from '../ui/podcastCatalogSearch'
 
@@ -110,7 +115,11 @@ const podcastResultCount = computed(() =>
   filteredCatalog.value.legalAreas.reduce((total, legalArea) => total + legalArea.series.length, 0)
 )
 
-onMounted(async () => {
+onMounted(loadCatalog)
+
+async function loadCatalog(): Promise<void> {
+  loading.value = true
+  error.value = ''
   try {
     catalog.value = await api.getPodcastCatalog()
     player.setCatalog(catalog.value)
@@ -119,7 +128,7 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-})
+}
 
 function seriesProgress(episodes: PodcastEpisode[]) {
   return calculatePodcastSeriesProgress(episodes)

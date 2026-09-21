@@ -21,10 +21,14 @@
       </div>
     </header>
 
-    <div v-if="player.catalogLoading.value" class="podcast-episode-skeleton">
-      <USkeleton v-for="index in 5" :key="index" />
-    </div>
-    <UAlert v-else-if="player.catalogError.value" color="error" :description="player.catalogError.value" />
+    <AppLoadingState v-if="player.catalogLoading.value" label="Podcast-Reihe wird geladen">
+      <div class="podcast-episode-skeleton">
+        <USkeleton v-for="index in 5" :key="index" />
+      </div>
+    </AppLoadingState>
+    <UAlert v-else-if="player.catalogError.value" color="error" :description="player.catalogError.value">
+      <template #actions><UButton type="button" color="neutral" variant="outline" @click="() => void player.loadCatalog(true)">Erneut versuchen</UButton></template>
+    </UAlert>
     <section v-else-if="series" class="podcast-episode-list" aria-label="Podcast-Folgen">
       <article
         v-for="episode in series.episodes"
@@ -70,6 +74,7 @@ import type { PodcastEpisode } from '@shared/schemas'
 import { usePodcastPlayer } from '../podcasts/usePodcastPlayer'
 import AppBreadcrumb from '../components/ui/AppBreadcrumb.vue'
 import PodcastArtwork from '../components/PodcastArtwork.vue'
+import AppLoadingState from '../components/ui/AppLoadingState.vue'
 import type { AppBreadcrumbItem } from '../ui/breadcrumbs'
 
 const route = useRoute()
