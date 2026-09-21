@@ -30,21 +30,35 @@
       <img :src="helloUrl" alt="" />
     </div>
 
-    <div class="home-metrics">
+    <AppLoadingState label="Startseite wird geladen" v-if="loading">
+      <div class="home-metrics home-metrics-skeleton">
+        <UCard v-for="index in 3" :key="index">
+          <USkeleton class="home-metric-value-skeleton" />
+          <USkeleton class="home-metric-label-skeleton" />
+          <USkeleton class="home-metric-copy-skeleton" />
+        </UCard>
+      </div>
+    </AppLoadingState>
+    <UAlert v-else-if="loadError" color="error" :description="loadError">
+      <template #actions>
+        <UButton type="button" color="neutral" variant="outline" @click="loadHome">Erneut versuchen</UButton>
+      </template>
+    </UAlert>
+    <div v-else-if="dashboard" class="home-metrics">
       <UCard>
-        <span>{{ dashboard?.streakDays ?? 0 }}</span>
+        <span>{{ dashboard.streakDays }}</span>
         <strong>Tage Streak</strong>
-        <small>{{ dashboard?.freeDaysRemainingThisWeek ?? 2 }} freie Tage diese Woche übrig</small>
+        <small>{{ dashboard.freeDaysRemainingThisWeek }} freie Tage diese Woche übrig</small>
       </UCard>
       <UCard>
-        <span>{{ dashboard?.dueCount ?? 0 }}</span>
+        <span>{{ dashboard.dueCount }}</span>
         <strong>Wiederholungen empfohlen</strong>
-        <small>{{ dashboard?.totalCards ?? 0 }} Karten insgesamt</small>
+        <small>{{ dashboard.totalCards }} Karten insgesamt</small>
       </UCard>
       <UCard>
-        <span>{{ dashboard?.collectionCount ?? 0 }}</span>
+        <span>{{ dashboard.collectionCount }}</span>
         <strong>Sammlungen</strong>
-        <small>{{ dashboard?.learnedToday ? 'Heute gelernt' : 'Heute noch offen' }}</small>
+        <small>{{ dashboard.learnedToday ? 'Heute gelernt' : 'Heute noch offen' }}</small>
       </UCard>
     </div>
 
@@ -81,8 +95,11 @@ import { api } from '../api'
 import { requiresCloudAuth } from '../cloudAuth'
 import type { StudyOverview } from '@shared/flashcardStudy'
 import { studyEntry } from '../ui/studyNavigation'
+import AppLoadingState from '../components/ui/AppLoadingState.vue'
 
 const dashboard = ref<LearningDashboard | null>(null)
+const loading = ref(true)
+const loadError = ref('')
 const studyOverviews = ref<StudyOverview[]>([])
 const collectionNames = ref<Record<string, string>>({})
 const lastStudy = computed(() => studyOverviews.value.filter((entry) => entry.activeRun).sort((a, b) => b.activeRun!.updatedAt.localeCompare(a.activeRun!.updatedAt))[0])
@@ -100,23 +117,33 @@ const profilePromptVisible = computed(() =>
   requiresCloudAuth() && profile.value !== null && !profile.value.firstName
 )
 
-onMounted(async () => {
-  const [nextDashboard, nextProfile] = await Promise.all([
-    api.getLearningDashboard(),
-    api.getUserProfile().catch(() => null)
-  ])
-  dashboard.value = nextDashboard
-  profile.value = nextProfile
-  const [studyResult, collections] = await Promise.all([
-    api.studyFlashcards({ action: 'overview' }).catch(() => ({ overviews: [] })),
-    api.listLearningCollections().catch(() => [])
-  ])
-  studyOverviews.value = studyResult.overviews
-  collectionNames.value = Object.fromEntries(collections.map((collection) => [collection.id, collection.name]))
-  if (dashboard.value && studyResult.overviews.length) dashboard.value.dueCount = studyResult.overviews.reduce((total, entry) => total + entry.dueCards, 0)
-  profileFirstName.value = nextProfile?.firstName ?? ''
-  profileLastName.value = nextProfile?.lastName ?? ''
-})
+onMounted(loadHome)
+
+async function loadHome(): Promise<void> {
+  loading.value = true
+  loadError.value = ''
+  try {
+    const [nextDashboard, nextProfile] = await Promise.all([
+      api.getLearningDashboard(),
+      api.getUserProfile().catch(() => null)
+    ])
+    dashboard.value = nextDashboard
+    profile.value = nextProfile
+    const [studyResult, collections] = await Promise.all([
+      api.studyFlashcards({ action: 'overview' }).catch(() => ({ overviews: [] })),
+      api.listLearningCollections().catch(() => [])
+    ])
+    studyOverviews.value = studyResult.overviews
+    collectionNames.value = Object.fromEntries(collections.map((collection) => [collection.id, collection.name]))
+    if (studyResult.overviews.length) dashboard.value.dueCount = studyResult.overviews.reduce((total, entry) => total + entry.dueCards, 0)
+    profileFirstName.value = nextProfile?.firstName ?? ''
+    profileLastName.value = nextProfile?.lastName ?? ''
+  } catch {
+    loadError.value = 'Die Startseite konnte nicht geladen werden.'
+  } finally {
+    loading.value = false
+  }
+}
 
 function openProfileModal(): void {
   profileError.value = ''

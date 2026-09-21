@@ -21,6 +21,72 @@
   width: 100%;
 }
 
+.app-bootstrap-screen {
+  align-items: center;
+  background: var(--color-bg);
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.app-bootstrap-panel,
+.app-bootstrap-error {
+  align-items: center;
+  display: grid;
+  gap: 20px;
+  grid-template-columns: 96px minmax(0, 360px);
+  margin: 0 auto;
+  max-width: 520px;
+}
+
+.app-bootstrap-panel img,
+.app-bootstrap-error img {
+  height: 96px;
+  object-fit: contain;
+  width: 96px;
+}
+
+.app-bootstrap-error {
+  grid-template-columns: 96px minmax(0, 1fr);
+}
+
+.app-bootstrap-error > button {
+  grid-column: 2;
+  justify-self: start;
+}
+
+.app-bootstrap-title {
+  height: 30px;
+  margin-top: 8px;
+  width: min(100%, 300px);
+}
+
+.app-bootstrap-copy {
+  height: 16px;
+  margin-top: 12px;
+  width: min(80%, 240px);
+}
+
+.home-metrics-skeleton [data-slot='body'] {
+  gap: 10px;
+}
+
+.home-metric-value-skeleton {
+  height: 36px;
+  width: 72px;
+}
+
+.home-metric-label-skeleton {
+  height: 18px;
+  width: 55%;
+}
+
+.home-metric-copy-skeleton {
+  height: 14px;
+  width: 75%;
+}
+
 /* Learning statistics, podcast library and persistent audio player */
 .sidebar-account-trigger {
   align-items: center;

@@ -1,7 +1,28 @@
 <template>
   <UApp>
+    <section v-if="bootstrapStatus === 'loading'" class="app-bootstrap-screen">
+      <AppLoadingState label="App wird geladen">
+        <div class="app-bootstrap-panel">
+          <img :src="welcomeImageUrl" alt="" />
+          <div>
+            <p class="eyebrow">Jura Wolpertinger</p>
+            <USkeleton class="app-bootstrap-title" />
+            <USkeleton class="app-bootstrap-copy" />
+          </div>
+        </div>
+      </AppLoadingState>
+    </section>
+
+    <section v-else-if="bootstrapStatus === 'error'" class="app-bootstrap-screen">
+      <div class="app-bootstrap-error">
+        <img :src="welcomeImageUrl" alt="" />
+        <UAlert color="error" title="Die App konnte nicht geöffnet werden" :description="bootstrapError" />
+        <UButton type="button" @click="bootstrapApp">Erneut versuchen</UButton>
+      </div>
+    </section>
+
     <section
-      v-if="cloudAuth.status !== 'not_required' && (cloudAuth.status !== 'signed_in' || authMode === 'update_password')"
+      v-else-if="cloudAuth.status !== 'not_required' && (cloudAuth.status !== 'signed_in' || authMode === 'update_password')"
       class="auth-gate"
     >
       <div class="auth-panel">
@@ -283,6 +304,7 @@ import { startOnboardingTour } from './onboarding'
 import { getWorkspaceSyncModeOptions, type WorkspaceSyncMode } from './syncWorkspaceUx'
 import { useTheme } from './theme'
 import PodcastPlayer from './components/PodcastPlayer.vue'
+import AppLoadingState from './components/ui/AppLoadingState.vue'
 import { usePodcastPlayer } from './podcasts/usePodcastPlayer'
 
 const route = useRoute()
@@ -291,6 +313,8 @@ const isExamFocus = computed(() => route.name === 'exam-focus')
 const iconUrl = 'assets/icon.png'
 const welcomeImageUrl = 'assets/hello.png'
 const appVersion = ref(APP_VERSION)
+const bootstrapStatus = ref<'loading' | 'ready' | 'error'>('loading')
+const bootstrapError = ref('')
 const { isDark, toggleTheme, applyTheme } = useTheme()
 const podcastPlayer = usePodcastPlayer()
 const users = ref<AppUser[]>([])
@@ -572,9 +596,16 @@ async function verifyRecoveryTokenFromUrl(): Promise<void> {
   cloudAuth.value = await readCloudAuthState()
 }
 
-onMounted(async () => {
+onMounted(() => {
+  void bootstrapApp()
+})
+
+async function bootstrapApp(): Promise<void> {
+  bootstrapStatus.value = 'loading'
+  bootstrapError.value = ''
+  try {
   applyTheme()
-  appVersion.value = await api.getAppVersion()
+  appVersion.value = await api.getAppVersion().catch(() => APP_VERSION)
   if (window.location.hash.includes('type=recovery')) {
     authMode.value = 'update_password'
   }
@@ -596,11 +627,18 @@ onMounted(async () => {
     await loadUsers()
   }
   await verifyRecoveryTokenFromUrl()
+  window.removeEventListener('jura:start-tour', startTourListener)
+  window.removeEventListener('jura:users-updated', usersUpdatedListener)
   window.addEventListener('jura:start-tour', startTourListener)
   window.addEventListener('jura:users-updated', usersUpdatedListener)
   await nextTick()
+  bootstrapStatus.value = 'ready'
   window.dispatchEvent(new Event(RELEASE_SMOKE_READY_EVENT))
-})
+  } catch (error) {
+    bootstrapError.value = error instanceof Error ? error.message : 'Bitte versuche es noch einmal.'
+    bootstrapStatus.value = 'error'
+  }
+}
 
 onBeforeUnmount(() => {
   window.removeEventListener('jura:start-tour', startTourListener)
