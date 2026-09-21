@@ -2,7 +2,7 @@
 title: "Jura-Klausuren schreiben"
 description: "Mit Jura Wolpertinger Übungsklausuren vorbereiten, konzentriert schreiben, automatisch sichern und später bewerten."
 kicker: "Prüfungen"
-heroImage: "/assets/wolpi/desktop.png"
+heroImage: "images/wolpi/desktop.png"
 keywords:
   - "Jura Klausuren schreiben"
   - "Klausurtraining Jura"

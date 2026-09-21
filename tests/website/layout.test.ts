@@ -6,7 +6,7 @@ import { chromium, type Browser, type BrowserContext, type Page } from '@playwri
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 const projectRoot = process.cwd()
-const staticRoot = resolve(projectRoot, 'website/static')
+const staticRoot = resolve(projectRoot, 'website/assets')
 let browser: Browser
 let server: Server
 let baseUrl = ''
@@ -17,7 +17,8 @@ beforeAll(async () => {
     readFile(resolve(projectRoot, 'website/layouts/index.html'), 'utf8'),
     readFile(resolve(projectRoot, 'website/assets/css/main.css'), 'utf8')
   ])
-  const main = template.match(/<main[\s\S]*<\/main>/)?.[0]
+  const renderedTemplate = renderAssetUrls(template)
+  const main = renderedTemplate.match(/<main[\s\S]*<\/main>/)?.[0]
   if (!main) throw new Error('Homepage template does not contain a main element')
 
   server = createServer(async (request, response) => {
@@ -40,6 +41,7 @@ beforeAll(async () => {
     try {
       const asset = await readFile(assetPath)
       if (assetPath.endsWith('.png')) response.setHeader('content-type', 'image/png')
+      if (assetPath.endsWith('.svg')) response.setHeader('content-type', 'image/svg+xml')
       response.end(asset)
     } catch {
       response.statusCode = 404
@@ -160,4 +162,16 @@ async function imageMetrics(page: Page, selector: string) {
       renderedRatio: bounds.width / bounds.height
     }
   })
+}
+
+function renderAssetUrls(template: string): string {
+  const definitions = template.matchAll(
+    /\{\{\s+\$(\w+)\s+:=\s+resources\.Get\s+"([^"]+)"\s+\|\s+fingerprint\s+\}\}/g
+  )
+
+  let rendered = template
+  for (const [, variable, path] of definitions) {
+    rendered = rendered.replaceAll(`{{ $${variable}.RelPermalink }}`, `/${path}`)
+  }
+  return rendered
 }

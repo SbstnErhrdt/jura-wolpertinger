@@ -2,7 +2,7 @@
 title: "Jura-Karteikarten lernen"
 description: "Jura Wolpertinger organisiert Karteikarten in Sammlungen, Schlagwörtern und Wiederholungen für die Examensvorbereitung."
 kicker: "Karteikarten"
-heroImage: "/assets/wolpi/cards.png"
+heroImage: "images/wolpi/cards.png"
 keywords:
   - "Jura Karteikarten"
   - "Karteikarten Jura lernen"

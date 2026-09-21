@@ -3,7 +3,12 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    {{ $shareImage := .Params.heroImage | default site.Params.image }}
+    {{ $defaultShareImage := resources.Get "images/wolpi/hero.png" | fingerprint }}
+    {{ $shareImage := $defaultShareImage.Permalink }}
+    {{ with .Params.heroImage }}
+      {{ $pageShareImage := resources.Get . | fingerprint }}
+      {{ $shareImage = $pageShareImage.Permalink }}
+    {{ end }}
     <title>{{ if .IsHome }}{{ site.Title }} | Karteikarten und Klausuren für die Examensvorbereitung{{ else }}{{ .Title }} | {{ site.Title }}{{ end }}</title>
     <meta name="description" content="{{ .Description | default site.Params.description }}">
     <meta name="keywords" content="{{ delimit (.Params.keywords | default site.Params.keywords) ", " }}">
@@ -15,11 +20,11 @@
     <meta property="og:title" content="{{ if .IsHome }}{{ site.Title }}{{ else }}{{ .Title }} | {{ site.Title }}{{ end }}">
     <meta property="og:description" content="{{ .Description | default site.Params.description }}">
     <meta property="og:url" content="{{ .Permalink }}">
-    <meta property="og:image" content="{{ $shareImage | absURL }}">
+    <meta property="og:image" content="{{ $shareImage }}">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="{{ if .IsHome }}{{ site.Title }}{{ else }}{{ .Title }} | {{ site.Title }}{{ end }}">
     <meta name="twitter:description" content="{{ .Description | default site.Params.description }}">
-    <meta name="twitter:image" content="{{ $shareImage | absURL }}">
+    <meta name="twitter:image" content="{{ $shareImage }}">
     {{ $style := resources.Get "css/main.css" | minify | fingerprint }}
     <link rel="stylesheet" href="{{ $style.RelPermalink }}" integrity="{{ $style.Data.Integrity }}">
     <script type="application/ld+json">

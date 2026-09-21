@@ -3,9 +3,9 @@ import { readFile, stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-const assetsRoot = resolve(process.cwd(), 'website/static/assets/wolpi')
+const assetsRoot = resolve(process.cwd(), 'website/assets/images/wolpi')
 const files = ['hero.png', 'cards.png', 'desktop.png']
-const screenshotsRoot = resolve(process.cwd(), 'website/static/screenshots')
+const screenshotsRoot = resolve(process.cwd(), 'website/assets/images/screenshots')
 const screenshots = [
   '1_home.png',
   '2_karteikarten.png',
@@ -24,6 +24,7 @@ describe('website artwork assets', () => {
     expect(metadata.width).toBeLessThanOrEqual(1024)
     expect(metadata.height).toBeLessThanOrEqual(1024)
     expect(metadata.hasTransparentPixel).toBe(true)
+    expect(metadata.transparentPixelRatio).toBeGreaterThan(0.25)
     expect((await stat(path)).size).toBeLessThan(750_000)
   })
 
@@ -37,7 +38,12 @@ describe('website artwork assets', () => {
   })
 })
 
-function pngMetadata(data: Buffer): { width: number; height: number; hasTransparentPixel: boolean } {
+function pngMetadata(data: Buffer): {
+  width: number
+  height: number
+  hasTransparentPixel: boolean
+  transparentPixelRatio: number
+} {
   expect(data.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a')
   let offset = 8
   let width = 0
@@ -67,10 +73,11 @@ function pngMetadata(data: Buffer): { width: number; height: number; hasTranspar
     return {
       width,
       height,
-      hasTransparentPixel: Boolean(paletteTransparency?.some((alpha) => alpha < 255))
+      hasTransparentPixel: Boolean(paletteTransparency?.some((alpha) => alpha < 255)),
+      transparentPixelRatio: paletteTransparency?.some((alpha) => alpha === 0) ? 1 : 0
     }
   }
-  if (colorType === 2) return { width, height, hasTransparentPixel: false }
+  if (colorType === 2) return { width, height, hasTransparentPixel: false, transparentPixelRatio: 0 }
   expect(bitDepth).toBe(8)
   expect(interlace).toBe(0)
   expect([4, 6]).toContain(colorType)
@@ -79,6 +86,7 @@ function pngMetadata(data: Buffer): { width: number; height: number; hasTranspar
   const inflated = inflateSync(Buffer.concat(idat))
   let previous = Buffer.alloc(stride)
   let hasTransparentPixel = false
+  let transparentPixels = 0
   let cursor = 0
   for (let row = 0; row < height; row += 1) {
     const filter = inflated[cursor++]
@@ -95,10 +103,16 @@ function pngMetadata(data: Buffer): { width: number; height: number; hasTranspar
     }
     for (let index = bytesPerPixel - 1; index < stride; index += bytesPerPixel) {
       if (scanline[index] < 255) hasTransparentPixel = true
+      if (scanline[index] === 0) transparentPixels += 1
     }
     previous = scanline
   }
-  return { width, height, hasTransparentPixel }
+  return {
+    width,
+    height,
+    hasTransparentPixel,
+    transparentPixelRatio: transparentPixels / (width * height)
+  }
 }
 
 function paeth(left: number, up: number, upLeft: number): number {

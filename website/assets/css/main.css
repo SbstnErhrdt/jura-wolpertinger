@@ -623,6 +623,12 @@ footer p {
   width: 48px;
 }
 
+.download-icon img {
+  display: block;
+  height: 30px;
+  width: 30px;
+}
+
 .download-card small {
   color: #5b707b;
 }
