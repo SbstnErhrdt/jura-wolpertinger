@@ -19,9 +19,11 @@ describe('page layout consistency', () => {
   it('uses one full-width correction breadcrumb and unframed empty states', async () => {
     const styles = await readFile(resolve(rendererRoot, 'styles/main.css'), 'utf8')
     const correction = await readFile(resolve(rendererRoot, 'views/CorrectionView.vue'), 'utf8')
+    const correctionViewIndex = correction.search(/<section\b[^>]*class="correction-view"[^>]*>/)
 
     expect(correction.match(/<AppBreadcrumb\b/g)).toHaveLength(1)
-    expect(correction.indexOf('<AppBreadcrumb')).toBeLessThan(correction.indexOf('<section class="correction-view">'))
+    expect(correctionViewIndex).toBeGreaterThan(-1)
+    expect(correction.indexOf('<AppBreadcrumb')).toBeLessThan(correctionViewIndex)
     expect(styles).toMatch(/\.correction-page\s*>\s*\.app-breadcrumb\s*\{[^}]*justify-self:\s*start;/s)
     expect(styles).not.toMatch(/\.(?:settings|about|help)-view\s*\{[^}]*max-width:\s*1120px/s)
     expect(styles).toMatch(/\.correction-list-panel\s*>\s*\.empty-state\s*\{[^}]*background:\s*transparent;[^}]*border:\s*0;/s)

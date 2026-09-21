@@ -13,6 +13,10 @@ test.describe('Jura Wolpertinger Electron app', () => {
     const app = await launchApp(userDataDir)
     try {
       const page = await findMainWindow(app)
+      if (process.env.JURA_E2E_SHOW !== '1') {
+        const browserWindow = await app.browserWindow(page)
+        expect(await browserWindow.evaluate((window) => window.isVisible())).toBe(false)
+      }
       await page.setViewportSize({ width: 1440, height: 1050 })
       await expect(page.locator('.home-view')).toBeVisible()
       await page.getByRole('button', { name: 'Später entscheiden' }).click()
@@ -124,6 +128,9 @@ test.describe('Jura Wolpertinger Electron app', () => {
         localStorage.setItem('jura-wolpertinger-theme', 'dark')
         document.documentElement.dataset.theme = 'dark'
       })
+      const activeFolder = page.getByRole('button', { name: 'Kurs umbenannt', exact: true })
+      await expect(activeFolder).toHaveCSS('background-color', 'rgb(15, 64, 88)')
+      await expect(activeFolder).toHaveCSS('color', 'rgb(228, 247, 255)')
       await scanAccessibility(page, 'library')
       await page.screenshot({ path: '/tmp/jura-folder-navigation-dark.png' })
       await page.evaluate(async id => {
@@ -672,7 +679,11 @@ async function scanAccessibility(page: Page, surface: 'home' | 'collections' | '
       impact: violation.impact,
       help: violation.help,
       helpUrl: violation.helpUrl,
-      targets: violation.nodes.map((node) => node.target)
+      nodes: violation.nodes.map((node) => ({
+        target: node.target,
+        html: node.html,
+        failureSummary: node.failureSummary
+      }))
     })),
     `${surface} has serious or critical Axe violations`
   ).toEqual([])

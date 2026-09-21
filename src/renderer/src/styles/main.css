@@ -2515,6 +2515,7 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .app-skeleton-block,
   .study-card-face,
   .wolpi-milestone-enter-active,
   .wolpi-milestone-leave-active {

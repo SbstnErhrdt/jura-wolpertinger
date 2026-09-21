@@ -64,6 +64,7 @@ test('aggregates calendar months and shows their scores on hover, keyboard focus
     expect(path?.match(/L /g)).toHaveLength(2)
 
     // A real pointer hover must show a visible tooltip, not just an SVG <title>.
+    await page.mouse.move(0, 0)
     await chart.locator('.analytics-point').first().hover()
     await expect(tooltip).toContainText('8,25 Punkte')
     await expect(tooltip).toContainText('Januar 2025')

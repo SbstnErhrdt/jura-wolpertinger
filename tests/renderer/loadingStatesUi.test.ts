@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const rendererRoot = resolve(import.meta.dirname, '../../src/renderer/src')
+const repoRoot = resolve(import.meta.dirname, '../..')
 
 async function rendererFile(path: string): Promise<string> {
   return readFile(resolve(rendererRoot, path), 'utf8')
@@ -85,5 +86,16 @@ describe('app loading states', () => {
     expect(source).toContain(':loading="createBusy"')
     expect(source).toContain(':loading="importBusy"')
     expect(source).toContain(':loading="exportBusy"')
+  })
+
+  it('documents reliable load semantics and respects reduced motion', async () => {
+    const userStories = await readFile(resolve(repoRoot, 'docs/user-stories.md'), 'utf8')
+    const styles = await rendererFile('styles/main.css')
+
+    expect(userStories).toContain('Verlässliche Ladezustände')
+    expect(userStories).toContain('noch geladen')
+    expect(userStories).toContain('echten Leerzustand')
+    expect(styles).toContain('@media (prefers-reduced-motion: reduce)')
+    expect(styles).toContain('.app-skeleton-block')
   })
 })

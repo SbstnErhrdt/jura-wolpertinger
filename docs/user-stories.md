@@ -32,6 +32,19 @@ Akzeptanz:
 - Das Modal beschreibt konkret, was passiert und ob Inhalte wiederherstellbar sind.
 - Primäre und sekundäre Aktion sind klar unterscheidbar.
 
+### Verlässliche Ladezustände erkennen
+
+Als Nutzer:in möchte ich jederzeit erkennen, ob Daten noch geladen, bereits vorhanden oder nicht verfügbar sind, damit ich vorläufige Anzeigen nicht für echte Ergebnisse halte.
+
+Akzeptanz:
+
+- Während der ersten Ladung bilden ruhige Platzhalter die spätere Seitenstruktur ab; vorläufige Nullwerte und Leerhinweise erscheinen nicht.
+- Nach erfolgreicher Ladung bleibt eine echte Null sichtbar und eine leere Liste zeigt ihren fachlichen, echten Leerzustand.
+- Hintergrundaktualisierungen lassen bereits geladene Inhalte stehen und zeigen dezent, dass die Ansicht aktualisiert wird.
+- Eine bewusst gestartete Aktion zeigt ihren Ladezustand am auslösenden Bedienelement und verhindert eine versehentliche Doppelausführung.
+- Fehler zeigen einen verständlichen Hinweis und, wenn sinnvoll, eine Aktion `Erneut versuchen`; bereits geladene Inhalte gehen durch einen späteren Fehler nicht verloren.
+- Ladeanzeigen besitzen zugängliche Statustexte und bleiben auch bei reduzierter Bewegung verständlich.
+
 ## Home und Motivation
 
 ### Motivierend starten

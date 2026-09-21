@@ -44,6 +44,7 @@ import { AppServices } from './services/services'
 import { seedDemoDataIfEnabled } from './services/demoData'
 import { exportExamPdf } from './services/pdf'
 import { resolveRuntimeDockIconPath } from './appIdentity'
+import { shouldShowAppWindows } from './appWindowVisibility'
 import { configureAutoUpdaterFeed, resolveUpdateFeedUrl } from './updateFeed'
 import { createAutoUpdateCoordinator, createUpdateMenuTemplate, type AutoUpdateCoordinator } from './autoUpdates'
 import { handleReleaseSmokeRendererReady } from './releaseSmoke'
@@ -210,7 +211,7 @@ function createSplashWindow(): void {
   })
 
   splashWindow.once('ready-to-show', () => {
-    splashWindow?.show()
+    if (shouldShowAppWindows(process.env)) splashWindow?.show()
   })
   splashWindow.on('closed', () => {
     splashWindow = null
@@ -508,7 +509,7 @@ function configureReleaseSmokeUserDataPath(): void {
 function revealMainWindow(): void {
   const delay = Math.max(0, SPLASH_MINIMUM_MS - (Date.now() - splashStartedAt))
   setTimeout(() => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow && !mainWindow.isDestroyed() && shouldShowAppWindows(process.env)) {
       mainWindow.show()
       mainWindow.focus()
       if (!app.isPackaged && process.env.JURA_E2E !== '1') {
