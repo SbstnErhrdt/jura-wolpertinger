@@ -112,7 +112,7 @@
   Kopiere nur die von Hugo erzeugten Website-Dateien nach `docs/`, ohne
   technische Dokumentationsdateien zu löschen.
 
-- [ ] **Step 5: Commit, push and deploy**
+- [x] **Step 5: Commit, push and deploy**
 
   Commit message: `fix: preserve website image proportions`
 
