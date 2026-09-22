@@ -16,12 +16,12 @@
     "publishedAt": "2026-08-09T00:00:00.000Z"
   },
   "episode": {
-    "id": "4e2ed99e-fad8-4f88-947f-becdc6ced300",
-    "slug": "die-abgabenordnung-als-betriebssystem-des-finanzamts",
-    "number": 1,
-    "title": "Die Abgabenordnung als Betriebssystem des Finanzamts",
-    "description": "Die Abgabenordnung als systematische Grundlage für Organisation, Verfahren und Entscheidungen des Finanzamts.",
-    "durationSeconds": 1413.407,
-    "publishedAt": "2026-08-09T00:00:00.000Z"
+    "id": "20b7a63d-412f-4970-bd7e-d66ce2dc0971",
+    "slug": "sonstige-einkuenfte-22-23-estg",
+    "number": 8,
+    "title": "Sonstige Einkünfte (§§ 22, 23 EStG)",
+    "description": "Systematik und klausurrelevante Grundlagen der sonstigen Einkünfte nach §§ 22 und 23 EStG.",
+    "durationSeconds": 828.5,
+    "publishedAt": "2026-09-22T00:00:00.000Z"
   }
 }
